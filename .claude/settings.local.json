@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_index",
+      "Bash(npm install *)",
+      "PowerShell(New-Item *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/@hookform/resolvers/package.json'\\).version\\)\")",
+      "Bash(npx next *)"
+    ]
+  }
+}
