@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
-import type { PagarParcelaFormData } from '@/schemas/crediario'
+import { gerarDatasParcelas } from '@/utils'
+import type { PagarParcelaFormData, EditarCrediarioFormData } from '@/schemas/crediario'
 
 export async function pagarParcela(
   parcelaId: string,
@@ -54,4 +55,70 @@ export async function pagarParcela(
   })
 
   return { error: null }
+}
+
+export async function updateCrediario(
+  crediarioId: string,
+  data: EditarCrediarioFormData,
+): Promise<{ error: string | null }> {
+  const { data: parcelasPagas, error: checkError } = await supabase
+    .from('crediario_parcelas')
+    .select('id')
+    .eq('crediario_id', crediarioId)
+    .eq('status', 'pago')
+
+  if (checkError) return { error: checkError.message }
+  if (parcelasPagas && parcelasPagas.length > 0) {
+    return { error: `${parcelasPagas.length} parcela(s) já pagas. Não é possível editar as condições.` }
+  }
+
+  const { data: crediario, error: fetchError } = await supabase
+    .from('crediario')
+    .select('total, cliente_id, created_at')
+    .eq('id', crediarioId)
+    .single()
+
+  if (fetchError) return { error: fetchError.message }
+
+  const saldo = Math.max(0, crediario.total - data.entrada)
+  const valorParcela = Math.round((saldo / data.num_parcelas) * 100) / 100
+
+  const { error: deleteError } = await supabase
+    .from('crediario_parcelas')
+    .delete()
+    .eq('crediario_id', crediarioId)
+
+  if (deleteError) return { error: deleteError.message }
+
+  const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, new Date(crediario.created_at))
+  const { error: insertError } = await supabase
+    .from('crediario_parcelas')
+    .insert(
+      datas.map((dataVenc, i) => ({
+        crediario_id: crediarioId,
+        cliente_id: crediario.cliente_id,
+        numero: i + 1,
+        valor: valorParcela,
+        valor_pago: 0,
+        data_vencimento: dataVenc,
+        data_pagamento: null,
+        forma_pagamento: null,
+        status: 'pendente',
+      })),
+    )
+
+  if (insertError) return { error: insertError.message }
+
+  const { error: updateError } = await supabase
+    .from('crediario')
+    .update({
+      entrada: data.entrada,
+      saldo,
+      num_parcelas: data.num_parcelas,
+      valor_parcela: valorParcela,
+      dia_vencimento: data.dia_vencimento,
+    })
+    .eq('id', crediarioId)
+
+  return { error: updateError?.message ?? null }
 }

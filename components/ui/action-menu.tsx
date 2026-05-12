@@ -55,7 +55,7 @@ export function ActionMenu({ items, className }: ActionMenuProps) {
             <button
               key={i}
               type="button"
-              onClick={() => { setOpen(false); item.onClick() }}
+              onClick={(e) => { e.stopPropagation(); setOpen(false); item.onClick() }}
               className={cn(
                 'w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-left transition-colors',
                 item.variant === 'danger'

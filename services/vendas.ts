@@ -10,9 +10,6 @@ export interface UpdateVendaData {
   desconto: number
   data_venda: string
   observacoes: string
-  num_parcelas: number
-  entrada: number
-  dia_vencimento: number
 }
 
 function itemSubtotal(item: VendaItemFormData) {
@@ -88,7 +85,7 @@ export async function createVenda(
 
     if (crediarioError) return { error: crediarioError.message }
 
-    const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento)
+    const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, new Date(data.data_venda))
     const { error: parcelasError } = await supabase
       .from('crediario_parcelas')
       .insert(
@@ -108,22 +105,46 @@ export async function createVenda(
   }
 
   // 4. Estoque (itens com variacao_id)
-  const movs = data.itens
-    .filter((item) => item.variacao_id)
-    .map((item) => ({
-      variacao_id: item.variacao_id!,
-      produto_id: item.produto_id,
-      tipo: 'saida',
-      quantidade: item.quantidade,
-      quantidade_antes: 0,
-      quantidade_depois: 0,
-      motivo: `Venda #${venda.numero}`,
-      referencia_id: venda.id,
-      referencia_tipo: 'venda',
-      created_by: userId,
-    }))
-  if (movs.length > 0) {
+  const itensComVariacao = data.itens.filter((item) => item.variacao_id)
+  if (itensComVariacao.length > 0) {
+    const variacaoIds = itensComVariacao.map((item) => item.variacao_id!)
+    const { data: variacoes } = await supabase
+      .from('produto_variacoes')
+      .select('id, estoque_atual')
+      .in('id', variacaoIds)
+
+    // running map to correctly handle same variation appearing multiple times
+    const estoqueRunning = Object.fromEntries((variacoes ?? []).map((v) => [v.id, v.estoque_atual as number]))
+
+    const movs = itensComVariacao.map((item) => {
+      const id = item.variacao_id!
+      const estoqueAntes = estoqueRunning[id] ?? 0
+      const estoqueDepois = Math.max(0, estoqueAntes - item.quantidade)
+      estoqueRunning[id] = estoqueDepois
+      return {
+        variacao_id: id,
+        produto_id: item.produto_id,
+        tipo: 'saida',
+        quantidade: item.quantidade,
+        quantidade_antes: estoqueAntes,
+        quantidade_depois: estoqueDepois,
+        motivo: `Venda #${venda.numero}`,
+        referencia_id: venda.id,
+        referencia_tipo: 'venda',
+        created_by: userId,
+      }
+    })
+
     await supabase.from('estoque_movimentacoes').insert(movs)
+
+    // One UPDATE per variation with the final computed stock
+    const variacoesUnicas = [...new Set(itensComVariacao.map((i) => i.variacao_id!))]
+    for (const variacaoId of variacoesUnicas) {
+      await supabase
+        .from('produto_variacoes')
+        .update({ estoque_atual: estoqueRunning[variacaoId] })
+        .eq('id', variacaoId)
+    }
   }
 
   // 5. Lançamento
@@ -159,7 +180,7 @@ export async function updateVenda(
       forma_pagamento: data.forma_pagamento,
       desconto: data.desconto,
       total,
-      valor_pago: isCrediario ? data.entrada : total,
+      valor_pago: total,
       data_venda: data.data_venda,
       observacoes: data.observacoes || null,
     })
@@ -181,8 +202,12 @@ export async function updateVenda(
       .maybeSingle()
 
     if (!existing) {
-      const saldo = Math.max(0, total - data.entrada)
-      const valorParcela = Math.round((saldo / data.num_parcelas) * 100) / 100
+      // Create crediário with defaults — user can adjust via Editar Crediário
+      const num_parcelas = 1
+      const entrada = 0
+      const dia_vencimento = 10
+      const saldo = total
+      const valorParcela = total
 
       const { data: crediario, error: crediarioError } = await supabase
         .from('crediario')
@@ -190,11 +215,11 @@ export async function updateVenda(
           venda_id: id,
           cliente_id: data.cliente_id,
           total,
-          entrada: data.entrada,
+          entrada,
           saldo,
-          num_parcelas: data.num_parcelas,
+          num_parcelas,
           valor_parcela: valorParcela,
-          dia_vencimento: data.dia_vencimento,
+          dia_vencimento,
           status: 'em_dia',
           created_by: userId,
         })
@@ -203,7 +228,7 @@ export async function updateVenda(
 
       if (crediarioError) return { error: crediarioError.message }
 
-      const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento)
+      const datas = gerarDatasParcelas(num_parcelas, dia_vencimento, new Date(data.data_venda))
       const { error: parcelasError } = await supabase
         .from('crediario_parcelas')
         .insert(
@@ -238,6 +263,16 @@ export async function deleteVenda(vendaId: string): Promise<{ error: string | nu
   const crediarioIds = (crediarios ?? []).map((crediario) => crediario.id)
 
   if (crediarioIds.length > 0) {
+    const { data: parcelasPagas } = await supabase
+      .from('crediario_parcelas')
+      .select('id')
+      .in('crediario_id', crediarioIds)
+      .eq('status', 'pago')
+
+    if (parcelasPagas && parcelasPagas.length > 0) {
+      return { error: 'Esta venda possui crediário com parcelas já pagas e não pode ser excluída.' }
+    }
+
     const { data: parcelas, error: parcelasFetchError } = await supabase
       .from('crediario_parcelas')
       .select('id')

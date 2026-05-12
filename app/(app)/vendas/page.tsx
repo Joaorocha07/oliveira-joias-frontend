@@ -10,6 +10,7 @@ import {
 } from '@/components/ui'
 import { ModalNovaVenda } from '@/components/modals/modal-nova-venda'
 import { ModalEditarVenda } from '@/components/modals/modal-editar-venda'
+import { DrawerDetalheVenda } from '@/components/vendas/drawer-detalhe-venda'
 import { deleteVenda } from '@/services/vendas'
 import {
   formatMoney, formatDate, vendaStatusVariant,
@@ -21,11 +22,24 @@ export type VendaRow = Venda & {
   cliente?: ClienteResumo | null
   itens?: {
     id: string
+    produto_id: string
+    variacao_id: string | null
     nome_produto: string
+    descricao: string | null
     quantidade: number
     preco_unitario: number
+    custo_unitario: number
     desconto: number
     subtotal: number
+    produto?: {
+      codigo: string
+      categoria: string
+      material: string | null
+    } | null
+    variacao?: {
+      nome: string
+      valor: string
+    } | null
   }[]
 }
 
@@ -38,11 +52,29 @@ export default function VendasPage() {
   const [confirmDelete, setConfirmDelete] = useState<VendaRow | null>(null)
   const [editando, setEditando] = useState<VendaRow | null>(null)
   const [modalNovaVenda, setModalNovaVenda] = useState(false)
+  const [drawerVenda, setDrawerVenda] = useState<VendaRow | null>(null)
 
   const loadVendas = useCallback(async () => {
     const { data, error } = await supabase
       .from('vendas')
-      .select('*, cliente:clientes(nome, telefone), itens:venda_itens(id, nome_produto, quantidade, preco_unitario, desconto, subtotal)')
+      .select(`
+        *,
+        cliente:clientes(nome, telefone),
+        itens:venda_itens(
+          id,
+          produto_id,
+          variacao_id,
+          nome_produto,
+          descricao,
+          quantidade,
+          preco_unitario,
+          custo_unitario,
+          desconto,
+          subtotal,
+          produto:produtos(codigo, categoria, material),
+          variacao:produto_variacoes(nome, valor)
+        )
+      `)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -69,7 +101,11 @@ export default function VendasPage() {
       const matchSearch = !search ||
         v.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
         String(v.numero).includes(search) ||
-        v.itens?.some((i) => i.nome_produto.toLowerCase().includes(search.toLowerCase()))
+        v.itens?.some((i) =>
+          i.nome_produto.toLowerCase().includes(search.toLowerCase()) ||
+          i.produto?.codigo.toLowerCase().includes(search.toLowerCase()) ||
+          i.variacao?.valor.toLowerCase().includes(search.toLowerCase()),
+        )
       const matchStatus = !filtroStatus || v.status === filtroStatus
       return matchSearch && matchStatus
     })
@@ -145,8 +181,13 @@ export default function VendasPage() {
             <div className="sm:hidden divide-y divide-gold-50">
               {filtered.map((venda) => {
                 const numItens = venda.itens?.length ?? 0
+                const totalUnidades = (venda.itens ?? []).reduce((s, i) => s + i.quantidade, 0)
                 return (
-                  <div key={venda.id} className="p-4 hover:bg-cream-50/30 transition-colors">
+                  <div
+                    key={venda.id}
+                    className="p-4 hover:bg-cream-50/30 transition-colors cursor-pointer active:bg-cream-100"
+                    onClick={() => setDrawerVenda(venda)}
+                  >
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -159,15 +200,16 @@ export default function VendasPage() {
                         </div>
                         <p className="text-xs text-dark-400 mt-1">
                           {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
-                          {numItens > 0 && <span className="text-dark-300"> · {numItens} {numItens === 1 ? 'item' : 'itens'}</span>}
+                          {numItens > 0 && (
+                            <span className="text-dark-300"> · {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}</span>
+                          )}
                         </p>
                         <p className="text-xs text-dark-300 mt-0.5">{formatDate(venda.data_venda)}</p>
-                        {/* Items preview */}
                         {(venda.itens ?? []).length > 0 && (
                           <div className="mt-1.5 space-y-0.5">
                             {(venda.itens ?? []).slice(0, 2).map((item) => (
                               <p key={item.id} className="text-[11px] text-dark-400 truncate">
-                                {item.quantidade}× {item.nome_produto}
+                                <span className="font-semibold text-dark-600">{item.quantidade}×</span> {item.nome_produto}
                               </p>
                             ))}
                             {(venda.itens ?? []).length > 2 && (
@@ -180,8 +222,8 @@ export default function VendasPage() {
                       </div>
                       <ActionMenu
                         items={[
-                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setEditando(venda) },
-                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(venda), variant: 'danger' },
+                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => { setEditando(venda) } },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => { setConfirmDelete(venda) }, variant: 'danger' },
                         ]}
                       />
                     </div>
@@ -221,8 +263,13 @@ export default function VendasPage() {
                 <tbody className="divide-y divide-gold-50">
                   {filtered.map((venda) => {
                     const numItens = venda.itens?.length ?? 0
+                    const totalUnidades = (venda.itens ?? []).reduce((s, i) => s + i.quantidade, 0)
                     return (
-                      <tr key={venda.id} className="hover:bg-cream-50/40 transition-colors group">
+                      <tr
+                        key={venda.id}
+                        className="hover:bg-cream-50/40 transition-colors group cursor-pointer"
+                        onClick={() => setDrawerVenda(venda)}
+                      >
                         <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{displayNumMap.get(venda.id)}</td>
                         <td className="px-5 py-3 max-w-[180px]">
                           <p className="font-medium text-dark-700 truncate">
@@ -244,10 +291,30 @@ export default function VendasPage() {
                             </div>
                           )}
                         </td>
-                        <td className="hidden md:table-cell px-5 py-3 text-dark-400 text-center">
-                          <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-[11px] font-medium bg-cream-100 border border-gold-100 rounded-full text-dark-500">
-                            {numItens}
-                          </span>
+                        <td className="hidden md:table-cell px-5 py-3 text-dark-400">
+                          <div className="flex flex-col gap-1 max-w-[320px]">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-[11px] font-medium bg-cream-100 border border-gold-100 rounded-full text-dark-500">
+                                {numItens}
+                              </span>
+                              <span className="text-xs text-dark-400">
+                                {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'} vendidas
+                              </span>
+                            </div>
+                            {(venda.itens ?? []).slice(0, 3).map((item) => (
+                              <p key={item.id} className="text-[11px] text-dark-400 truncate leading-tight">
+                                <span className="font-semibold text-dark-600">{item.quantidade}x</span> {item.nome_produto}
+                                {item.variacao && (
+                                  <span className="text-dark-300"> - {item.variacao.nome}: {item.variacao.valor}</span>
+                                )}
+                              </p>
+                            ))}
+                            {(venda.itens ?? []).length > 3 && (
+                              <p className="text-[11px] text-dark-300 italic leading-tight">
+                                +{(venda.itens ?? []).length - 3} mais
+                              </p>
+                            )}
+                          </div>
                         </td>
                         <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(venda.data_venda)}</td>
                         <td className="hidden lg:table-cell px-5 py-3 text-dark-400">
@@ -270,7 +337,10 @@ export default function VendasPage() {
                           <div className="flex items-center gap-1 justify-end">
                             <button
                               type="button"
-                              onClick={() => setEditando(venda)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setEditando(venda)
+                              }}
                               className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                               title="Editar venda"
                             >
@@ -278,7 +348,10 @@ export default function VendasPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setConfirmDelete(venda)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setConfirmDelete(venda)
+                              }}
                               className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                               title="Excluir venda"
                             >
@@ -318,6 +391,23 @@ export default function VendasPage() {
         onSuccess={handleEditSuccess}
         venda={editando}
         displayNum={editando ? displayNumMap.get(editando.id) : undefined}
+      />
+
+      <DrawerDetalheVenda
+        open={!!drawerVenda}
+        onClose={() => setDrawerVenda(null)}
+        venda={drawerVenda}
+        displayNum={drawerVenda ? displayNumMap.get(drawerVenda.id) : undefined}
+        onEditar={() => {
+          if (!drawerVenda) return
+          setEditando(drawerVenda)
+          setDrawerVenda(null)
+        }}
+        onExcluir={() => {
+          if (!drawerVenda) return
+          setConfirmDelete(drawerVenda)
+          setDrawerVenda(null)
+        }}
       />
     </div>
   )

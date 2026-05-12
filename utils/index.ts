@@ -1,4 +1,4 @@
-import { format, parseISO, isValid } from 'date-fns'
+import { format, parseISO, isValid, isBefore, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type {
   FormaPagamento, VendaStatus, ServicoStatus,
@@ -91,7 +91,7 @@ export const PARCELA_STATUS_LABEL: Record<ParcelaStatus, string> = {
 
 export const CREDIARIO_STATUS_LABEL: Record<CrediarioStatus, string> = {
   em_dia: 'Em Dia',
-  vencido: 'Vencido',
+  vencido: 'Atrasado',
   quitado: 'Quitado',
   cancelado: 'Cancelado',
 }
@@ -199,9 +199,15 @@ export function gerarDatasParcelas(
 ): string[] {
   const base = dataBase || new Date()
   const dates: string[] = []
-  for (let i = 1; i <= numParcelas; i++) {
-    const d = new Date(base.getFullYear(), base.getMonth() + i, diaVencimento)
+  // Start from current month if due day hasn't passed yet; otherwise next month
+  const startOffset = base.getDate() < diaVencimento ? 0 : 1
+  for (let i = 0; i < numParcelas; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth() + startOffset + i, diaVencimento)
     dates.push(format(d, 'yyyy-MM-dd'))
   }
   return dates
+}
+
+export function parcelaVencida(dataVencimento: string): boolean {
+  return isBefore(startOfDay(parseISO(dataVencimento)), startOfDay(new Date()))
 }

@@ -5,7 +5,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Modal, Button, Select, Input, Badge } from '@/components/ui'
+import { Modal, Button, Select } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { updateVenda } from '@/services/vendas'
@@ -13,7 +13,6 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/auth-context'
 import {
   formatMoney, toInputDate, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
-  vendaStatusVariant,
 } from '@/utils'
 import type { VendaStatus, FormaPagamento } from '@/types'
 import type { VendaRow } from '@/app/(app)/vendas/page'
@@ -28,13 +27,6 @@ const schema = z.object({
   desconto: z.number().min(0),
   data_venda: z.string().min(1),
   observacoes: z.string(),
-  num_parcelas: z.number().int().min(1).max(60),
-  entrada: z.number().min(0),
-  dia_vencimento: z.number().int().min(1).max(28),
-}).superRefine((val, ctx) => {
-  if (val.forma_pagamento === 'crediario' && !val.cliente_id) {
-    ctx.addIssue({ code: 'custom', path: ['cliente_id'], message: 'Cliente é obrigatório para crediário' })
-  }
 })
 
 type FormData = z.infer<typeof schema>
@@ -61,9 +53,6 @@ function buildDefaults(venda: VendaRow): FormData {
     desconto: venda.desconto,
     data_venda: toInputDate(venda.data_venda),
     observacoes: venda.observacoes ?? '',
-    num_parcelas: 1,
-    entrada: 0,
-    dia_vencimento: 10,
   }
 }
 
@@ -82,14 +71,8 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
   })
 
   const watchedDesconto = watch('desconto') ?? 0
-  const watchedForma = watch('forma_pagamento')
-  const watchedEntrada = watch('entrada') ?? 0
-  const watchedParcelas = watch('num_parcelas') ?? 1
   const subtotal = venda?.subtotal ?? 0
   const total = Math.max(0, Math.round((subtotal - watchedDesconto) * 100) / 100)
-  const isCrediario = watchedForma === 'crediario'
-  const saldo = Math.max(0, total - watchedEntrada)
-  const valorParcela = watchedParcelas > 0 ? Math.round((saldo / watchedParcelas) * 100) / 100 : 0
 
   useEffect(() => {
     if (open && venda) reset(buildDefaults(venda))
@@ -261,62 +244,6 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
             {...register('observacoes')}
           />
         </div>
-
-        {isCrediario && (
-          <div className="border border-gold-200 rounded-xl p-4 flex flex-col gap-4 bg-amber-50/40">
-            <p className="text-xs font-medium text-dark-400 uppercase tracking-wide">Condições do Crediário</p>
-
-            <div className="grid grid-cols-3 gap-3">
-              <Controller
-                name="entrada"
-                control={control}
-                render={({ field }) => (
-                  <CurrencyInput
-                    label="Entrada"
-                    value={field.value}
-                    onChange={field.onChange}
-                    error={errors.entrada?.message}
-                  />
-                )}
-              />
-              <div className="flex flex-col gap-1">
-                <label className="label-base">Nº de parcelas</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  className={`input-base ${errors.num_parcelas ? 'border-red-400' : ''}`}
-                  {...register('num_parcelas', { valueAsNumber: true })}
-                />
-                {errors.num_parcelas && (
-                  <p className="text-xs text-red-600">{errors.num_parcelas.message}</p>
-                )}
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="label-base">Dia de vencimento</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={28}
-                  className={`input-base ${errors.dia_vencimento ? 'border-red-400' : ''}`}
-                  {...register('dia_vencimento', { valueAsNumber: true })}
-                />
-                {errors.dia_vencimento && (
-                  <p className="text-xs text-red-600">{errors.dia_vencimento.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-between text-sm text-dark-500 border-t border-gold-100 pt-3">
-              <span>Saldo a financiar</span>
-              <span className="font-medium">{formatMoney(saldo)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-dark-600 font-medium -mt-2">
-              <span>Valor por parcela</span>
-              <span>{formatMoney(valorParcela)} × {watchedParcelas}x</span>
-            </div>
-          </div>
-        )}
 
         {/* Resumo */}
         <div className="border-t border-gold-100 pt-4 flex flex-col gap-1.5">
