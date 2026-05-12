@@ -17,6 +17,7 @@ interface ModalMovimentacaoEstoqueProps {
   onClose: () => void
   onSuccess: () => void
   produtoId?: string
+  produtoNome?: string
   variacaoId?: string
 }
 
@@ -32,6 +33,7 @@ export function ModalMovimentacaoEstoque({
   onClose,
   onSuccess,
   produtoId,
+  produtoNome,
   variacaoId,
 }: ModalMovimentacaoEstoqueProps) {
   const { user } = useAuth()
@@ -157,6 +159,7 @@ export function ModalMovimentacaoEstoque({
               }}
               onSearch={searchProdutos}
               placeholder="Buscar produto..."
+              displayValue={produtoNome}
               error={errors.produto_id?.message}
             />
           )}

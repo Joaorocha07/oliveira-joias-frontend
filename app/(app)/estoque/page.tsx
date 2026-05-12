@@ -1,70 +1,150 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { Diamond } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Plus, Diamond, Pencil, Trash2, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
-  PageHeader, Card, Badge, SearchInput, Select, Spinner, EmptyState,
+  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
+  ActionMenu, AlertDialog,
 } from '@/components/ui'
+import { ModalProduto } from '@/components/modals/modal-produto'
+import { ModalMovimentacaoEstoque } from '@/components/modals/modal-movimentacao-estoque'
 import { formatMoney, PRODUTO_CATEGORIA_LABEL } from '@/utils'
-import type { VwEstoqueAtual, ProdutoCategoria } from '@/types'
+import { deleteProduto, desativarProduto } from '@/services/produtos'
+import type { Produto, ProdutoCategoria } from '@/types'
+
+interface ProdutoComEstoque extends Produto {
+  total_estoque: number
+  variacoes_ativas: number
+}
 
 export default function EstoquePage() {
-  const [estoque, setEstoque] = useState<VwEstoqueAtual[]>([])
+  const [produtos, setProdutos] = useState<ProdutoComEstoque[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<ProdutoCategoria | ''>('')
-  const [filtroStatus, setFiltroStatus] = useState<'normal' | 'critico' | 'esgotado' | ''>('')
+  const [filtroAtivo, setFiltroAtivo] = useState<'true' | 'false' | ''>('true')
+  const [modalProduto, setModalProduto] = useState(false)
+  const [editando, setEditando] = useState<Produto | null>(null)
+  const [modalMovimentacao, setModalMovimentacao] = useState(false)
+  const [movimentandoProduto, setMovimentandoProduto] = useState<{ id: string; nome: string } | undefined>()
+  const [deleteTarget, setDeleteTarget] = useState<ProdutoComEstoque | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
 
-  async function loadEstoque() {
+  const loadProdutos = useCallback(async () => {
     const { data, error } = await supabase
-      .from('vw_estoque_atual')
-      .select('*')
-      .order('produto_nome')
+      .from('produtos')
+      .select('*, variacoes:produto_variacoes(*), fornecedor:fornecedores(nome)')
+      .order('nome')
 
     if (error) {
-      toast.error('Erro ao carregar estoque.')
-    } else {
-      setEstoque(data ?? [])
+      toast.error('Erro ao carregar produtos.')
+      setLoading(false)
+      return
     }
-    setLoading(false)
-  }
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadEstoque(), 0)
-    return () => window.clearTimeout(timeoutId)
+    const enriched: ProdutoComEstoque[] = (data ?? []).map((p: Produto & { variacoes: Produto['variacoes'] }) => {
+      const variacoes = p.variacoes ?? []
+      const ativas = variacoes.filter((v) => v.ativo)
+      const total = ativas.reduce((sum, v) => sum + (v.estoque_atual ?? 0), 0)
+      return { ...p, total_estoque: total, variacoes_ativas: ativas.length }
+    })
+
+    setProdutos(enriched)
+    setLoading(false)
   }, [])
 
-  const filtered = useMemo(() => {
-    return estoque.filter((item) => {
-      const matchSearch = !search ||
-        item.produto_nome.toLowerCase().includes(search.toLowerCase()) ||
-        item.codigo.toLowerCase().includes(search.toLowerCase()) ||
-        (item.material ?? '').toLowerCase().includes(search.toLowerCase())
-      const matchCategoria = !filtroCategoria || item.categoria === filtroCategoria
-      const matchStatus = !filtroStatus || item.status_estoque === filtroStatus
-      return matchSearch && matchCategoria && matchStatus
-    })
-  }, [estoque, search, filtroCategoria, filtroStatus])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => void loadProdutos(), 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [loadProdutos])
 
-  function statusVariant(status: VwEstoqueAtual['status_estoque']) {
-    if (status === 'esgotado') return 'danger' as const
-    if (status === 'critico') return 'warning' as const
-    return 'success' as const
+  const filtered = useMemo(() => {
+    return produtos.filter((p) => {
+      const matchSearch = !search ||
+        p.nome.toLowerCase().includes(search.toLowerCase()) ||
+        p.codigo.toLowerCase().includes(search.toLowerCase()) ||
+        (p.material ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria
+      const matchAtivo = !filtroAtivo || String(p.ativo) === filtroAtivo
+      return matchSearch && matchCategoria && matchAtivo
+    })
+  }, [produtos, search, filtroCategoria, filtroAtivo])
+
+  function openCreate() {
+    setEditando(null)
+    setModalProduto(true)
   }
 
-  function statusLabel(status: VwEstoqueAtual['status_estoque']) {
-    if (status === 'esgotado') return 'Esgotado'
-    if (status === 'critico') return 'Crítico'
-    return 'Normal'
+  function openEdit(p: Produto) {
+    setEditando(p)
+    setModalProduto(true)
+  }
+
+  function openMovimentacao(p: ProdutoComEstoque) {
+    setMovimentandoProduto({ id: p.id, nome: p.nome })
+    setModalMovimentacao(true)
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    const { error } = await deleteProduto(deleteTarget.id)
+
+    if (error === 'HAS_DEPENDENCIES') {
+      setDeleteLoading(false)
+      setDeactivateOpen(true)
+      return
+    }
+
+    if (error) {
+      toast.error('Erro ao excluir produto.')
+    } else {
+      toast.success('Produto excluído.')
+      setProdutos((prev) => prev.filter((p) => p.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    }
+    setDeleteLoading(false)
+  }
+
+  async function handleDesativar() {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    const { error } = await desativarProduto(deleteTarget.id)
+    if (error) {
+      toast.error('Erro ao desativar produto.')
+    } else {
+      toast.success('Produto desativado.')
+      setProdutos((prev) => prev.map((p) => p.id === deleteTarget.id ? { ...p, ativo: false } : p))
+    }
+    setDeleteLoading(false)
+    setDeactivateOpen(false)
+    setDeleteTarget(null)
+  }
+
+  function stockBadge(estoque: number, minimo: number) {
+    if (estoque === 0) return { variant: 'danger' as const, label: 'Esgotado' }
+    if (estoque <= minimo) return { variant: 'warning' as const, label: 'Crítico' }
+    return { variant: 'success' as const, label: 'Normal' }
+  }
+
+  const minEstoque = (p: ProdutoComEstoque) => {
+    const variacoes = p.variacoes ?? []
+    return variacoes.filter((v) => v.ativo).reduce((sum, v) => sum + (v.estoque_minimo ?? 0), 0)
   }
 
   return (
     <div>
       <PageHeader
         title="Estoque"
-        subtitle="Controle de produtos e variações"
+        subtitle="Cadastro e controle de produtos"
+        actions={
+          <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
+            Novo Produto
+          </Button>
+        }
       />
 
       <Card padding="none">
@@ -86,14 +166,13 @@ export default function EstoquePage() {
             ))}
           </Select>
           <Select
-            value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value as 'normal' | 'critico' | 'esgotado' | '')}
-            placeholder="Todos os status"
-            className="w-full sm:w-40"
+            value={filtroAtivo}
+            onChange={(e) => setFiltroAtivo(e.target.value as 'true' | 'false' | '')}
+            placeholder="Todos"
+            className="w-full sm:w-36"
           >
-            <option value="normal">Normal</option>
-            <option value="critico">Crítico</option>
-            <option value="esgotado">Esgotado</option>
+            <option value="true">Ativos</option>
+            <option value="false">Inativos</option>
           </Select>
         </div>
 
@@ -103,38 +182,57 @@ export default function EstoquePage() {
           <EmptyState
             icon={<Diamond size={24} />}
             title="Nenhum produto encontrado"
-            description="Ajuste os filtros ou cadastre produtos no sistema."
+            description="Ajuste os filtros ou cadastre o primeiro produto."
+            action={!search && !filtroCategoria && (
+              <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>
+                Novo Produto
+              </Button>
+            )}
           />
         ) : (
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((item) => (
-                <div key={item.variacao_id} className="p-4 hover:bg-cream-50/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-dark-700 text-sm truncate">{item.produto_nome}</p>
-                      <p className="text-xs text-dark-400 mt-0.5">
-                        {item.variacao_nome}: {item.variacao_valor}
-                      </p>
-                      <p className="text-xs text-dark-300 mt-0.5 font-mono">{item.codigo}</p>
+              {filtered.map((p) => {
+                const { variant, label } = stockBadge(p.total_estoque, minEstoque(p))
+                return (
+                  <div key={p.id} className="p-4 hover:bg-cream-50/30 transition-colors">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-mono text-dark-400 bg-cream-100 border border-gold-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                            {p.codigo}
+                          </span>
+                          {!p.ativo && (
+                            <span className="text-[10px] text-dark-300 italic">inativo</span>
+                          )}
+                        </div>
+                        <p className="font-medium text-dark-700 text-sm truncate">{p.nome}</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {PRODUTO_CATEGORIA_LABEL[p.categoria]}
+                          {p.material && <> · {p.material}</>}
+                        </p>
+                      </div>
+                      <ActionMenu
+                        items={[
+                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
+                          { label: 'Movimentar Estoque', icon: <ArrowUpDown size={14} />, onClick: () => openMovimentacao(p) },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setDeleteTarget(p), variant: 'danger' },
+                        ]}
+                      />
                     </div>
-                    <Badge variant={statusVariant(item.status_estoque)} className="flex-shrink-0">
-                      {statusLabel(item.status_estoque)}
-                    </Badge>
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gold-50">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={variant}>{label}</Badge>
+                        <span className="text-xs text-dark-400">
+                          {p.total_estoque} un · {p.variacoes_ativas} var.
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-dark-600">{formatMoney(p.preco_venda)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gold-50">
-                    <span className="text-xs text-dark-400">
-                      Estoque:{' '}
-                      <span className={item.status_estoque !== 'normal' ? 'text-red-600 font-medium' : 'text-dark-700 font-medium'}>
-                        {item.estoque_atual}
-                      </span>
-                      <span className="text-dark-300"> / {item.estoque_minimo}</span>
-                    </span>
-                    <span className="text-xs font-medium text-dark-600">{formatMoney(item.preco_venda)}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Desktop: tabela */}
@@ -145,45 +243,117 @@ export default function EstoquePage() {
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Código</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Produto</th>
                     <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Categoria</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Variação</th>
+                    <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Variações</th>
                     <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Estoque</th>
                     <th className="hidden md:table-cell text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Preço</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Status</th>
+                    <th className="px-5 py-3 w-24" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((item) => (
-                    <tr key={item.variacao_id} className="hover:bg-cream-50/40 transition-colors">
-                      <td className="px-5 py-3 text-dark-400 font-mono text-xs">{item.codigo}</td>
-                      <td className="px-5 py-3 font-medium text-dark-700 max-w-[200px]">
-                        <span className="block truncate">{item.produto_nome}</span>
-                      </td>
-                      <td className="hidden md:table-cell px-5 py-3 text-dark-400">
-                        {PRODUTO_CATEGORIA_LABEL[item.categoria]}
-                      </td>
-                      <td className="px-5 py-3 text-dark-400">
-                        {item.variacao_nome}: {item.variacao_valor}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={item.status_estoque !== 'normal' ? 'text-red-600 font-medium' : 'text-dark-700'}>
-                          {item.estoque_atual}
-                        </span>
-                        <span className="text-dark-300"> / {item.estoque_minimo}</span>
-                      </td>
-                      <td className="hidden md:table-cell px-5 py-3 text-right text-dark-700">{formatMoney(item.preco_venda)}</td>
-                      <td className="px-5 py-3">
-                        <Badge variant={statusVariant(item.status_estoque)}>
-                          {statusLabel(item.status_estoque)}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((p) => {
+                    const { variant, label } = stockBadge(p.total_estoque, minEstoque(p))
+                    return (
+                      <tr key={p.id} className="hover:bg-cream-50/40 transition-colors">
+                        <td className="px-5 py-3 text-dark-400 font-mono text-xs">{p.codigo}</td>
+                        <td className="px-5 py-3 font-medium text-dark-700 max-w-[200px]">
+                          <span className="block truncate">{p.nome}</span>
+                          {!p.ativo && <span className="text-[10px] text-dark-300 italic">inativo</span>}
+                        </td>
+                        <td className="hidden md:table-cell px-5 py-3 text-dark-400">
+                          {PRODUTO_CATEGORIA_LABEL[p.categoria]}
+                        </td>
+                        <td className="hidden lg:table-cell px-5 py-3 text-dark-400 text-center">
+                          {p.variacoes_ativas}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <span className={p.total_estoque === 0 ? 'text-red-600 font-medium' : p.total_estoque <= minEstoque(p) ? 'text-amber-600 font-medium' : 'text-dark-700'}>
+                            {p.total_estoque}
+                          </span>
+                          <span className="text-dark-300"> un</span>
+                        </td>
+                        <td className="hidden md:table-cell px-5 py-3 text-right text-dark-700">
+                          {formatMoney(p.preco_venda)}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge variant={variant}>{label}</Badge>
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => openMovimentacao(p)}
+                              className="p-1.5 rounded-lg text-dark-300 hover:text-dark-600 hover:bg-cream-100 transition-colors"
+                              title="Movimentar estoque"
+                            >
+                              <ArrowUpDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(p)}
+                              className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Editar produto"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(p)}
+                              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Excluir produto"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           </>
         )}
       </Card>
+
+      <ModalProduto
+        open={modalProduto}
+        onClose={() => { setModalProduto(false); setEditando(null) }}
+        onSuccess={() => { void loadProdutos() }}
+        produto={editando}
+      />
+
+      <ModalMovimentacaoEstoque
+        open={modalMovimentacao}
+        onClose={() => { setModalMovimentacao(false); setMovimentandoProduto(undefined) }}
+        onSuccess={() => { void loadProdutos() }}
+        produtoId={movimentandoProduto?.id}
+        produtoNome={movimentandoProduto?.nome}
+      />
+
+      <AlertDialog
+        open={!!deleteTarget && !deactivateOpen}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        iconVariant="danger"
+        title="Excluir produto?"
+        description={`Deseja excluir "${deleteTarget?.nome}"? Esta ação é irreversível.`}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        loading={deleteLoading}
+      />
+
+      <AlertDialog
+        open={deactivateOpen}
+        onClose={() => { setDeactivateOpen(false); setDeleteTarget(null) }}
+        onConfirm={handleDesativar}
+        iconVariant="warning"
+        title="Produto com vínculos"
+        description={`"${deleteTarget?.nome}" possui vendas, compras ou movimentações registradas e não pode ser excluído. Deseja desativá-lo?`}
+        confirmLabel="Desativar"
+        cancelLabel="Cancelar"
+        loading={deleteLoading}
+      />
     </div>
   )
 }

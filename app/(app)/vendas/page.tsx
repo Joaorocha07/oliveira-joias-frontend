@@ -1,36 +1,54 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import { Plus, ShoppingCart, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
-  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState, ConfirmDialog, ActionMenu,
+  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
+  ConfirmDialog, ActionMenu,
 } from '@/components/ui'
 import { ModalNovaVenda } from '@/components/modals/modal-nova-venda'
+import { ModalEditarVenda } from '@/components/modals/modal-editar-venda'
 import { deleteVenda } from '@/services/vendas'
-import { formatMoney, formatDate, vendaStatusVariant, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL } from '@/utils'
-import type { VendaComCliente, VendaStatus } from '@/types'
+import {
+  formatMoney, formatDate, vendaStatusVariant,
+  VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
+} from '@/utils'
+import type { Venda, VendaStatus, ClienteResumo } from '@/types'
+
+export type VendaRow = Venda & {
+  cliente?: ClienteResumo | null
+  itens?: {
+    id: string
+    nome_produto: string
+    quantidade: number
+    preco_unitario: number
+    desconto: number
+    subtotal: number
+  }[]
+}
 
 export default function VendasPage() {
-  const [vendas, setVendas] = useState<VendaComCliente[]>([])
+  const [vendas, setVendas] = useState<VendaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<VendaStatus | ''>('')
   const [deletando, setDeletando] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<VendaComCliente | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<VendaRow | null>(null)
+  const [editando, setEditando] = useState<VendaRow | null>(null)
   const [modalNovaVenda, setModalNovaVenda] = useState(false)
 
   const loadVendas = useCallback(async () => {
     const { data, error } = await supabase
       .from('vendas')
-      .select('*, cliente:clientes(nome, telefone)')
+      .select('*, cliente:clientes(nome, telefone), itens:venda_itens(id, nome_produto, quantidade, preco_unitario, desconto, subtotal)')
       .order('created_at', { ascending: false })
 
     if (error) {
       toast.error('Erro ao carregar vendas.')
     } else {
-      setVendas((data as VendaComCliente[]) ?? [])
+      setVendas((data as VendaRow[]) ?? [])
     }
     setLoading(false)
   }, [])
@@ -40,11 +58,18 @@ export default function VendasPage() {
     return () => window.clearTimeout(timeoutId)
   }, [loadVendas])
 
+  // Sequential display numbers based on creation order (stable, gap-free)
+  const displayNumMap = useMemo(() => {
+    const sorted = [...vendas].sort((a, b) => a.numero - b.numero)
+    return new Map(sorted.map((v, i) => [v.id, i + 1]))
+  }, [vendas])
+
   const filtered = useMemo(() => {
     return vendas.filter((v) => {
       const matchSearch = !search ||
         v.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
-        String(v.numero).includes(search)
+        String(v.numero).includes(search) ||
+        v.itens?.some((i) => i.nome_produto.toLowerCase().includes(search.toLowerCase()))
       const matchStatus = !filtroStatus || v.status === filtroStatus
       return matchSearch && matchStatus
     })
@@ -64,6 +89,12 @@ export default function VendasPage() {
     setConfirmDelete(null)
   }
 
+  function handleEditSuccess(updated: Partial<VendaRow>) {
+    setVendas((prev) =>
+      prev.map((v) => v.id === editando?.id ? { ...v, ...updated } : v),
+    )
+  }
+
   return (
     <div>
       <PageHeader
@@ -81,12 +112,11 @@ export default function VendasPage() {
       />
 
       <Card padding="none">
-        {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Buscar por cliente ou nº..."
+            placeholder="Buscar por cliente, nº ou produto..."
             className="flex-1"
           />
           <Select
@@ -113,37 +143,64 @@ export default function VendasPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((venda) => (
-                <div key={venda.id} className="p-4 hover:bg-cream-50/30 transition-colors">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="flex-shrink-0 text-[10px] font-mono text-dark-400 bg-cream-100 border border-gold-100 px-1.5 py-0.5 rounded">
-                          #{venda.numero}
-                        </span>
-                        <p className="font-medium text-dark-700 text-sm truncate">
-                          {venda.cliente?.nome || <span className="text-dark-300 italic">Sem cliente</span>}
+              {filtered.map((venda) => {
+                const numItens = venda.itens?.length ?? 0
+                return (
+                  <div key={venda.id} className="p-4 hover:bg-cream-50/30 transition-colors">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="flex-shrink-0 text-[10px] font-mono text-dark-400 bg-cream-100 border border-gold-100 px-1.5 py-0.5 rounded">
+                            #{displayNumMap.get(venda.id)}
+                          </span>
+                          <p className="font-medium text-dark-700 text-sm truncate">
+                            {venda.cliente?.nome || <span className="text-dark-300 italic">Sem cliente</span>}
+                          </p>
+                        </div>
+                        <p className="text-xs text-dark-400 mt-1">
+                          {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
+                          {numItens > 0 && <span className="text-dark-300"> · {numItens} {numItens === 1 ? 'item' : 'itens'}</span>}
                         </p>
+                        <p className="text-xs text-dark-300 mt-0.5">{formatDate(venda.data_venda)}</p>
+                        {/* Items preview */}
+                        {(venda.itens ?? []).length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {(venda.itens ?? []).slice(0, 2).map((item) => (
+                              <p key={item.id} className="text-[11px] text-dark-400 truncate">
+                                {item.quantidade}× {item.nome_produto}
+                              </p>
+                            ))}
+                            {(venda.itens ?? []).length > 2 && (
+                              <p className="text-[11px] text-dark-300 italic">
+                                +{(venda.itens ?? []).length - 2} mais
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-dark-300 mt-1 pl-0.5">{formatDate(venda.data_venda)}</p>
+                      <ActionMenu
+                        items={[
+                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => setEditando(venda) },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(venda), variant: 'danger' },
+                        ]}
+                      />
                     </div>
-                    <ActionMenu
-                      items={[{
-                        label: 'Excluir',
-                        icon: <Trash2 size={14} />,
-                        onClick: () => setConfirmDelete(venda),
-                        variant: 'danger',
-                      }]}
-                    />
+                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gold-50">
+                      <Badge variant={vendaStatusVariant(venda.status)}>
+                        {VENDA_STATUS_LABEL[venda.status]}
+                      </Badge>
+                      <div className="text-right">
+                        {venda.desconto > 0 && (
+                          <p className="text-[10px] text-red-400 leading-none mb-0.5">
+                            −{formatMoney(venda.desconto)}
+                          </p>
+                        )}
+                        <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gold-50">
-                    <Badge variant={vendaStatusVariant(venda.status)}>
-                      {VENDA_STATUS_LABEL[venda.status]}
-                    </Badge>
-                    <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Desktop: tabela */}
@@ -153,42 +210,85 @@ export default function VendasPage() {
                   <tr className="border-b border-gold-100 bg-cream-50/50">
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide w-14">#</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Cliente</th>
+                    <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Itens</th>
                     <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Data</th>
                     <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Pagamento</th>
                     <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Total</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Status</th>
-                    <th className="px-5 py-3 w-12" />
+                    <th className="px-5 py-3 w-20" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((venda) => (
-                    <tr key={venda.id} className="hover:bg-cream-50/40 transition-colors">
-                      <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{venda.numero}</td>
-                      <td className="px-5 py-3 font-medium text-dark-700 max-w-[200px]">
-                        <span className="block truncate">
-                          {venda.cliente?.nome || <span className="text-dark-300 italic font-normal">Sem cliente</span>}
-                        </span>
-                      </td>
-                      <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(venda.data_venda)}</td>
-                      <td className="hidden lg:table-cell px-5 py-3 text-dark-400">{FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}</td>
-                      <td className="px-5 py-3 text-right font-medium text-dark-700">{formatMoney(venda.total)}</td>
-                      <td className="px-5 py-3">
-                        <Badge variant={vendaStatusVariant(venda.status)}>
-                          {VENDA_STATUS_LABEL[venda.status]}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDelete(venda)}
-                          className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="Excluir venda"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((venda) => {
+                    const numItens = venda.itens?.length ?? 0
+                    return (
+                      <tr key={venda.id} className="hover:bg-cream-50/40 transition-colors group">
+                        <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{displayNumMap.get(venda.id)}</td>
+                        <td className="px-5 py-3 max-w-[180px]">
+                          <p className="font-medium text-dark-700 truncate">
+                            {venda.cliente?.nome || <span className="text-dark-300 italic font-normal">Sem cliente</span>}
+                          </p>
+                          {/* Items preview on hover/always visible */}
+                          {(venda.itens ?? []).length > 0 && (
+                            <div className="mt-0.5 space-y-px">
+                              {(venda.itens ?? []).slice(0, 2).map((item) => (
+                                <p key={item.id} className="text-[11px] text-dark-400 truncate leading-tight">
+                                  {item.quantidade}× {item.nome_produto}
+                                </p>
+                              ))}
+                              {(venda.itens ?? []).length > 2 && (
+                                <p className="text-[11px] text-dark-300 italic leading-tight">
+                                  +{(venda.itens ?? []).length - 2} mais
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="hidden md:table-cell px-5 py-3 text-dark-400 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-[11px] font-medium bg-cream-100 border border-gold-100 rounded-full text-dark-500">
+                            {numItens}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(venda.data_venda)}</td>
+                        <td className="hidden lg:table-cell px-5 py-3 text-dark-400">
+                          {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {venda.desconto > 0 && (
+                            <p className="text-[10px] text-red-400 leading-none mb-0.5">
+                              −{formatMoney(venda.desconto)}
+                            </p>
+                          )}
+                          <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge variant={vendaStatusVariant(venda.status)}>
+                            {VENDA_STATUS_LABEL[venda.status]}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setEditando(venda)}
+                              className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Editar venda"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDelete(venda)}
+                              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Excluir venda"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -201,7 +301,7 @@ export default function VendasPage() {
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleDelete}
         title="Excluir venda"
-        description={`Deseja excluir a venda #${confirmDelete?.numero}? Esta ação não pode ser desfeita.`}
+        description={`Deseja excluir a venda #${confirmDelete ? displayNumMap.get(confirmDelete.id) : ''}? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         loading={!!deletando}
       />
@@ -210,6 +310,14 @@ export default function VendasPage() {
         open={modalNovaVenda}
         onClose={() => setModalNovaVenda(false)}
         onSuccess={() => { void loadVendas() }}
+      />
+
+      <ModalEditarVenda
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        onSuccess={handleEditSuccess}
+        venda={editando}
+        displayNum={editando ? displayNumMap.get(editando.id) : undefined}
       />
     </div>
   )

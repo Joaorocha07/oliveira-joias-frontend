@@ -8,23 +8,59 @@ import { Modal, Button, Select, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { servicoSchema, type ServicoFormData } from '@/schemas/servico'
-import { createServico } from '@/services/servicos'
+import { createServico, updateServico } from '@/services/servicos'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
-import { today, SERVICO_STATUS_LABEL, FORMA_PAGAMENTO_LABEL } from '@/utils'
-import type { ServicoStatus, FormaPagamento } from '@/types'
+import { today, SERVICO_STATUS_LABEL, FORMA_PAGAMENTO_LABEL, toInputDate } from '@/utils'
+import type { ServicoComCliente, ServicoStatus, FormaPagamento } from '@/types'
 
 interface ModalNovoServicoProps {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  servico?: ServicoComCliente | null
+  displayNum?: number
 }
 
 const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'entregue', 'cancelado']
 const FORMAS: FormaPagamento[] = ['dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'transferencia', 'cheque']
 
-export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoProps) {
+function buildDefaults(servico?: ServicoComCliente | null): ServicoFormData {
+  if (servico) {
+    return {
+      cliente_id: servico.cliente_id,
+      tipo: servico.tipo,
+      descricao: servico.descricao,
+      observacoes_internas: servico.observacoes_internas ?? '',
+      valor: servico.valor,
+      custo_estimado: servico.custo_estimado,
+      status: servico.status,
+      data_entrada: toInputDate(servico.data_entrada),
+      data_previsao: toInputDate(servico.data_previsao) || null,
+      forma_pagamento: servico.forma_pagamento,
+      responsavel_id: servico.responsavel_id,
+      pago: servico.pago,
+    }
+  }
+  return {
+    cliente_id: null,
+    tipo: '',
+    descricao: '',
+    observacoes_internas: '',
+    valor: 0,
+    custo_estimado: null,
+    status: 'orcamento',
+    data_entrada: today(),
+    data_previsao: null,
+    forma_pagamento: null,
+    responsavel_id: null,
+    pago: false,
+  }
+}
+
+export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum }: ModalNovoServicoProps) {
   const { user } = useAuth()
+  const isEditing = !!servico
 
   const {
     register,
@@ -35,42 +71,14 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
     formState: { errors, isSubmitting },
   } = useForm<ServicoFormData>({
     resolver: zodResolver(servicoSchema) as never,
-    defaultValues: {
-      cliente_id: null,
-      tipo: '',
-      descricao: '',
-      observacoes_internas: '',
-      valor: 0,
-      custo_estimado: null,
-      status: 'orcamento',
-      data_entrada: today(),
-      data_previsao: null,
-      forma_pagamento: null,
-      responsavel_id: null,
-      pago: false,
-    },
+    defaultValues: buildDefaults(servico),
   })
 
   const pago = watch('pago')
 
   useEffect(() => {
-    if (open) {
-      reset({
-        cliente_id: null,
-        tipo: '',
-        descricao: '',
-        observacoes_internas: '',
-        valor: 0,
-        custo_estimado: null,
-        status: 'orcamento',
-        data_entrada: today(),
-        data_previsao: null,
-        forma_pagamento: null,
-        responsavel_id: null,
-        pago: false,
-      })
-    }
-  }, [open, reset])
+    if (open) reset(buildDefaults(servico))
+  }, [open, servico, reset])
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
     const { data } = await supabase
@@ -101,11 +109,14 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
 
   async function onSave(data: ServicoFormData) {
     if (!user) return
-    const { error } = await createServico(data, user.id)
+    const { error } = isEditing
+      ? await updateServico(servico.id, data)
+      : await createServico(data, user.id)
+
     if (error) {
       toast.error(error)
     } else {
-      toast.success('Serviço criado com sucesso.')
+      toast.success(isEditing ? 'Serviço atualizado.' : 'Serviço criado com sucesso.')
       onSuccess()
       onClose()
     }
@@ -115,7 +126,7 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
     <Modal
       open={open}
       onClose={onClose}
-      title="Nova Ordem de Serviço"
+      title={isEditing ? `Editar Serviço #${displayNum ?? servico.numero}` : 'Nova Ordem de Serviço'}
       size="lg"
       footer={
         <>
@@ -128,7 +139,7 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
             form="form-novo-servico"
             loading={isSubmitting}
           >
-            Criar Serviço
+            {isEditing ? 'Salvar' : 'Criar Serviço'}
           </Button>
         </>
       }
@@ -144,6 +155,7 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
               onChange={(id) => field.onChange(id)}
               onSearch={searchClientes}
               placeholder="Buscar cliente..."
+              displayValue={servico?.cliente?.nome}
               error={errors.cliente_id?.message}
             />
           )}
@@ -238,6 +250,7 @@ export function ModalNovoServico({ open, onClose, onSuccess }: ModalNovoServicoP
               onChange={(id) => field.onChange(id)}
               onSearch={searchResponsaveis}
               placeholder="Buscar colaborador..."
+              displayValue={servico?.responsavel?.nome}
             />
           )}
         />

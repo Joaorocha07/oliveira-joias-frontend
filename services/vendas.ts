@@ -1,6 +1,19 @@
 import { supabase } from '@/lib/supabase'
 import { gerarDatasParcelas } from '@/utils'
 import type { VendaFormData, VendaItemFormData } from '@/schemas/venda'
+import type { VendaStatus, FormaPagamento } from '@/types'
+
+export interface UpdateVendaData {
+  cliente_id: string | null
+  status: VendaStatus
+  forma_pagamento: FormaPagamento
+  desconto: number
+  data_venda: string
+  observacoes: string
+  num_parcelas: number
+  entrada: number
+  dia_vencimento: number
+}
 
 function itemSubtotal(item: VendaItemFormData) {
   return Math.max(0, Math.round((item.quantidade * item.preco_unitario - item.desconto) * 100) / 100)
@@ -124,6 +137,92 @@ export async function createVenda(
     referencia_tipo: 'venda',
     created_by: userId,
   })
+
+  return { error: null }
+}
+
+export async function updateVenda(
+  id: string,
+  subtotal: number,
+  data: UpdateVendaData,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const total = Math.max(0, Math.round((subtotal - data.desconto) * 100) / 100)
+  const isCrediario = data.forma_pagamento === 'crediario'
+  const status = isCrediario ? 'crediario' : data.status
+
+  const { error } = await supabase
+    .from('vendas')
+    .update({
+      cliente_id: data.cliente_id || null,
+      status,
+      forma_pagamento: data.forma_pagamento,
+      desconto: data.desconto,
+      total,
+      valor_pago: isCrediario ? data.entrada : total,
+      data_venda: data.data_venda,
+      observacoes: data.observacoes || null,
+    })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  await supabase
+    .from('lancamentos')
+    .update({ valor: total, data_lancamento: data.data_venda, forma_pagamento: data.forma_pagamento })
+    .eq('referencia_id', id)
+    .eq('referencia_tipo', 'venda')
+
+  if (isCrediario && data.cliente_id) {
+    const { data: existing } = await supabase
+      .from('crediario')
+      .select('id')
+      .eq('venda_id', id)
+      .maybeSingle()
+
+    if (!existing) {
+      const saldo = Math.max(0, total - data.entrada)
+      const valorParcela = Math.round((saldo / data.num_parcelas) * 100) / 100
+
+      const { data: crediario, error: crediarioError } = await supabase
+        .from('crediario')
+        .insert({
+          venda_id: id,
+          cliente_id: data.cliente_id,
+          total,
+          entrada: data.entrada,
+          saldo,
+          num_parcelas: data.num_parcelas,
+          valor_parcela: valorParcela,
+          dia_vencimento: data.dia_vencimento,
+          status: 'em_dia',
+          created_by: userId,
+        })
+        .select('id')
+        .single()
+
+      if (crediarioError) return { error: crediarioError.message }
+
+      const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento)
+      const { error: parcelasError } = await supabase
+        .from('crediario_parcelas')
+        .insert(
+          datas.map((dataVenc, i) => ({
+            crediario_id: crediario.id,
+            cliente_id: data.cliente_id,
+            numero: i + 1,
+            valor: valorParcela,
+            valor_pago: 0,
+            data_vencimento: dataVenc,
+            data_pagamento: null,
+            forma_pagamento: null,
+            status: 'pendente',
+          })),
+        )
+
+      if (parcelasError) return { error: parcelasError.message }
+    }
+  }
 
   return { error: null }
 }
