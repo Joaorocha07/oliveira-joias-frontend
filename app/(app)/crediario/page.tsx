@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, SearchInput, Select, Spinner, EmptyState,
+  PeriodFilter, getPeriodRange, type PeriodPreset,
 } from '@/components/ui'
 import { ModalPagarParcela } from '@/components/modals/modal-pagar-parcela'
 import { ModalEditarCrediario } from '@/components/modals/modal-editar-crediario'
@@ -73,6 +74,10 @@ export default function CrediarioPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<CrediarioStatus | ''>('')
+  const initialPeriod = getPeriodRange('mes')
+  const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
+  const [dataFim, setDataFim] = useState(initialPeriod.fim)
+  const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
 
   const [selectedCrediario, setSelectedCrediario] = useState<CrediarioRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -84,6 +89,8 @@ export default function CrediarioPage() {
     const { data, error } = await supabase
       .from('crediario')
       .select('*, cliente:clientes(nome, telefone), parcelas:crediario_parcelas(*), venda:vendas(numero, data_venda, forma_pagamento)')
+      .gte('created_at', `${dataInicio}T00:00:00`)
+      .lte('created_at', `${dataFim}T23:59:59`)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -95,7 +102,7 @@ export default function CrediarioPage() {
     setCrediarios(rows)
     setLoading(false)
     return rows
-  }, [])
+  }, [dataFim, dataInicio])
 
   useEffect(() => {
     const id = window.setTimeout(() => void loadCrediarios(), 0)
@@ -140,7 +147,19 @@ export default function CrediarioPage() {
       />
 
       <Card padding="none">
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
+        <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            activePreset={activePreset}
+            onChange={({ inicio, fim, preset }) => {
+              setLoading(true)
+              setDataInicio(inicio)
+              setDataFim(fim)
+              setActivePreset(preset)
+            }}
+          />
+          <div className="flex flex-col sm:flex-row gap-3">
           <SearchInput
             value={search}
             onChange={setSearch}
@@ -157,6 +176,7 @@ export default function CrediarioPage() {
               <option key={s} value={s}>{CREDIARIO_STATUS_LABEL[s]}</option>
             ))}
           </Select>
+          </div>
         </div>
 
         {loading ? (

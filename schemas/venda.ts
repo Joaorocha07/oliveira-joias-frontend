@@ -18,6 +18,9 @@ const itemSchema = z.object({
 export const vendaSchema = z
   .object({
     cliente_id: z.string().nullable(),
+    vendedor_id: z.string().nullable(),
+    origem_id: z.string().nullable(),
+    origem_outro: z.string().nullable(),
     data_venda: z.string().min(1, 'Data obrigatória'),
     forma_pagamento: z.enum(formasPagamento),
     desconto: z.number().min(0),

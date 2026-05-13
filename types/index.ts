@@ -21,8 +21,17 @@ export interface Profile {
   ativo: boolean
   avatar_url: string | null
   telefone: string | null
+  cpf: string | null
   created_at: string
   updated_at: string
+}
+
+// ── ORIGEM CLIENTE ─────────────────────────────────────────────
+export interface OrigemCliente {
+  id: string
+  nome: string
+  ativo: boolean
+  created_at: string
 }
 
 // ── CLIENTE ────────────────────────────────────────────────────
@@ -177,6 +186,8 @@ export interface Venda {
   numero: number
   cliente_id: string | null
   vendedor_id: string | null
+  origem_id: string | null
+  origem_outro: string | null
   status: VendaStatus
   forma_pagamento: FormaPagamento
   subtotal: number
@@ -190,6 +201,7 @@ export interface Venda {
   updated_at: string
   cliente?: Cliente
   vendedor?: Profile
+  origem?: OrigemCliente
   itens?: VendaItem[]
 }
 

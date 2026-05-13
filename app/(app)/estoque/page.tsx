@@ -5,8 +5,8 @@ import { Plus, Diamond, Pencil, Trash2, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
-  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
-  ActionMenu, AlertDialog,
+  PageHeader, Card, Badge, MetricCard, Button, SearchInput, Select,
+  Spinner, EmptyState, ActionMenu, AlertDialog, PeriodFilter, getPeriodRange, type PeriodPreset,
 } from '@/components/ui'
 import { ModalProduto } from '@/components/modals/modal-produto'
 import { ModalMovimentacaoEstoque } from '@/components/modals/modal-movimentacao-estoque'
@@ -25,6 +25,10 @@ export default function EstoquePage() {
   const [search, setSearch] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<ProdutoCategoria | ''>('')
   const [filtroAtivo, setFiltroAtivo] = useState<'true' | 'false' | ''>('true')
+  const initialPeriod = getPeriodRange('mes')
+  const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
+  const [dataFim, setDataFim] = useState(initialPeriod.fim)
+  const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
   const [modalProduto, setModalProduto] = useState(false)
   const [editando, setEditando] = useState<Produto | null>(null)
   const [modalMovimentacao, setModalMovimentacao] = useState(false)
@@ -37,6 +41,8 @@ export default function EstoquePage() {
     const { data, error } = await supabase
       .from('produtos')
       .select('*, variacoes:produto_variacoes(*), fornecedor:fornecedores(nome)')
+      .gte('created_at', `${dataInicio}T00:00:00`)
+      .lte('created_at', `${dataFim}T23:59:59`)
       .order('nome')
 
     if (error) {
@@ -54,12 +60,17 @@ export default function EstoquePage() {
 
     setProdutos(enriched)
     setLoading(false)
-  }, [])
+  }, [dataFim, dataInicio])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadProdutos(), 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadProdutos])
+
+  const minEstoque = useCallback((p: ProdutoComEstoque) => {
+    const variacoes = p.variacoes ?? []
+    return variacoes.filter((v) => v.ativo).reduce((sum, v) => sum + (v.estoque_minimo ?? 0), 0)
+  }, [])
 
   const filtered = useMemo(() => {
     return produtos.filter((p) => {
@@ -73,16 +84,26 @@ export default function EstoquePage() {
     })
   }, [produtos, search, filtroCategoria, filtroAtivo])
 
-  function openCreate() {
-    setEditando(null)
-    setModalProduto(true)
-  }
+  const metricas = useMemo(() => {
+    const ativos = produtos.filter((p) => p.ativo)
+    let critico = 0; let esgotado = 0
 
-  function openEdit(p: Produto) {
-    setEditando(p)
-    setModalProduto(true)
-  }
+    ativos.forEach((p) => {
+      const min = minEstoque(p)
+      if (p.total_estoque === 0) esgotado++
+      else if (p.total_estoque <= min) critico++
+    })
 
+    return {
+      totalProdutos: ativos.length,
+      totalUnidades: ativos.reduce((s, p) => s + p.total_estoque, 0),
+      critico,
+      esgotado,
+    }
+  }, [produtos, minEstoque])
+
+  function openCreate() { setEditando(null); setModalProduto(true) }
+  function openEdit(p: Produto) { setEditando(p); setModalProduto(true) }
   function openMovimentacao(p: ProdutoComEstoque) {
     setMovimentandoProduto({ id: p.id, nome: p.nome })
     setModalMovimentacao(true)
@@ -130,11 +151,6 @@ export default function EstoquePage() {
     return { variant: 'success' as const, label: 'Normal' }
   }
 
-  const minEstoque = (p: ProdutoComEstoque) => {
-    const variacoes = p.variacoes ?? []
-    return variacoes.filter((v) => v.ativo).reduce((sum, v) => sum + (v.estoque_minimo ?? 0), 0)
-  }
-
   return (
     <div>
       <PageHeader
@@ -147,8 +163,32 @@ export default function EstoquePage() {
         }
       />
 
+      {!loading && (
+        <>
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <MetricCard label="Produtos Ativos" value={String(metricas.totalProdutos)} />
+            <MetricCard label="Total em Estoque" value={`${metricas.totalUnidades} un`} />
+            <MetricCard label="Estoque Crítico" value={String(metricas.critico)} changeType={metricas.critico > 0 ? 'down' : 'neutral'} />
+            <MetricCard label="Esgotados" value={String(metricas.esgotado)} changeType={metricas.esgotado > 0 ? 'down' : 'neutral'} accent={metricas.esgotado > 0} />
+          </div>
+        </>
+      )}
+
       <Card padding="none">
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
+        <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            activePreset={activePreset}
+            onChange={({ inicio, fim, preset }) => {
+              setLoading(true)
+              setDataInicio(inicio)
+              setDataFim(fim)
+              setActivePreset(preset)
+            }}
+          />
+          <div className="flex flex-col sm:flex-row gap-3">
           <SearchInput
             value={search}
             onChange={setSearch}
@@ -174,6 +214,7 @@ export default function EstoquePage() {
             <option value="true">Ativos</option>
             <option value="false">Inativos</option>
           </Select>
+          </div>
         </div>
 
         {loading ? (
@@ -203,9 +244,7 @@ export default function EstoquePage() {
                           <span className="text-[10px] font-mono text-dark-400 bg-cream-100 border border-gold-100 px-1.5 py-0.5 rounded flex-shrink-0">
                             {p.codigo}
                           </span>
-                          {!p.ativo && (
-                            <span className="text-[10px] text-dark-300 italic">inativo</span>
-                          )}
+                          {!p.ativo && <span className="text-[10px] text-dark-300 italic">inativo</span>}
                         </div>
                         <p className="font-medium text-dark-700 text-sm truncate">{p.nome}</p>
                         <p className="text-xs text-dark-400 mt-0.5">
@@ -224,9 +263,7 @@ export default function EstoquePage() {
                     <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gold-50">
                       <div className="flex items-center gap-2">
                         <Badge variant={variant}>{label}</Badge>
-                        <span className="text-xs text-dark-400">
-                          {p.total_estoque} un · {p.variacoes_ativas} var.
-                        </span>
+                        <span className="text-xs text-dark-400">{p.total_estoque} un · {p.variacoes_ativas} var.</span>
                       </div>
                       <span className="text-xs font-medium text-dark-600">{formatMoney(p.preco_venda)}</span>
                     </div>

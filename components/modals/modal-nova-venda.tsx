@@ -8,12 +8,13 @@ import toast from 'react-hot-toast'
 import { Modal, Button, Select, Input, Spinner } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
+import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
 import { vendaSchema, type VendaFormData } from '@/schemas/venda'
 import { createVenda } from '@/services/vendas'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import { today, formatMoney, FORMA_PAGAMENTO_LABEL } from '@/utils'
-import type { FormaPagamento, Produto, ProdutoVariacao } from '@/types'
+import type { FormaPagamento, Produto, ProdutoVariacao, OrigemCliente } from '@/types'
 
 interface ModalNovaVendaProps {
   open: boolean
@@ -38,6 +39,10 @@ function round2(n: number) {
 export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps) {
   const { user } = useAuth()
   const [itemProdutos, setItemProdutos] = useState<Record<number, ItemProdutoState>>({})
+  const [quickClienteOpen, setQuickClienteOpen] = useState(false)
+  const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
+  const [origens, setOrigens] = useState<OrigemCliente[]>([])
+  const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
 
   const {
     register,
@@ -53,6 +58,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     resolver: zodResolver(vendaSchema) as never,
     defaultValues: {
       cliente_id: null,
+      vendedor_id: null,
+      origem_id: null,
+      origem_outro: null,
       data_venda: today(),
       forma_pagamento: undefined,
       desconto: 0,
@@ -64,10 +72,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     },
   })
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'itens',
-  })
+  const { fields, append, remove } = useFieldArray({ control, name: 'itens' })
 
   const watchedItens = watch('itens')
   const watchedDesconto = watch('desconto')
@@ -83,6 +88,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     if (open) {
       reset({
         cliente_id: null,
+        vendedor_id: null,
+        origem_id: null,
+        origem_outro: null,
         data_venda: today(),
         forma_pagamento: undefined,
         desconto: 0,
@@ -93,8 +101,34 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         dia_vencimento: 10,
       })
       setItemProdutos({})
+      setClienteDisplayValue(undefined)
+      setVendedorDisplayValue(undefined)
+      void supabase
+        .from('origens_cliente')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome')
+        .then(({ data }) => setOrigens((data as OrigemCliente[]) ?? []))
     }
   }, [open, reset])
+
+  const watchedOrigemId = watch('origem_id')
+  const origemSelecionada = origens.find((o) => o.id === watchedOrigemId)
+  const isOrigemOutro = origemSelecionada?.nome === 'Outro'
+
+  const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, nome, role')
+      .eq('ativo', true)
+      .ilike('nome', `%${q}%`)
+      .limit(20)
+    return (data ?? []).map((v: { id: string; nome: string; role: string }) => ({
+      id: v.id,
+      label: v.nome,
+      sublabel: v.role,
+    }))
+  }, [])
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
     const { data } = await supabase
@@ -131,10 +165,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   }, [])
 
   async function handleProdutoSelect(index: number, produtoId: string) {
-    setItemProdutos((prev) => ({
-      ...prev,
-      [index]: { variacoes: [], loading: true },
-    }))
+    setItemProdutos((prev) => ({ ...prev, [index]: { variacoes: [], loading: true } }))
 
     const { data: produto } = await supabase
       .from('produtos')
@@ -144,32 +175,19 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
 
     const p = produto as (Produto & { variacoes: ProdutoVariacao[] }) | null
     if (!p) {
-      setItemProdutos((prev) => ({
-        ...prev,
-        [index]: { variacoes: [], loading: false },
-      }))
+      setItemProdutos((prev) => ({ ...prev, [index]: { variacoes: [], loading: false } }))
       return false
     }
 
     const variacoes = (p.variacoes ?? []).filter((v) => v.ativo && v.estoque_atual > 0)
     if (variacoes.length === 0) {
-      setItemProdutos((prev) => ({
-        ...prev,
-        [index]: { variacoes: [], loading: false },
-      }))
-      setError(`itens.${index}.produto_id`, {
-        type: 'manual',
-        message: 'Produto sem estoque disponivel.',
-      })
-      toast.error('Este produto acabou e nao pode ser selecionado.')
+      setItemProdutos((prev) => ({ ...prev, [index]: { variacoes: [], loading: false } }))
+      setError(`itens.${index}.produto_id`, { type: 'manual', message: 'Produto sem estoque disponível.' })
+      toast.error('Este produto acabou e não pode ser selecionado.')
       return false
     }
 
-    setItemProdutos((prev) => ({
-      ...prev,
-      [index]: { variacoes, loading: false },
-    }))
-
+    setItemProdutos((prev) => ({ ...prev, [index]: { variacoes, loading: false } }))
     clearErrors([`itens.${index}.produto_id`, `itens.${index}.quantidade`, `itens.${index}.variacao_id`])
     setValue(`itens.${index}.produto_id`, p.id)
     setValue(`itens.${index}.nome_produto`, p.nome)
@@ -181,15 +199,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   }
 
   function addItem() {
-    append({
-      produto_id: '',
-      variacao_id: null,
-      nome_produto: '',
-      quantidade: 1,
-      preco_unitario: 0,
-      custo_unitario: 0,
-      desconto: 0,
-    })
+    append({ produto_id: '', variacao_id: null, nome_produto: '', quantidade: 1, preco_unitario: 0, custo_unitario: 0, desconto: 0 })
   }
 
   function removeItem(index: number) {
@@ -206,23 +216,24 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     })
   }
 
+  function handleQuickClienteSuccess(cliente: { id: string; nome: string; telefone: string | null }) {
+    setValue('cliente_id', cliente.id)
+    setClienteDisplayValue(cliente.nome)
+  }
+
   async function onSave(data: VendaFormData) {
     if (!user) return
 
     const stockErrorIndex = data.itens.findIndex((item, index) => {
       const variacoes = itemProdutos[index]?.variacoes ?? []
       const selectedVariation = variacoes.find((v) => v.id === item.variacao_id)
-
       if (!selectedVariation) return true
       return item.quantidade > selectedVariation.estoque_atual
     })
 
     if (stockErrorIndex >= 0) {
-      setError(`itens.${stockErrorIndex}.quantidade`, {
-        type: 'manual',
-        message: 'Quantidade maior que o estoque disponivel.',
-      })
-      toast.error('A quantidade informada passa do estoque disponivel.')
+      setError(`itens.${stockErrorIndex}.quantidade`, { type: 'manual', message: 'Quantidade maior que o estoque disponível.' })
+      toast.error('A quantidade informada passa do estoque disponível.')
       return
     }
 
@@ -237,322 +248,324 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Nova Venda"
-      size="xl"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form="form-nova-venda"
-            loading={isSubmitting}
-          >
-            Registrar Venda
-          </Button>
-        </>
-      }
-    >
-      <form id="form-nova-venda" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-5">
-        {/* Cliente + Data */}
-        <div className="grid grid-cols-2 gap-4">
-          <Controller
-            name="cliente_id"
-            control={control}
-            render={({ field }) => (
-              <SearchableSelect
-                label="Cliente (opcional)"
-                value={field.value}
-                onChange={(id, option) => {
-                  field.onChange(id)
-                  return !!option || id === null
-                }}
-                onSearch={searchClientes}
-                placeholder="Buscar cliente..."
-                error={errors.cliente_id?.message}
-              />
-            )}
-          />
-          <div className="flex flex-col gap-1">
-            <label className="label-base">Data da venda</label>
-            <input
-              type="date"
-              className={`input-base ${errors.data_venda ? 'border-red-400' : ''}`}
-              {...register('data_venda')}
-            />
-            {errors.data_venda && (
-              <p className="text-xs text-red-600">{errors.data_venda.message}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Itens */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-dark-600">Itens da venda</h4>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              leftIcon={<Plus size={13} />}
-              onClick={addItem}
-            >
-              Adicionar item
+    <>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title="Nova Venda"
+        size="xl"
+        footer={
+          <>
+            <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="form-nova-venda" loading={isSubmitting}>
+              Registrar Venda
             </Button>
+          </>
+        }
+      >
+        <form id="form-nova-venda" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-5">
+          {/* Cliente + Data */}
+          <div className="grid grid-cols-2 gap-4">
+            <Controller
+              name="cliente_id"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  label="Cliente (opcional)"
+                  value={field.value}
+                  displayValue={clienteDisplayValue}
+                  onChange={(id, option) => {
+                    field.onChange(id)
+                    if (option) setClienteDisplayValue(option.label)
+                    else if (id === null) setClienteDisplayValue(undefined)
+                    return !!option || id === null
+                  }}
+                  onSearch={searchClientes}
+                  onCreateNew={() => setQuickClienteOpen(true)}
+                  createNewLabel="Cadastrar cliente"
+                  placeholder="Buscar cliente..."
+                  error={errors.cliente_id?.message}
+                />
+              )}
+            />
+            <div className="flex flex-col gap-1">
+              <label className="label-base">Data da venda</label>
+              <input
+                type="date"
+                className={`input-base ${errors.data_venda ? 'border-red-400' : ''}`}
+                {...register('data_venda')}
+              />
+              {errors.data_venda && (
+                <p className="text-xs text-red-600">{errors.data_venda.message}</p>
+              )}
+            </div>
           </div>
 
-          {fields.length === 0 && (
-            <div className="border border-dashed border-gold-200 rounded-xl p-6 text-center">
-              <Package size={20} className="mx-auto mb-2 text-dark-300" />
-              <p className="text-sm text-dark-400">Nenhum item adicionado</p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-2"
-                onClick={addItem}
+          {/* Vendedor + Origem */}
+          <div className="grid grid-cols-2 gap-4">
+            <Controller
+              name="vendedor_id"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  label="Vendedor (opcional)"
+                  value={field.value}
+                  displayValue={vendedorDisplayValue}
+                  onChange={(id, option) => {
+                    field.onChange(id)
+                    setVendedorDisplayValue(option?.label)
+                    return true
+                  }}
+                  onSearch={searchVendedores}
+                  placeholder="Buscar vendedor..."
+                />
+              )}
+            />
+            <div className="flex flex-col gap-1">
+              <label className="label-base">Origem do cliente</label>
+              <select
+                className="input-base"
+                {...register('origem_id')}
+                onChange={(e) => {
+                  setValue('origem_id', e.target.value || null)
+                  setValue('origem_outro', null)
+                }}
               >
-                Adicionar primeiro item
+                <option value="">Não informado</option>
+                {origens.map((o) => (
+                  <option key={o.id} value={o.id}>{o.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {isOrigemOutro && (
+            <Input
+              label="Onde exatamente? *"
+              placeholder="Ex: Feira do bairro, amigo João..."
+              {...register('origem_outro')}
+              error={errors.origem_outro?.message}
+            />
+          )}
+
+          {/* Itens */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-dark-600">Itens da venda</h4>
+              <Button type="button" variant="ghost" size="sm" leftIcon={<Plus size={13} />} onClick={addItem}>
+                Adicionar item
               </Button>
             </div>
-          )}
 
-          {typeof errors.itens?.message === 'string' && (
-            <p className="text-xs text-red-600">{errors.itens.message}</p>
-          )}
-
-          {fields.map((field, index) => {
-            const itemState = itemProdutos[index]
-            const itemErrors = errors.itens?.[index]
-            const item = watchedItens?.[index]
-            const produtoId = item?.produto_id
-            const selectedVariation = itemState?.variacoes.find((v) => v.id === item?.variacao_id)
-            const estoqueDisponivel = selectedVariation?.estoque_atual ?? (
-              itemState?.variacoes.length === 1 ? itemState.variacoes[0].estoque_atual : undefined
-            )
-
-            return (
-              <div
-                key={field.id}
-                className="border border-gold-100 rounded-xl p-4 bg-cream-50/50 flex flex-col gap-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-dark-400">Item {index + 1}</span>
-                  <Button
-                    type="button"
-                    variant="danger-ghost"
-                    size="icon"
-                    onClick={() => removeItem(index)}
-                  >
-                    <Trash2 size={13} />
-                  </Button>
-                </div>
-
-                <SearchableSelect
-                  label="Produto"
-                  value={produtoId || null}
-                  onChange={(id) => {
-                    if (!id) return
-                    return handleProdutoSelect(index, id)
-                  }}
-                  onSearch={searchProdutos}
-                  placeholder="Buscar produto..."
-                  error={itemErrors?.produto_id?.message}
-                />
-
-                {itemState?.loading && (
-                  <div className="flex items-center gap-2 text-xs text-dark-400">
-                    <Spinner size={12} />
-                    Carregando variações...
-                  </div>
-                )}
-
-                {itemState && itemState.variacoes.length > 1 && (
-                  <Select
-                    label="Variação"
-                    placeholder="Selecione a variação..."
-                    error={itemErrors?.variacao_id?.message}
-                    {...register(`itens.${index}.variacao_id`)}
-                  >
-                    {itemState.variacoes.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.nome}: {v.valor} (estoque: {v.estoque_atual})
-                      </option>
-                    ))}
-                  </Select>
-                )}
-
-                {estoqueDisponivel !== undefined && (
-                  <p className="text-xs text-dark-400">
-                    Estoque disponivel: {estoqueDisponivel} un.
-                  </p>
-                )}
-
-                <div className="grid grid-cols-3 gap-3">
-                  <Input
-                    label="Qtd"
-                    type="number"
-                    min={1}
-                    max={estoqueDisponivel}
-                    error={itemErrors?.quantidade?.message}
-                    {...register(`itens.${index}.quantidade`, {
-                      valueAsNumber: true,
-                      validate: (quantidade) => {
-                        if (estoqueDisponivel === undefined) return true
-                        return quantidade <= estoqueDisponivel || `Disponivel: ${estoqueDisponivel} un.`
-                      },
-                    })}
-                  />
-                  <Controller
-                    name={`itens.${index}.preco_unitario`}
-                    control={control}
-                    render={({ field: f }) => (
-                      <CurrencyInput
-                        label="Preço unit."
-                        value={f.value}
-                        onChange={f.onChange}
-                        error={itemErrors?.preco_unitario?.message}
-                      />
-                    )}
-                  />
-                  <Controller
-                    name={`itens.${index}.desconto`}
-                    control={control}
-                    render={({ field: f }) => (
-                      <CurrencyInput
-                        label="Desconto"
-                        value={f.value}
-                        onChange={f.onChange}
-                      />
-                    )}
-                  />
-                </div>
-
-                {(() => {
-                  const item = watchedItens?.[index]
-                  if (!item) return null
-                  const sub = round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
-                  return (
-                    <div className="text-right text-sm text-dark-500">
-                      Subtotal: <strong className="text-dark-700">{formatMoney(sub)}</strong>
-                    </div>
-                  )
-                })()}
+            {fields.length === 0 && (
+              <div className="border border-dashed border-gold-200 rounded-xl p-6 text-center">
+                <Package size={20} className="mx-auto mb-2 text-dark-300" />
+                <p className="text-sm text-dark-400">Nenhum item adicionado</p>
+                <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={addItem}>
+                  Adicionar primeiro item
+                </Button>
               </div>
-            )
-          })}
-        </div>
-
-        {/* Forma de pagamento + Desconto total */}
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Forma de pagamento"
-            placeholder="Selecione..."
-            error={errors.forma_pagamento?.message}
-            {...register('forma_pagamento')}
-          >
-            {FORMAS.map((f) => (
-              <option key={f} value={f}>{FORMA_PAGAMENTO_LABEL[f]}</option>
-            ))}
-          </Select>
-          <Controller
-            name="desconto"
-            control={control}
-            render={({ field }) => (
-              <CurrencyInput
-                label="Desconto total"
-                value={field.value}
-                onChange={field.onChange}
-                error={errors.desconto?.message}
-              />
             )}
-          />
-        </div>
 
-        {/* Crediário */}
-        {isCrediario && (
-          <div className="border border-gold-200 rounded-xl p-4 bg-gold-50/30 flex flex-col gap-4">
-            <h4 className="text-sm font-medium text-dark-600">Condições do crediário</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <Input
-                label="Nº de parcelas"
-                type="number"
-                min={1}
-                max={60}
-                error={errors.num_parcelas?.message}
-                {...register('num_parcelas', { valueAsNumber: true })}
-              />
-              <Controller
-                name="entrada"
-                control={control}
-                render={({ field }) => (
-                  <CurrencyInput
-                    label="Entrada"
-                    value={field.value}
-                    onChange={field.onChange}
-                    error={errors.entrada?.message}
-                  />
-                )}
-              />
-              <Input
-                label="Dia de vencimento"
-                type="number"
-                min={1}
-                max={28}
-                error={errors.dia_vencimento?.message}
-                {...register('dia_vencimento', { valueAsNumber: true })}
-              />
-            </div>
-            {(() => {
-              const entrada = watch('entrada') ?? 0
-              const numParcelas = watch('num_parcelas') ?? 1
-              const saldo = Math.max(0, total - entrada)
-              const valorParcela = numParcelas > 0 ? round2(saldo / numParcelas) : 0
+            {typeof errors.itens?.message === 'string' && (
+              <p className="text-xs text-red-600">{errors.itens.message}</p>
+            )}
+
+            {fields.map((field, index) => {
+              const itemState = itemProdutos[index]
+              const itemErrors = errors.itens?.[index]
+              const item = watchedItens?.[index]
+              const produtoId = item?.produto_id
+              const selectedVariation = itemState?.variacoes.find((v) => v.id === item?.variacao_id)
+              const estoqueDisponivel = selectedVariation?.estoque_atual ?? (
+                itemState?.variacoes.length === 1 ? itemState.variacoes[0].estoque_atual : undefined
+              )
+
               return (
-                <div className="text-sm text-dark-500">
-                  Saldo a parcelar: <strong>{formatMoney(saldo)}</strong>
-                  {valorParcela > 0 && (
-                    <> · {numParcelas}x de <strong>{formatMoney(valorParcela)}</strong></>
+                <div key={field.id} className="border border-gold-100 rounded-xl p-4 bg-cream-50/50 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-dark-400">Item {index + 1}</span>
+                    <Button type="button" variant="danger-ghost" size="icon" onClick={() => removeItem(index)}>
+                      <Trash2 size={13} />
+                    </Button>
+                  </div>
+
+                  <SearchableSelect
+                    label="Produto"
+                    value={produtoId || null}
+                    onChange={(id) => { if (!id) return; return handleProdutoSelect(index, id) }}
+                    onSearch={searchProdutos}
+                    placeholder="Buscar produto..."
+                    error={itemErrors?.produto_id?.message}
+                  />
+
+                  {itemState?.loading && (
+                    <div className="flex items-center gap-2 text-xs text-dark-400">
+                      <Spinner size={12} /> Carregando variações...
+                    </div>
                   )}
+
+                  {itemState && itemState.variacoes.length > 1 && (
+                    <Select
+                      label="Variação"
+                      placeholder="Selecione a variação..."
+                      error={itemErrors?.variacao_id?.message}
+                      {...register(`itens.${index}.variacao_id`)}
+                    >
+                      {itemState.variacoes.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nome}: {v.valor} (estoque: {v.estoque_atual})
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+
+                  {estoqueDisponivel !== undefined && (
+                    <p className="text-xs text-dark-400">Estoque disponível: {estoqueDisponivel} un.</p>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <Input
+                      label="Qtd"
+                      type="number"
+                      min={1}
+                      max={estoqueDisponivel}
+                      error={itemErrors?.quantidade?.message}
+                      {...register(`itens.${index}.quantidade`, {
+                        valueAsNumber: true,
+                        validate: (quantidade) => {
+                          if (estoqueDisponivel === undefined) return true
+                          return quantidade <= estoqueDisponivel || `Disponível: ${estoqueDisponivel} un.`
+                        },
+                      })}
+                    />
+                    <Controller
+                      name={`itens.${index}.preco_unitario`}
+                      control={control}
+                      render={({ field: f }) => (
+                        <CurrencyInput label="Preço unit." value={f.value} onChange={f.onChange} error={itemErrors?.preco_unitario?.message} />
+                      )}
+                    />
+                    <Controller
+                      name={`itens.${index}.desconto`}
+                      control={control}
+                      render={({ field: f }) => (
+                        <CurrencyInput label="Desconto" value={f.value} onChange={f.onChange} />
+                      )}
+                    />
+                  </div>
+
+                  {(() => {
+                    if (!item) return null
+                    const sub = round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
+                    return (
+                      <div className="text-right text-sm text-dark-500">
+                        Subtotal: <strong className="text-dark-700">{formatMoney(sub)}</strong>
+                      </div>
+                    )
+                  })()}
                 </div>
               )
-            })()}
+            })}
           </div>
-        )}
 
-        {/* Observações */}
-        <div className="flex flex-col gap-1">
-          <label className="label-base">Observações (opcional)</label>
-          <textarea
-            className="input-base resize-none"
-            rows={2}
-            {...register('observacoes')}
-          />
-        </div>
-
-        {/* Resumo */}
-        <div className="border-t border-gold-100 pt-4 flex flex-col gap-1">
-          <div className="flex justify-between text-sm text-dark-500">
-            <span>Subtotal</span>
-            <span>{formatMoney(subtotal)}</span>
+          {/* Forma de pagamento + Desconto total */}
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Forma de pagamento"
+              placeholder="Selecione..."
+              error={errors.forma_pagamento?.message}
+              {...register('forma_pagamento')}
+            >
+              {FORMAS.map((f) => (
+                <option key={f} value={f}>{FORMA_PAGAMENTO_LABEL[f]}</option>
+              ))}
+            </Select>
+            <Controller
+              name="desconto"
+              control={control}
+              render={({ field }) => (
+                <CurrencyInput label="Desconto total" value={field.value} onChange={field.onChange} error={errors.desconto?.message} />
+              )}
+            />
           </div>
-          {(watchedDesconto ?? 0) > 0 && (
-            <div className="flex justify-between text-sm text-dark-500">
-              <span>Desconto</span>
-              <span className="text-red-600">− {formatMoney(watchedDesconto ?? 0)}</span>
+
+          {/* Crediário */}
+          {isCrediario && (
+            <div className="border border-gold-200 rounded-xl p-4 bg-gold-50/30 flex flex-col gap-4">
+              <h4 className="text-sm font-medium text-dark-600">Condições do crediário</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <Input
+                  label="Nº de parcelas"
+                  type="number"
+                  min={1}
+                  max={60}
+                  error={errors.num_parcelas?.message}
+                  {...register('num_parcelas', { valueAsNumber: true })}
+                />
+                <Controller
+                  name="entrada"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput label="Entrada" value={field.value} onChange={field.onChange} error={errors.entrada?.message} />
+                  )}
+                />
+                <Input
+                  label="Dia de vencimento"
+                  type="number"
+                  min={1}
+                  max={28}
+                  error={errors.dia_vencimento?.message}
+                  {...register('dia_vencimento', { valueAsNumber: true })}
+                />
+              </div>
+              {(() => {
+                const entrada = watch('entrada') ?? 0
+                const numParcelas = watch('num_parcelas') ?? 1
+                const saldo = Math.max(0, total - entrada)
+                const valorParcela = numParcelas > 0 ? round2(saldo / numParcelas) : 0
+                return (
+                  <div className="text-sm text-dark-500">
+                    Saldo a parcelar: <strong>{formatMoney(saldo)}</strong>
+                    {valorParcela > 0 && (
+                      <> · {numParcelas}x de <strong>{formatMoney(valorParcela)}</strong></>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           )}
-          <div className="flex justify-between text-base font-medium text-dark-700 mt-1">
-            <span>Total</span>
-            <span className="font-display text-lg">{formatMoney(total)}</span>
+
+          {/* Observações */}
+          <div className="flex flex-col gap-1">
+            <label className="label-base">Observações (opcional)</label>
+            <textarea className="input-base resize-none" rows={2} {...register('observacoes')} />
           </div>
-        </div>
-      </form>
-    </Modal>
+
+          {/* Resumo */}
+          <div className="border-t border-gold-100 pt-4 flex flex-col gap-1">
+            <div className="flex justify-between text-sm text-dark-500">
+              <span>Subtotal</span><span>{formatMoney(subtotal)}</span>
+            </div>
+            {(watchedDesconto ?? 0) > 0 && (
+              <div className="flex justify-between text-sm text-dark-500">
+                <span>Desconto</span>
+                <span className="text-red-600">− {formatMoney(watchedDesconto ?? 0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-base font-medium text-dark-700 mt-1">
+              <span>Total</span>
+              <span className="font-display text-lg">{formatMoney(total)}</span>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      <ModalQuickCliente
+        open={quickClienteOpen}
+        onClose={() => setQuickClienteOpen(false)}
+        onSuccess={handleQuickClienteSuccess}
+      />
+    </>
   )
 }

@@ -211,3 +211,22 @@ export function gerarDatasParcelas(
 export function parcelaVencida(dataVencimento: string): boolean {
   return isBefore(startOfDay(parseISO(dataVencimento)), startOfDay(new Date()))
 }
+
+// ── CATEGORIAS DE DESPESA ──────────────────────────────────────
+export const CATEGORIAS_DESPESA = [
+  'Reposição / aumento de estoque',
+  'Investimentos',
+  'Contas fixas',
+  'Pró-labore',
+  'Retiradas pessoais',
+  'Marketing',
+  'Comissão',
+  'Serviços',
+  'Transporte',
+  'Logística',
+  'Comida',
+  'Limpeza / manutenção da loja',
+  'Outros',
+] as const
+
+export type CategoriaDespesa = typeof CATEGORIAS_DESPESA[number]

@@ -11,6 +11,7 @@ import {
 import { formatPhone, formatCPF } from '@/utils'
 import type { Cliente, ClienteInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
+import { deleteVenda } from '@/services/vendas'
 
 const EMPTY_FORM: ClienteInsert = {
   nome: '', cpf: null, rg: null, email: null, telefone: null, whatsapp: null,
@@ -30,6 +31,11 @@ export default function ClientesPage() {
   const [salvando, setSalvando] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Cliente | null>(null)
   const [deletando, setDeletando] = useState(false)
+  const [checandoVinculos, setChecandoVinculos] = useState<string | null>(null)
+  const [vinculos, setVinculos] = useState<{ vendas: number; servicos: number } | null>(null)
+  const [dangerCliente, setDangerCliente] = useState<Cliente | null>(null)
+  const [senha, setSenha] = useState('')
+  const [verificando, setVerificando] = useState(false)
 
   async function loadClientes() {
     const { data, error } = await supabase
@@ -115,19 +121,69 @@ export default function ClientesPage() {
     setSalvando(false)
   }
 
+  async function iniciarDelete(cliente: Cliente) {
+    setChecandoVinculos(cliente.id)
+    const [{ count: vendasCount }, { count: servicosCount }] = await Promise.all([
+      supabase.from('vendas').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
+      supabase.from('servicos').select('id', { count: 'exact', head: true }).eq('cliente_id', cliente.id),
+    ])
+    setChecandoVinculos(null)
+    const total = (vendasCount ?? 0) + (servicosCount ?? 0)
+    if (total === 0) {
+      setConfirmDelete(cliente)
+    } else {
+      setVinculos({ vendas: vendasCount ?? 0, servicos: servicosCount ?? 0 })
+      setDangerCliente(cliente)
+      setSenha('')
+    }
+  }
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeletando(true)
-    const { error } = await supabase
-      .from('clientes').update({ ativo: false }).eq('id', confirmDelete.id)
+    const { error } = await supabase.from('clientes').delete().eq('id', confirmDelete.id)
     if (error) {
       toast.error('Erro ao excluir cliente.')
     } else {
-      toast.success('Cliente removido.')
+      toast.success('Cliente excluído.')
       setClientes((prev) => prev.filter((c) => c.id !== confirmDelete.id))
+      setConfirmDelete(null)
     }
     setDeletando(false)
-    setConfirmDelete(null)
+  }
+
+  async function handleDeleteCascade() {
+    if (!dangerCliente || !user?.email) return
+    setVerificando(true)
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: senha,
+    })
+    if (authError) {
+      toast.error('Senha incorreta.')
+      setVerificando(false)
+      return
+    }
+
+    const { data: vendas } = await supabase.from('vendas').select('id').eq('cliente_id', dangerCliente.id)
+    for (const v of vendas ?? []) {
+      const { error } = await deleteVenda(v.id)
+      if (error) { toast.error(`Erro ao excluir venda: ${error}`); setVerificando(false); return }
+    }
+
+    const { error: servicosError } = await supabase.from('servicos').delete().eq('cliente_id', dangerCliente.id)
+    if (servicosError) { toast.error(`Erro ao excluir serviços: ${servicosError.message}`); setVerificando(false); return }
+
+    const { error: clienteError } = await supabase.from('clientes').delete().eq('id', dangerCliente.id)
+    if (clienteError) { toast.error(`Erro: ${clienteError.message}`); setVerificando(false); return }
+
+    toast.success('Cliente e todos os registros excluídos.')
+    setClientes((prev) => prev.filter((c) => c.id !== dangerCliente.id))
+    setDangerCliente(null)
+    setVinculos(null)
+    setSenha('')
+    setVerificando(false)
   }
 
   return (
@@ -192,7 +248,7 @@ export default function ClientesPage() {
                     <ActionMenu
                       items={[
                         { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(cliente) },
-                        { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(cliente), variant: 'danger' },
+                        { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => void iniciarDelete(cliente), variant: 'danger' },
                       ]}
                     />
                   </div>
@@ -244,11 +300,15 @@ export default function ClientesPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfirmDelete(cliente)}
-                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            onClick={() => void iniciarDelete(cliente)}
+                            disabled={checandoVinculos === cliente.id}
+                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                             title="Excluir cliente"
                           >
-                            <Trash2 size={14} />
+                            {checandoVinculos === cliente.id
+                              ? <span className="block w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                              : <Trash2 size={14} />
+                            }
                           </button>
                         </div>
                       </td>
@@ -371,11 +431,56 @@ export default function ClientesPage() {
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleDelete}
-        title="Remover cliente"
-        description={`Deseja remover "${confirmDelete?.nome}"?`}
-        confirmLabel="Remover"
+        title="Excluir cliente"
+        description={`Deseja excluir "${confirmDelete?.nome}" permanentemente? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
         loading={deletando}
       />
+
+      <Modal
+        open={!!dangerCliente}
+        onClose={() => { if (!verificando) { setDangerCliente(null); setVinculos(null); setSenha('') } }}
+        title="Excluir cliente e registros"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setDangerCliente(null); setVinculos(null); setSenha('') }} disabled={verificando}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={handleDeleteCascade} loading={verificando} disabled={!senha.trim()}>
+              Excluir tudo
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <p className="text-sm font-semibold text-red-700 mb-2">Atenção: esta ação é irreversível!</p>
+            <p className="text-sm text-red-600 mb-3">
+              Ao excluir <strong>{dangerCliente?.nome}</strong>, os seguintes registros serão apagados permanentemente:
+            </p>
+            <ul className="text-sm text-red-600 space-y-1">
+              {(vinculos?.vendas ?? 0) > 0 && (
+                <li>• {vinculos!.vendas} venda(s) — incluindo itens, crediário, parcelas e lançamentos</li>
+              )}
+              {(vinculos?.servicos ?? 0) > 0 && (
+                <li>• {vinculos!.servicos} serviço(s)</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="text-sm text-dark-500 mb-3">Para confirmar, insira sua senha de acesso:</p>
+            <Input
+              label="Senha"
+              type="password"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && senha.trim()) void handleDeleteCascade() }}
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

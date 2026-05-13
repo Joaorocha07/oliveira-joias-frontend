@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
-  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu,
+  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/context/auth-context'
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { href: '/servicos',     icon: <Wrench size={16} />,       label: 'Serviços' },
   { href: '/clientes',     icon: <Users size={16} />,        label: 'Clientes' },
   { href: '/fornecedores', icon: <Truck size={16} />,        label: 'Fornecedores' },
+  { href: '/vendedores',   icon: <UserCog size={16} />,      label: 'Equipe de Vendas' },
   { section: 'Financeiro', href: '/caixa',  icon: <Wallet size={16} />,   label: 'Caixa & Financeiro' },
   { href: '/relatorios',   icon: <BarChart3 size={16} />,    label: 'Relatórios' },
 ]

@@ -28,7 +28,9 @@ export async function createVenda(
     .from('vendas')
     .insert({
       cliente_id: data.cliente_id || null,
-      vendedor_id: userId,
+      vendedor_id: data.vendedor_id || userId,
+      origem_id: data.origem_id || null,
+      origem_outro: data.origem_outro || null,
       status: data.forma_pagamento === 'crediario' ? 'crediario' : 'pago',
       forma_pagamento: data.forma_pagamento,
       subtotal,

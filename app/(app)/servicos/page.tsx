@@ -6,31 +6,58 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
-  ActionMenu, ConfirmDialog,
+  ActionMenu, ConfirmDialog, Input,
 } from '@/components/ui'
 import { ModalNovoServico } from '@/components/modals/modal-novo-servico'
 import {
-  formatMoney, formatDate, servicoStatusVariant, SERVICO_STATUS_LABEL,
+  formatMoney, formatDate, today, servicoStatusVariant, SERVICO_STATUS_LABEL,
 } from '@/utils'
 import { updateServicoStatus, deleteServico } from '@/services/servicos'
 import type { ServicoComCliente, ServicoStatus } from '@/types'
 
 const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'entregue', 'cancelado']
 
+type PeriodoAtalho = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses'
+
+function toDateInputValue(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function addDays(date: Date, days: number) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function monthStart() {
+  const now = new Date()
+  return toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1))
+}
+
+function threeMonthsStart() {
+  const now = new Date()
+  return toDateInputValue(new Date(now.getFullYear(), now.getMonth() - 2, 1))
+}
+
 export default function ServicosPage() {
   const [servicos, setServicos] = useState<ServicoComCliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<ServicoStatus | ''>('')
+  const [dataInicio, setDataInicio] = useState(threeMonthsStart())
+  const [dataFim, setDataFim] = useState(today())
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<ServicoComCliente | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<ServicoComCliente | null>(null)
   const [deletando, setDeletando] = useState(false)
 
   const loadServicos = useCallback(async () => {
+    setLoading(true)
     const { data, error } = await supabase
       .from('servicos')
       .select('*, cliente:clientes(nome, telefone), responsavel:profiles!servicos_responsavel_id_fkey(nome)')
+      .gte('data_entrada', dataInicio)
+      .lte('data_entrada', dataFim)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -39,14 +66,13 @@ export default function ServicosPage() {
       setServicos((data as ServicoComCliente[]) ?? [])
     }
     setLoading(false)
-  }, [])
+  }, [dataInicio, dataFim])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadServicos(), 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadServicos])
 
-  // Sequential display numbers — gap-free, based on DB numero order
   const displayNumMap = useMemo(() => {
     const sorted = [...servicos].sort((a, b) => a.numero - b.numero)
     return new Map(sorted.map((s, i) => [s.id, i + 1]))
@@ -63,15 +89,16 @@ export default function ServicosPage() {
     })
   }, [servicos, search, filtroStatus])
 
-  function openCreate() {
-    setEditando(null)
-    setModalOpen(true)
+  function setPeriodo(atalho: PeriodoAtalho) {
+    const hoje = today()
+    if (atalho === 'hoje') { setDataInicio(hoje); setDataFim(hoje); return }
+    if (atalho === 'sete_dias') { setDataInicio(toDateInputValue(addDays(new Date(), -6))); setDataFim(hoje); return }
+    if (atalho === 'mes') { setDataInicio(monthStart()); setDataFim(hoje); return }
+    setDataInicio(threeMonthsStart()); setDataFim(hoje)
   }
 
-  function openEdit(s: ServicoComCliente) {
-    setEditando(s)
-    setModalOpen(true)
-  }
+  function openCreate() { setEditando(null); setModalOpen(true) }
+  function openEdit(s: ServicoComCliente) { setEditando(s); setModalOpen(true) }
 
   async function handleStatusChange(id: string, status: ServicoStatus) {
     const { error } = await updateServicoStatus(id, status)
@@ -109,23 +136,48 @@ export default function ServicosPage() {
       />
 
       <Card padding="none">
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por cliente, tipo ou nº..."
-            className="flex-1"
-          />
-          <Select
-            value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value as ServicoStatus | '')}
-            placeholder="Todos os status"
-            className="w-full sm:w-44"
-          >
-            {STATUS_OPTS.map((s) => (
-              <option key={s} value={s}>{SERVICO_STATUS_LABEL[s]}</option>
-            ))}
-          </Select>
+        <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('hoje')}>Hoje</Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('sete_dias')}>7 dias</Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('mes')}>Mês</Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('tres_meses')}>3 meses</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 lg:ml-auto">
+              <Input
+                label="De"
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
+              <Input
+                label="Até"
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Buscar por cliente, tipo ou nº..."
+              className="flex-1"
+            />
+            <Select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value as ServicoStatus | '')}
+              placeholder="Todos os status"
+              className="w-full sm:w-44"
+            >
+              {STATUS_OPTS.map((s) => (
+                <option key={s} value={s}>{SERVICO_STATUS_LABEL[s]}</option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         {loading ? (
@@ -134,7 +186,7 @@ export default function ServicosPage() {
           <EmptyState
             icon={<Wrench size={24} />}
             title="Nenhum serviço encontrado"
-            description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhuma ordem de serviço registrada.'}
+            description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhuma ordem de serviço no período.'}
           />
         ) : (
           <>

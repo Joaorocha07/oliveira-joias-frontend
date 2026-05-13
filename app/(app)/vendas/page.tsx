@@ -5,8 +5,8 @@ import { Plus, ShoppingCart, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
-  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
-  ConfirmDialog, ActionMenu,
+  PageHeader, Card, Badge, Button, SearchInput, Select, Spinner,
+  EmptyState, ConfirmDialog, ActionMenu, PeriodFilter, getPeriodRange, type PeriodPreset,
 } from '@/components/ui'
 import { ModalNovaVenda } from '@/components/modals/modal-nova-venda'
 import { ModalEditarVenda } from '@/components/modals/modal-editar-venda'
@@ -31,15 +31,8 @@ export type VendaRow = Venda & {
     custo_unitario: number
     desconto: number
     subtotal: number
-    produto?: {
-      codigo: string
-      categoria: string
-      material: string | null
-    } | null
-    variacao?: {
-      nome: string
-      valor: string
-    } | null
+    produto?: { codigo: string; categoria: string; material: string | null } | null
+    variacao?: { nome: string; valor: string } | null
   }[]
 }
 
@@ -48,6 +41,10 @@ export default function VendasPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<VendaStatus | ''>('')
+  const initialPeriod = getPeriodRange('mes')
+  const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
+  const [dataFim, setDataFim] = useState(initialPeriod.fim)
+  const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
   const [deletando, setDeletando] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<VendaRow | null>(null)
   const [editando, setEditando] = useState<VendaRow | null>(null)
@@ -55,26 +52,21 @@ export default function VendasPage() {
   const [drawerVenda, setDrawerVenda] = useState<VendaRow | null>(null)
 
   const loadVendas = useCallback(async () => {
+    setLoading(true)
     const { data, error } = await supabase
       .from('vendas')
       .select(`
         *,
         cliente:clientes(nome, telefone),
         itens:venda_itens(
-          id,
-          produto_id,
-          variacao_id,
-          nome_produto,
-          descricao,
-          quantidade,
-          preco_unitario,
-          custo_unitario,
-          desconto,
-          subtotal,
+          id, produto_id, variacao_id, nome_produto, descricao,
+          quantidade, preco_unitario, custo_unitario, desconto, subtotal,
           produto:produtos(codigo, categoria, material),
           variacao:produto_variacoes(nome, valor)
         )
       `)
+      .gte('data_venda', dataInicio)
+      .lte('data_venda', dataFim)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -83,14 +75,13 @@ export default function VendasPage() {
       setVendas((data as VendaRow[]) ?? [])
     }
     setLoading(false)
-  }, [])
+  }, [dataInicio, dataFim])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadVendas(), 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadVendas])
 
-  // Sequential display numbers based on creation order (stable, gap-free)
   const displayNumMap = useMemo(() => {
     const sorted = [...vendas].sort((a, b) => a.numero - b.numero)
     return new Map(sorted.map((v, i) => [v.id, i + 1]))
@@ -126,9 +117,7 @@ export default function VendasPage() {
   }
 
   function handleEditSuccess(updated: Partial<VendaRow>) {
-    setVendas((prev) =>
-      prev.map((v) => v.id === editando?.id ? { ...v, ...updated } : v),
-    )
+    setVendas((prev) => prev.map((v) => v.id === editando?.id ? { ...v, ...updated } : v))
   }
 
   return (
@@ -137,34 +126,44 @@ export default function VendasPage() {
         title="Vendas"
         subtitle="Gerenciamento de vendas e pedidos"
         actions={
-          <Button
-            variant="primary"
-            leftIcon={<Plus size={14} />}
-            onClick={() => setModalNovaVenda(true)}
-          >
+          <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setModalNovaVenda(true)}>
             Nova Venda
           </Button>
         }
       />
 
       <Card padding="none">
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por cliente, nº ou produto..."
-            className="flex-1"
+        <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            activePreset={activePreset}
+            onChange={({ inicio, fim, preset }) => {
+              setLoading(true)
+              setDataInicio(inicio)
+              setDataFim(fim)
+              setActivePreset(preset)
+            }}
           />
-          <Select
-            value={filtroStatus}
-            onChange={(e) => setFiltroStatus(e.target.value as VendaStatus | '')}
-            placeholder="Todos os status"
-            className="w-full sm:w-44"
-          >
-            {(Object.keys(VENDA_STATUS_LABEL) as VendaStatus[]).map((s) => (
-              <option key={s} value={s}>{VENDA_STATUS_LABEL[s]}</option>
-            ))}
-          </Select>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Buscar por cliente, nº ou produto..."
+              className="flex-1"
+            />
+            <Select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value as VendaStatus | '')}
+              placeholder="Todos os status"
+              className="w-full sm:w-44"
+            >
+              {(Object.keys(VENDA_STATUS_LABEL) as VendaStatus[]).map((s) => (
+                <option key={s} value={s}>{VENDA_STATUS_LABEL[s]}</option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         {loading ? (
@@ -173,7 +172,7 @@ export default function VendasPage() {
           <EmptyState
             icon={<ShoppingCart size={24} />}
             title="Nenhuma venda encontrada"
-            description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Registre a primeira venda.'}
+            description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhuma venda no período selecionado.'}
           />
         ) : (
           <>
@@ -213,9 +212,7 @@ export default function VendasPage() {
                               </p>
                             ))}
                             {(venda.itens ?? []).length > 2 && (
-                              <p className="text-[11px] text-dark-300 italic">
-                                +{(venda.itens ?? []).length - 2} mais
-                              </p>
+                              <p className="text-[11px] text-dark-300 italic">+{(venda.itens ?? []).length - 2} mais</p>
                             )}
                           </div>
                         )}
@@ -233,9 +230,7 @@ export default function VendasPage() {
                       </Badge>
                       <div className="text-right">
                         {venda.desconto > 0 && (
-                          <p className="text-[10px] text-red-400 leading-none mb-0.5">
-                            −{formatMoney(venda.desconto)}
-                          </p>
+                          <p className="text-[10px] text-red-400 leading-none mb-0.5">−{formatMoney(venda.desconto)}</p>
                         )}
                         <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
                       </div>
@@ -275,7 +270,6 @@ export default function VendasPage() {
                           <p className="font-medium text-dark-700 truncate">
                             {venda.cliente?.nome || <span className="text-dark-300 italic font-normal">Sem cliente</span>}
                           </p>
-                          {/* Items preview on hover/always visible */}
                           {(venda.itens ?? []).length > 0 && (
                             <div className="mt-0.5 space-y-px">
                               {(venda.itens ?? []).slice(0, 2).map((item) => (
@@ -298,7 +292,7 @@ export default function VendasPage() {
                                 {numItens}
                               </span>
                               <span className="text-xs text-dark-400">
-                                {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'} vendidas
+                                {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}
                               </span>
                             </div>
                             {(venda.itens ?? []).slice(0, 3).map((item) => (
@@ -322,25 +316,18 @@ export default function VendasPage() {
                         </td>
                         <td className="px-5 py-3 text-right">
                           {venda.desconto > 0 && (
-                            <p className="text-[10px] text-red-400 leading-none mb-0.5">
-                              −{formatMoney(venda.desconto)}
-                            </p>
+                            <p className="text-[10px] text-red-400 leading-none mb-0.5">−{formatMoney(venda.desconto)}</p>
                           )}
                           <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
                         </td>
                         <td className="px-5 py-3">
-                          <Badge variant={vendaStatusVariant(venda.status)}>
-                            {VENDA_STATUS_LABEL[venda.status]}
-                          </Badge>
+                          <Badge variant={vendaStatusVariant(venda.status)}>{VENDA_STATUS_LABEL[venda.status]}</Badge>
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-1 justify-end">
                             <button
                               type="button"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setEditando(venda)
-                              }}
+                              onClick={(e) => { e.stopPropagation(); setEditando(venda) }}
                               className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                               title="Editar venda"
                             >
@@ -348,10 +335,7 @@ export default function VendasPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setConfirmDelete(venda)
-                              }}
+                              onClick={(e) => { e.stopPropagation(); setConfirmDelete(venda) }}
                               className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                               title="Excluir venda"
                             >
@@ -398,16 +382,8 @@ export default function VendasPage() {
         onClose={() => setDrawerVenda(null)}
         venda={drawerVenda}
         displayNum={drawerVenda ? displayNumMap.get(drawerVenda.id) : undefined}
-        onEditar={() => {
-          if (!drawerVenda) return
-          setEditando(drawerVenda)
-          setDrawerVenda(null)
-        }}
-        onExcluir={() => {
-          if (!drawerVenda) return
-          setConfirmDelete(drawerVenda)
-          setDrawerVenda(null)
-        }}
+        onEditar={() => { if (!drawerVenda) return; setEditando(drawerVenda); setDrawerVenda(null) }}
+        onExcluir={() => { if (!drawerVenda) return; setConfirmDelete(drawerVenda); setDrawerVenda(null) }}
       />
     </div>
   )

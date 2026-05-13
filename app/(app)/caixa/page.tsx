@@ -1,16 +1,24 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Wallet, TrendingUp, TrendingDown } from 'lucide-react'
+import { Plus, Wallet, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, MetricCard, Button,
   SearchInput, Select, Spinner, EmptyState, Modal, Input, Textarea,
+  PeriodFilter, getPeriodRange, type PeriodPreset,
+  ActionMenu, type ActionMenuItem, ConfirmDialog,
 } from '@/components/ui'
+import { CurrencyInput } from '@/components/forms/currency-input'
 import { formatMoney, formatDate, today } from '@/utils'
 import type { Lancamento, LancamentoInsert, LancamentoTipo } from '@/types'
 import { useAuth } from '@/context/auth-context'
+
+interface CategoriaLancamento {
+  id: string
+  nome: string
+}
 
 const EMPTY_FORM: LancamentoInsert = {
   tipo: 'entrada',
@@ -27,32 +35,23 @@ const EMPTY_FORM: LancamentoInsert = {
   updated_by: null,
 }
 
-type PeriodoAtalho = 'hoje' | 'sete_dias' | 'mes'
-
-function toDateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
-function addDays(date: Date, days: number) {
-  const nextDate = new Date(date)
-  nextDate.setDate(nextDate.getDate() + days)
-  return nextDate
-}
-
-function monthStart() {
-  const now = new Date()
-  return toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1))
-}
-
 export default function CaixaPage() {
   const { user } = useAuth()
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([])
   const [loading, setLoading] = useState(true)
+  const [categorias, setCategorias] = useState<CategoriaLancamento[]>([])
+  const [categoriasLoading, setCategoriasLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroTipo, setFiltroTipo] = useState<LancamentoTipo | ''>('')
-  const [dataInicio, setDataInicio] = useState(today())
-  const [dataFim, setDataFim] = useState(today())
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const initialPeriod = getPeriodRange('hoje')
+  const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
+  const [dataFim, setDataFim] = useState(initialPeriod.fim)
+  const [activePreset, setActivePreset] = useState<PeriodPreset>('hoje')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editando, setEditando] = useState<Lancamento | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Lancamento | null>(null)
+  const [deletando, setDeletando] = useState(false)
   const [form, setForm] = useState<LancamentoInsert>(EMPTY_FORM)
   const [salvando, setSalvando] = useState(false)
 
@@ -65,25 +64,48 @@ export default function CaixaPage() {
       .order('data_lancamento', { ascending: false })
 
     if (error) {
-      toast.error('Erro ao carregar lancamentos.')
+      toast.error('Erro ao carregar lançamentos.')
     } else {
       setLancamentos(data ?? [])
     }
     setLoading(false)
   }, [dataFim, dataInicio])
 
+  const loadCategorias = useCallback(async () => {
+    setCategoriasLoading(true)
+    const { data, error } = await supabase
+      .from('categorias')
+      .select('id, nome')
+      .order('nome')
+
+    if (error) {
+      toast.error(`Categorias: ${error.message}`)
+      console.error('loadCategorias error:', error)
+      setCategorias([])
+    } else {
+      setCategorias((data as CategoriaLancamento[]) ?? [])
+    }
+    setCategoriasLoading(false)
+  }, [])
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadLancamentos(), 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadLancamentos])
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => void loadCategorias(), 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [loadCategorias])
+
   const filtered = useMemo(() => {
     return lancamentos.filter((l) => {
       const matchSearch = !search || l.descricao.toLowerCase().includes(search.toLowerCase())
       const matchTipo = !filtroTipo || l.tipo === filtroTipo
-      return matchSearch && matchTipo
+      const matchCat = !filtroCategoria || l.categoria_nome === filtroCategoria
+      return matchSearch && matchTipo && matchCat
     })
-  }, [lancamentos, search, filtroTipo])
+  }, [lancamentos, search, filtroTipo, filtroCategoria])
 
   const totalEntradas = lancamentos
     .filter((l) => l.tipo === 'entrada')
@@ -100,67 +122,108 @@ export default function CaixaPage() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function setPeriodo(atalho: PeriodoAtalho) {
-    const hoje = today()
-    setLoading(true)
-
-    if (atalho === 'hoje') {
-      setDataInicio(hoje)
-      setDataFim(hoje)
-      return
-    }
-
-    if (atalho === 'sete_dias') {
-      setDataInicio(toDateInputValue(addDays(new Date(), -6)))
-      setDataFim(hoje)
-      return
-    }
-
-    setDataInicio(monthStart())
-    setDataFim(hoje)
+  function handleTipoChange(value: LancamentoTipo) {
+    setForm((prev) => ({ ...prev, tipo: value }))
   }
 
-  function handleDataInicioChange(value: string) {
-    setLoading(true)
-    setDataInicio(value)
-    if (value > dataFim) setDataFim(value)
+  function handleCategoriaChange(categoriaId: string) {
+    const categoria = categorias.find((item) => item.id === categoriaId)
+    setForm((prev) => ({
+      ...prev,
+      categoria_id: categoria?.id ?? null,
+      categoria_nome: categoria?.nome ?? null,
+    }))
   }
 
-  function handleDataFimChange(value: string) {
-    setLoading(true)
-    setDataFim(value)
-    if (value < dataInicio) setDataInicio(value)
+  function openEdit(l: Lancamento) {
+    setEditando(l)
+    setForm({
+      tipo: l.tipo,
+      descricao: l.descricao,
+      valor: l.valor,
+      data_lancamento: l.data_lancamento,
+      categoria_id: l.categoria_id,
+      categoria_nome: l.categoria_nome,
+      forma_pagamento: l.forma_pagamento,
+      referencia_id: l.referencia_id,
+      referencia_tipo: l.referencia_tipo,
+      observacoes: l.observacoes,
+      created_by: l.created_by,
+      updated_by: user?.id ?? null,
+    })
+    setModalOpen(true)
+  }
+
+  function getLancamentoActions(l: Lancamento): ActionMenuItem[] {
+    return [
+      { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(l) },
+      { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(l), variant: 'danger' },
+    ]
   }
 
   async function handleSave() {
-    if (!form.descricao.trim()) {
-      toast.error('Descricao e obrigatoria.')
-      return
-    }
-    if (!form.valor || form.valor <= 0) {
-      toast.error('Valor deve ser maior que zero.')
-      return
-    }
+    if (!form.descricao.trim()) { toast.error('Descrição é obrigatória.'); return }
+    if (!form.valor || form.valor <= 0) { toast.error('Valor deve ser maior que zero.'); return }
 
     setSalvando(true)
-    const { data, error } = await supabase
-      .from('lancamentos')
-      .insert([{ ...form, created_by: user?.id ?? null }])
-      .select()
-      .single()
 
-    if (error) {
-      toast.error('Erro ao registrar lancamento.')
+    if (editando) {
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .update({ ...form, updated_by: user?.id ?? null })
+        .eq('id', editando.id)
+        .select()
+        .single()
+
+      if (error) {
+        toast.error(`Erro ao atualizar: ${error.message}`)
+      } else {
+        toast.success('Lançamento atualizado.')
+        setModalOpen(false)
+        setEditando(null)
+        if (data) setLancamentos((prev) => prev.map((l) => l.id === editando.id ? data as Lancamento : l))
+      }
     } else {
-      toast.success('Lancamento registrado.')
-      setModalOpen(false)
-      if (data) {
-        const lancamento = data as Lancamento
-        const belongsToCurrentPeriod = lancamento.data_lancamento >= dataInicio && lancamento.data_lancamento <= dataFim
-        if (belongsToCurrentPeriod) setLancamentos((prev) => [lancamento, ...prev])
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .insert([{ ...form, created_by: user?.id ?? null }])
+        .select()
+        .single()
+
+      if (error) {
+        toast.error(`Lançamento: ${error.message}`)
+        console.error('handleSave error:', error)
+      } else {
+        toast.success('Lançamento registrado.')
+        setModalOpen(false)
+        if (data) {
+          const lancamento = data as Lancamento
+          const belongsToCurrentPeriod =
+            lancamento.data_lancamento >= dataInicio && lancamento.data_lancamento <= dataFim
+          if (belongsToCurrentPeriod) setLancamentos((prev) => [lancamento, ...prev])
+        }
       }
     }
+
     setSalvando(false)
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) return
+    setDeletando(true)
+    const { error } = await supabase
+      .from('lancamentos')
+      .delete()
+      .eq('id', confirmDelete.id)
+
+    if (error) {
+      toast.error(`Erro ao excluir: ${error.message}`)
+    } else {
+      toast.success('Lançamento excluído.')
+      setLancamentos((prev) => prev.filter((l) => l.id !== confirmDelete.id))
+      setConfirmDelete(null)
+    }
+    setDeletando(false)
   }
 
   return (
@@ -173,61 +236,41 @@ export default function CaixaPage() {
             variant="primary"
             leftIcon={<Plus size={14} />}
             onClick={() => {
+              setEditando(null)
               setForm({ ...EMPTY_FORM, data_lancamento: today(), created_by: user?.id ?? null })
               setModalOpen(true)
             }}
           >
-            Novo Lancamento
+            Novo Lançamento
           </Button>
         }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <MetricCard label="Total de Entradas" value={formatMoney(totalEntradas)} changeType="up" />
-        <MetricCard label="Total de Saidas" value={formatMoney(totalSaidas)} changeType="down" />
+        <MetricCard label="Total de Saídas" value={formatMoney(totalSaidas)} changeType="down" />
         <MetricCard label="Saldo" value={formatMoney(saldo)} changeType={saldo >= 0 ? 'up' : 'down'} accent />
       </div>
 
       <Card padding="none">
         <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
-          <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={dataInicio === today() && dataFim === today() ? 'primary' : 'secondary'}
-                onClick={() => setPeriodo('hoje')}
-              >
-                Hoje
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setPeriodo('sete_dias')}>
-                7 dias
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setPeriodo('mes')}>
-                Mes
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:ml-auto">
-              <Input
-                label="De"
-                type="date"
-                value={dataInicio}
-                onChange={(e) => handleDataInicioChange(e.target.value)}
-              />
-              <Input
-                label="Ate"
-                type="date"
-                value={dataFim}
-                onChange={(e) => handleDataFimChange(e.target.value)}
-              />
-            </div>
-          </div>
+          <PeriodFilter
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            activePreset={activePreset}
+            onChange={({ inicio, fim, preset }) => {
+              setLoading(true)
+              setDataInicio(inicio)
+              setDataFim(fim)
+              setActivePreset(preset)
+            }}
+          />
 
           <div className="flex flex-col sm:flex-row gap-3">
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar lancamento..."
+              placeholder="Buscar lançamento..."
               className="flex-1"
             />
             <Select
@@ -237,7 +280,17 @@ export default function CaixaPage() {
               className="w-full sm:w-44"
             >
               <option value="entrada">Entradas</option>
-              <option value="saida">Saidas</option>
+              <option value="saida">Saídas</option>
+            </Select>
+            <Select
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              placeholder="Todas as categorias"
+              className="w-full sm:w-56"
+            >
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.nome}>{categoria.nome}</option>
+              ))}
             </Select>
           </div>
         </div>
@@ -247,8 +300,8 @@ export default function CaixaPage() {
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Wallet size={24} />}
-            title="Nenhum lancamento encontrado"
-            description={search || filtroTipo ? 'Tente ajustar os filtros.' : `Nenhum movimento em ${periodoLabel}.`}
+            title="Nenhum lançamento encontrado"
+            description={search || filtroTipo || filtroCategoria ? 'Tente ajustar os filtros.' : `Nenhum movimento em ${periodoLabel}.`}
           />
         ) : (
           <>
@@ -257,21 +310,29 @@ export default function CaixaPage() {
               {filtered.map((l) => (
                 <div key={l.id} className="p-4 hover:bg-cream-50/30 transition-colors">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-dark-700 text-sm truncate flex-1">{l.descricao}</p>
-                    {l.tipo === 'entrada' ? (
-                      <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium flex-shrink-0">
-                        <TrendingUp size={11} /> Entrada
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium flex-shrink-0">
-                        <TrendingDown size={11} /> Saida
-                      </span>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-dark-700 text-sm truncate">{l.descricao}</p>
+                      {l.categoria_nome && (
+                        <p className="text-xs text-dark-400 mt-0.5">{l.categoria_nome}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {l.tipo === 'entrada' ? (
+                        <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                          <TrendingUp size={11} /> Entrada
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
+                          <TrendingDown size={11} /> Saída
+                        </span>
+                      )}
+                      <ActionMenu items={getLancamentoActions(l)} />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gold-50">
                     <span className="text-xs text-dark-300">{formatDate(l.data_lancamento)}</span>
                     <span className={`font-medium text-sm ${l.tipo === 'entrada' ? 'text-green-700' : 'text-red-700'}`}>
-                      {l.tipo === 'saida' ? '- ' : '+ '}{formatMoney(l.valor)}
+                      {l.tipo === 'saida' ? '− ' : '+ '}{formatMoney(l.valor)}
                     </span>
                   </div>
                 </div>
@@ -284,17 +345,22 @@ export default function CaixaPage() {
                 <thead>
                   <tr className="border-b border-gold-100 bg-cream-50/50">
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Data</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Descricao</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Descrição</th>
+                    <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Categoria</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Tipo</th>
                     <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Valor</th>
+                    <th className="px-5 py-3 w-20" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
                   {filtered.map((l) => (
                     <tr key={l.id} className="hover:bg-cream-50/40 transition-colors">
                       <td className="px-5 py-3 text-dark-400 whitespace-nowrap">{formatDate(l.data_lancamento)}</td>
-                      <td className="px-5 py-3 text-dark-700 max-w-[300px]">
+                      <td className="px-5 py-3 text-dark-700 max-w-[260px]">
                         <span className="block truncate">{l.descricao}</span>
+                      </td>
+                      <td className="hidden lg:table-cell px-5 py-3 text-dark-400 max-w-[180px]">
+                        <span className="block truncate">{l.categoria_nome ?? '—'}</span>
                       </td>
                       <td className="px-5 py-3">
                         {l.tipo === 'entrada' ? (
@@ -303,12 +369,32 @@ export default function CaixaPage() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
-                            <TrendingDown size={12} /> Saida
+                            <TrendingDown size={12} /> Saída
                           </span>
                         )}
                       </td>
                       <td className={`px-5 py-3 text-right font-medium ${l.tipo === 'entrada' ? 'text-green-700' : 'text-red-700'}`}>
-                        {l.tipo === 'saida' ? '- ' : '+ '}{formatMoney(l.valor)}
+                        {l.tipo === 'saida' ? '− ' : '+ '}{formatMoney(l.valor)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(l)}
+                            className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Editar lançamento"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDelete(l)}
+                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Excluir lançamento"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -321,8 +407,8 @@ export default function CaixaPage() {
 
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Novo Lancamento"
+        onClose={() => { setModalOpen(false); setEditando(null) }}
+        title={editando ? 'Editar Lançamento' : 'Novo Lançamento'}
         size="md"
         footer={
           <>
@@ -330,7 +416,7 @@ export default function CaixaPage() {
               Cancelar
             </Button>
             <Button variant="primary" onClick={handleSave} loading={salvando}>
-              Registrar
+              {editando ? 'Salvar' : 'Registrar'}
             </Button>
           </>
         }
@@ -339,24 +425,44 @@ export default function CaixaPage() {
           <Select
             label="Tipo"
             value={form.tipo}
-            onChange={(e) => setField('tipo', e.target.value as LancamentoTipo)}
+            onChange={(e) => handleTipoChange(e.target.value as LancamentoTipo)}
           >
             <option value="entrada">Entrada</option>
-            <option value="saida">Saida</option>
+            <option value="saida">Saída</option>
           </Select>
-          <Input label="Descricao *" value={form.descricao} onChange={(e) => setField('descricao', e.target.value)} />
-          <Input
+
+          <Select
+            label="Categoria"
+            value={form.categoria_id ?? ''}
+            onChange={(e) => handleCategoriaChange(e.target.value)}
+            placeholder={categoriasLoading ? 'Carregando categorias...' : 'Selecione a categoria...'}
+            disabled={categoriasLoading}
+            hint={!categoriasLoading && categorias.length === 0 ? 'Nenhuma categoria encontrada no banco.' : undefined}
+          >
+            {categorias.map((categoria) => (
+              <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>
+            ))}
+          </Select>
+
+          <Input label="Descrição *" value={form.descricao} onChange={(e) => setField('descricao', e.target.value)} />
+          <CurrencyInput
             label="Valor *"
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={form.valor || ''}
-            onChange={(e) => setField('valor', parseFloat(e.target.value) || 0)}
+            value={form.valor}
+            onChange={(v) => setField('valor', v)}
           />
           <Input label="Data" type="date" value={form.data_lancamento} onChange={(e) => setField('data_lancamento', e.target.value)} />
-          <Textarea label="Observacoes" value={form.observacoes ?? ''} onChange={(e) => setField('observacoes', e.target.value || null)} />
+          <Textarea label="Observações" value={form.observacoes ?? ''} onChange={(e) => setField('observacoes', e.target.value || null)} />
         </div>
       </Modal>
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={handleDelete}
+        title="Excluir Lançamento"
+        description={`Tem certeza que deseja excluir "${confirmDelete?.descricao}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        loading={deletando}
+      />
     </div>
   )
 }
