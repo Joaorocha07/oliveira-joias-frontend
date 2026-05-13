@@ -5,6 +5,9 @@ import type { VendaStatus, FormaPagamento } from '@/types'
 
 export interface UpdateVendaData {
   cliente_id: string | null
+  vendedor_id: string | null
+  origem_id: string | null
+  origem_outro: string | null
   status: VendaStatus
   forma_pagamento: FormaPagamento
   desconto: number
@@ -178,6 +181,9 @@ export async function updateVenda(
     .from('vendas')
     .update({
       cliente_id: data.cliente_id || null,
+      vendedor_id: data.vendedor_id || null,
+      origem_id: data.origem_id || null,
+      origem_outro: data.origem_outro || null,
       status,
       forma_pagamento: data.forma_pagamento,
       desconto: data.desconto,

@@ -44,12 +44,13 @@ export default function ServicosPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<ServicoStatus | ''>('')
-  const [dataInicio, setDataInicio] = useState(threeMonthsStart())
+  const [dataInicio, setDataInicio] = useState(today())
   const [dataFim, setDataFim] = useState(today())
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<ServicoComCliente | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<ServicoComCliente | null>(null)
   const [deletando, setDeletando] = useState(false)
+  const [activePeriodo, setActivePeriodo] = useState<PeriodoAtalho | null>('hoje')
 
   const loadServicos = useCallback(async () => {
     setLoading(true)
@@ -91,6 +92,7 @@ export default function ServicosPage() {
 
   function setPeriodo(atalho: PeriodoAtalho) {
     const hoje = today()
+    setActivePeriodo(atalho)
     if (atalho === 'hoje') { setDataInicio(hoje); setDataFim(hoje); return }
     if (atalho === 'sete_dias') { setDataInicio(toDateInputValue(addDays(new Date(), -6))); setDataFim(hoje); return }
     if (atalho === 'mes') { setDataInicio(monthStart()); setDataFim(hoje); return }
@@ -139,23 +141,23 @@ export default function ServicosPage() {
         <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
           <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('hoje')}>Hoje</Button>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('sete_dias')}>7 dias</Button>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('mes')}>Mês</Button>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPeriodo('tres_meses')}>3 meses</Button>
+              <Button type="button" variant={activePeriodo === 'hoje' ? 'primary' : 'secondary'} size="sm" onClick={() => setPeriodo('hoje')}>Hoje</Button>
+              <Button type="button" variant={activePeriodo === 'sete_dias' ? 'primary' : 'secondary'} size="sm" onClick={() => setPeriodo('sete_dias')}>7 dias</Button>
+              <Button type="button" variant={activePeriodo === 'mes' ? 'primary' : 'secondary'} size="sm" onClick={() => setPeriodo('mes')}>Mês</Button>
+              <Button type="button" variant={activePeriodo === 'tres_meses' ? 'primary' : 'secondary'} size="sm" onClick={() => setPeriodo('tres_meses')}>3 meses</Button>
             </div>
             <div className="grid grid-cols-2 gap-3 lg:ml-auto">
               <Input
                 label="De"
                 type="date"
                 value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
+                onChange={(e) => { setDataInicio(e.target.value); setActivePeriodo(null) }}
               />
               <Input
                 label="Até"
                 type="date"
                 value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
+                onChange={(e) => { setDataFim(e.target.value); setActivePeriodo(null) }}
               />
             </div>
           </div>

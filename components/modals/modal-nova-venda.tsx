@@ -103,12 +103,14 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       setItemProdutos({})
       setClienteDisplayValue(undefined)
       setVendedorDisplayValue(undefined)
-      void supabase
+      supabase
         .from('origens_cliente')
-        .select('*')
-        .eq('ativo', true)
+        .select('id, nome, ativo, created_at')
         .order('nome')
-        .then(({ data }) => setOrigens((data as OrigemCliente[]) ?? []))
+        .then(({ data, error }) => {
+          if (error) toast.error('Erro ao carregar origens.')
+          else setOrigens((data as OrigemCliente[]) ?? [])
+        })
     }
   }, [open, reset])
 

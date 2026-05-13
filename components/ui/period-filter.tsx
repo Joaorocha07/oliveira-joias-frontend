@@ -2,7 +2,7 @@ import { format, startOfMonth, subDays, subMonths } from 'date-fns'
 import { Button } from './button'
 import { Input } from './input'
 
-export type PeriodPreset = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses' | 'custom'
+export type PeriodPreset = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses' | 'tudo' | 'custom'
 
 interface PeriodFilterProps {
   dataInicio: string
@@ -21,14 +21,16 @@ export function getPeriodRange(preset: Exclude<PeriodPreset, 'custom'>) {
   if (preset === 'hoje') return { inicio: toDateStr(hoje), fim: toDateStr(hoje) }
   if (preset === 'sete_dias') return { inicio: toDateStr(subDays(hoje, 6)), fim: toDateStr(hoje) }
   if (preset === 'mes') return { inicio: toDateStr(startOfMonth(hoje)), fim: toDateStr(hoje) }
-  return { inicio: toDateStr(startOfMonth(subMonths(hoje, 2))), fim: toDateStr(hoje) }
+  if (preset === 'tres_meses') return { inicio: toDateStr(startOfMonth(subMonths(hoje, 2))), fim: toDateStr(hoje) }
+  return { inicio: '2000-01-01', fim: toDateStr(hoje) }
 }
 
 const PRESETS: { key: Exclude<PeriodPreset, 'custom'>; label: string }[] = [
   { key: 'hoje', label: 'Hoje' },
   { key: 'sete_dias', label: '7 dias' },
-  { key: 'mes', label: 'Mes' },
+  { key: 'mes', label: 'Mês' },
   { key: 'tres_meses', label: '3 meses' },
+  { key: 'tudo', label: 'Tudo' },
 ]
 
 export function PeriodFilter({ dataInicio, dataFim, activePreset, onChange, className }: PeriodFilterProps) {

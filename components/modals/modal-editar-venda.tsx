@@ -1,24 +1,28 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Modal, Button, Select } from '@/components/ui'
+import { Modal, Button, Select, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
+import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
 import { updateVenda } from '@/services/vendas'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/auth-context'
 import {
   formatMoney, toInputDate, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
-import type { VendaStatus, FormaPagamento } from '@/types'
+import type { VendaStatus, FormaPagamento, OrigemCliente } from '@/types'
 import type { VendaRow } from '@/app/(app)/vendas/page'
 
 const schema = z.object({
   cliente_id: z.string().nullable(),
+  vendedor_id: z.string().nullable(),
+  origem_id: z.string().nullable(),
+  origem_outro: z.string().nullable(),
   status: z.enum(['orcamento', 'pendente', 'pago', 'crediario', 'cancelado'] as const),
   forma_pagamento: z.enum([
     'dinheiro', 'pix', 'cartao_debito', 'cartao_credito',
@@ -48,6 +52,9 @@ interface ModalEditarVendaProps {
 function buildDefaults(venda: VendaRow): FormData {
   return {
     cliente_id: venda.cliente_id,
+    vendedor_id: venda.vendedor_id,
+    origem_id: venda.origem_id,
+    origem_outro: venda.origem_outro,
     status: venda.status,
     forma_pagamento: venda.forma_pagamento,
     desconto: venda.desconto,
@@ -58,12 +65,17 @@ function buildDefaults(venda: VendaRow): FormData {
 
 export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }: ModalEditarVendaProps) {
   const { user } = useAuth()
+  const [quickClienteOpen, setQuickClienteOpen] = useState(false)
+  const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
+  const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
+  const [origens, setOrigens] = useState<OrigemCliente[]>([])
   const {
     register,
     handleSubmit,
     control,
     watch,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as never,
@@ -75,8 +87,24 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
   const total = Math.max(0, Math.round((subtotal - watchedDesconto) * 100) / 100)
 
   useEffect(() => {
-    if (open && venda) reset(buildDefaults(venda))
+    if (open && venda) {
+      reset(buildDefaults(venda))
+      setClienteDisplayValue(venda.cliente?.nome ?? undefined)
+      setVendedorDisplayValue(venda.vendedor?.nome ?? undefined)
+      supabase
+        .from('origens_cliente')
+        .select('id, nome, ativo, created_at')
+        .order('nome')
+        .then(({ data, error }) => {
+          if (error) toast.error('Erro ao carregar origens.')
+          else setOrigens((data as OrigemCliente[]) ?? [])
+        })
+    }
   }, [open, venda, reset])
+
+  const watchedOrigemId = watch('origem_id')
+  const origemSelecionada = origens.find((o) => o.id === watchedOrigemId)
+  const isOrigemOutro = origemSelecionada?.nome === 'Outro'
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
     const { data } = await supabase
@@ -92,6 +120,25 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
     }))
   }, [])
 
+  const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, nome, role')
+      .eq('ativo', true)
+      .ilike('nome', `%${q}%`)
+      .limit(20)
+    return (data ?? []).map((v: { id: string; nome: string; role: string }) => ({
+      id: v.id,
+      label: v.nome,
+      sublabel: v.role,
+    }))
+  }, [])
+
+  function handleQuickClienteSuccess(cliente: { id: string; nome: string; telefone: string | null }) {
+    setValue('cliente_id', cliente.id)
+    setClienteDisplayValue(cliente.nome)
+  }
+
   async function onSave(data: FormData) {
     if (!venda || !user) return
     const { error } = await updateVenda(venda.id, subtotal, data, user.id)
@@ -101,12 +148,18 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
       toast.success('Venda atualizada.')
       onSuccess({
         cliente_id: data.cliente_id,
+        vendedor_id: data.vendedor_id,
+        origem_id: data.origem_id,
+        origem_outro: data.origem_outro,
         status: data.status,
         forma_pagamento: data.forma_pagamento,
         desconto: data.desconto,
         total,
         data_venda: data.data_venda,
         observacoes: data.observacoes,
+        cliente: data.cliente_id ? { nome: clienteDisplayValue ?? venda.cliente?.nome ?? 'Cliente', telefone: venda.cliente?.telefone ?? null } : null,
+        vendedor: data.vendedor_id ? { nome: vendedorDisplayValue ?? venda.vendedor?.nome ?? 'Vendedor' } : null,
+        origem: data.origem_id && origemSelecionada ? { id: origemSelecionada.id, nome: origemSelecionada.nome } : null,
       })
       onClose()
     }
@@ -115,6 +168,7 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
   const itens = venda?.itens ?? []
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -201,14 +255,68 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
             <SearchableSelect
               label="Cliente"
               value={field.value}
-              onChange={(id) => field.onChange(id)}
+              onChange={(id, option) => {
+                field.onChange(id)
+                if (option) setClienteDisplayValue(option.label)
+                else if (id === null) setClienteDisplayValue(undefined)
+                return true
+              }}
               onSearch={searchClientes}
+              onCreateNew={() => setQuickClienteOpen(true)}
+              createNewLabel="Cadastrar cliente"
               placeholder="Buscar cliente..."
-              displayValue={venda?.cliente?.nome ?? undefined}
+              displayValue={clienteDisplayValue}
               error={errors.cliente_id?.message}
             />
           )}
         />
+
+        <div className="grid grid-cols-2 gap-4">
+          <Controller
+            name="vendedor_id"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                label="Vendedor (opcional)"
+                value={field.value}
+                displayValue={vendedorDisplayValue}
+                onChange={(id, option) => {
+                  field.onChange(id)
+                  setVendedorDisplayValue(option?.label)
+                  return true
+                }}
+                onSearch={searchVendedores}
+                placeholder="Buscar vendedor..."
+              />
+            )}
+          />
+
+          <div className="flex flex-col gap-1">
+            <label className="label-base">Origem do cliente</label>
+            <select
+              className="input-base"
+              {...register('origem_id')}
+              onChange={(e) => {
+                setValue('origem_id', e.target.value || null)
+                setValue('origem_outro', null)
+              }}
+            >
+              <option value="">Não informado</option>
+              {origens.map((origem) => (
+                <option key={origem.id} value={origem.id}>{origem.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {isOrigemOutro && (
+          <Input
+            label="Onde exatamente? *"
+            placeholder="Ex: Feira do bairro, amigo João..."
+            {...register('origem_outro')}
+            error={errors.origem_outro?.message}
+          />
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <Select
@@ -264,5 +372,12 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
         </div>
       </form>
     </Modal>
+
+    <ModalQuickCliente
+      open={quickClienteOpen}
+      onClose={() => setQuickClienteOpen(false)}
+      onSuccess={handleQuickClienteSuccess}
+    />
+    </>
   )
 }

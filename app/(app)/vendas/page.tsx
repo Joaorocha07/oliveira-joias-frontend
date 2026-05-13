@@ -16,10 +16,12 @@ import {
   formatMoney, formatDate, vendaStatusVariant,
   VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
-import type { Venda, VendaStatus, ClienteResumo } from '@/types'
+import type { Venda, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
 
-export type VendaRow = Venda & {
+export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> & {
   cliente?: ClienteResumo | null
+  vendedor?: ProfileResumo | null
+  origem?: Pick<OrigemCliente, 'id' | 'nome'> | null
   itens?: {
     id: string
     produto_id: string
@@ -58,6 +60,7 @@ export default function VendasPage() {
       .select(`
         *,
         cliente:clientes(nome, telefone),
+        vendedor:profiles(nome, role),
         itens:venda_itens(
           id, produto_id, variacao_id, nome_produto, descricao,
           quantidade, preco_unitario, custo_unitario, desconto, subtotal,
