@@ -41,20 +41,14 @@ export async function generateCodigo(categoria: ProdutoCategoria): Promise<strin
 
 export async function checkDependencias(produtoId: string): Promise<{
   vendas: number
-  compras: number
-  kits: number
   movimentacoes: number
 }> {
-  const [vendas, compras, kits, movimentacoes] = await Promise.all([
+  const [vendas, movimentacoes] = await Promise.all([
     supabase.from('venda_itens').select('id', { count: 'exact', head: true }).eq('produto_id', produtoId),
-    supabase.from('compra_itens').select('id', { count: 'exact', head: true }).eq('produto_id', produtoId),
-    supabase.from('kit_itens').select('id', { count: 'exact', head: true }).eq('produto_id', produtoId),
     supabase.from('estoque_movimentacoes').select('id', { count: 'exact', head: true }).eq('produto_id', produtoId),
   ])
   return {
     vendas: vendas.count ?? 0,
-    compras: compras.count ?? 0,
-    kits: kits.count ?? 0,
     movimentacoes: movimentacoes.count ?? 0,
   }
 }
@@ -161,7 +155,7 @@ export async function desativarProduto(id: string): Promise<{ error: string | nu
 
 export async function deleteProduto(id: string): Promise<{ error: string | null }> {
   const deps = await checkDependencias(id)
-  const temDeps = deps.vendas > 0 || deps.compras > 0 || deps.kits > 0 || deps.movimentacoes > 0
+  const temDeps = deps.vendas > 0 || deps.movimentacoes > 0
 
   if (temDeps) {
     return { error: 'HAS_DEPENDENCIES' }

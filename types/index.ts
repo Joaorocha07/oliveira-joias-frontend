@@ -111,10 +111,9 @@ export interface Produto {
   updated_at: string
   variacoes?: ProdutoVariacao[]
   fornecedor?: Fornecedor
-  kit_itens?: KitItem[]
 }
 
-export type ProdutoInsert = Omit<Produto, 'id' | 'created_at' | 'updated_at' | 'variacoes' | 'fornecedor' | 'kit_itens'>
+export type ProdutoInsert = Omit<Produto, 'id' | 'created_at' | 'updated_at' | 'variacoes' | 'fornecedor'>
 export type ProdutoUpdate = Partial<ProdutoInsert>
 
 export interface ProdutoVariacao {
@@ -132,18 +131,6 @@ export interface ProdutoVariacao {
 
 export type ProdutoVariacaoInsert = Omit<ProdutoVariacao, 'id' | 'created_at' | 'updated_at'>
 export type ProdutoVariacaoUpdate = Partial<ProdutoVariacaoInsert>
-
-export interface KitItem {
-  id: string
-  kit_id: string
-  produto_id: string
-  variacao_id: string | null
-  quantidade: number
-  preco_unitario: number | null
-  created_at: string
-  produto?: Produto
-  variacao?: ProdutoVariacao
-}
 
 // ── ESTOQUE ────────────────────────────────────────────────────
 export interface EstoqueMovimentacao {
@@ -327,55 +314,10 @@ export interface Lancamento {
   created_at: string
   updated_at: string
   categoria?: CategoriaFinanceira
-  historico?: LancamentoHistorico[]
 }
 
 export type LancamentoInsert = Omit<Lancamento, 'id' | 'editado' | 'created_at' | 'updated_at' | 'categoria' | 'historico'>
 export type LancamentoUpdate = Partial<LancamentoInsert> & { updated_by?: string }
-
-export interface LancamentoHistorico {
-  id: string
-  lancamento_id: string
-  campo_alterado: string
-  valor_antes: string | null
-  valor_depois: string | null
-  motivo: string | null
-  alterado_por: string | null
-  alterado_em: string
-  profile?: Profile
-}
-
-// ── COMPRA ─────────────────────────────────────────────────────
-export interface Compra {
-  id: string
-  numero: number
-  fornecedor_id: string | null
-  total: number
-  forma_pagamento: FormaPagamento | null
-  data_compra: string
-  data_entrega: string | null
-  status: string
-  observacoes: string | null
-  nota_fiscal: string | null
-  created_by: string | null
-  created_at: string
-  updated_at: string
-  fornecedor?: Fornecedor
-  itens?: CompraItem[]
-}
-
-export interface CompraItem {
-  id: string
-  compra_id: string
-  produto_id: string
-  variacao_id: string | null
-  quantidade: number
-  custo_unitario: number
-  subtotal: number
-  created_at: string
-  produto?: Produto
-  variacao?: ProdutoVariacao
-}
 
 // ── DASHBOARD / RELATÓRIOS ─────────────────────────────────────
 export interface DashboardData {
@@ -417,10 +359,6 @@ export type CrediarioComRelacoes = Omit<Crediario, 'cliente' | 'venda' | 'parcel
 
 export type CrediarioParcelaComCliente = Omit<CrediarioParcela, 'cliente'> & {
   cliente?: ClienteResumo | null
-}
-
-export type LancamentoHistoricoComProfile = Omit<LancamentoHistorico, 'profile'> & {
-  profile?: ProfileResumo | null
 }
 
 export interface CategoriaVendaRow {
