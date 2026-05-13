@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
-  Modal, Input, Select, ConfirmDialog, Badge,
+  Modal, Input, Select, ConfirmDialog, Badge, type BadgeVariant,
 } from '@/components/ui'
 import { MaskedInput } from '@/components/forms/masked-input'
 import { formatPhone } from '@/utils'
@@ -19,11 +19,11 @@ const ROLE_LABEL: Record<UserRole, string> = {
   visualizador: 'Visualizador',
 }
 
-const ROLE_VARIANT: Record<UserRole, 'gold' | 'green' | 'blue' | 'default'> = {
+const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
   admin: 'gold',
-  vendedor: 'green',
-  caixa: 'blue',
-  visualizador: 'default',
+  vendedor: 'success',
+  caixa: 'info',
+  visualizador: 'gray',
 }
 
 interface VendedorForm {
