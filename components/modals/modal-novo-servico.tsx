@@ -227,8 +227,8 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
             )}
           />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={isOrigemOutro ? 'flex flex-col gap-1' : 'flex flex-col gap-1 sm:col-span-2'}>
               <label className="label-base">Origem do cliente</label>
               <select
                 className="input-base"
@@ -254,7 +254,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Tipo de serviço"
               placeholder="Ex: Redimensionamento, Solda..."
@@ -285,7 +285,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Controller
               name="valor"
               control={control}
@@ -311,7 +311,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="label-base">Data de entrada</label>
               <input
@@ -398,7 +398,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
                   </p>
                 )}
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Controller
                     name="entrada_crediario"
                     control={control}
