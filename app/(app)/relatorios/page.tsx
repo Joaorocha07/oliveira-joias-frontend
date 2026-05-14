@@ -7,23 +7,23 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { BarChart3 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
   PeriodFilter, getPeriodRange, Button, type PeriodPreset,
 } from '@/components/ui'
-import { formatMoney, PRODUTO_CATEGORIA_LABEL } from '@/utils'
-import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual } from '@/types'
+import { formatMoney, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL } from '@/utils'
+import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus } from '@/types'
 
 const CHART_COLORS = ['#B8962E', '#C49A35', '#D4AF5A', '#EBD9A4', '#9A7B22', '#7A5C10', '#5C4208', '#3D2B05']
 
-type ReportSection = 'vendas' | 'caixa' | 'estoque' | 'crediario'
+type ReportSection = 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario'
 type CaixaChartMode = 'evolucao' | 'categorias' | 'lancamentos'
 
 const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[] = [
   { key: 'vendas', label: 'Vendas', subtitle: 'Faturamento e lucro' },
   { key: 'caixa', label: 'Despesas e Caixa', subtitle: 'Entradas e saidas' },
+  { key: 'servicos', label: 'Servicos', subtitle: 'Ordens e receita' },
   { key: 'estoque', label: 'Estoque', subtitle: 'Movimentacoes e alertas' },
   { key: 'crediario', label: 'Crediario', subtitle: 'Parcelas e recebimentos' },
 ]
@@ -52,6 +52,16 @@ interface LancamentoRelatorio {
   valor: number
   data_lancamento: string
   categoria_nome: string | null
+  referencia_tipo: string | null
+}
+
+interface ServicoRelatorio {
+  status: ServicoStatus
+  tipo: string
+  valor: number
+  custo_estimado: number | null
+  pago: boolean
+  data_entrada: string
 }
 
 interface MovimentoEstoqueRelatorio {
@@ -107,6 +117,7 @@ export default function RelatoriosPage() {
 
   const [vendas, setVendas] = useState<VendaRelatorio[]>([])
   const [lancamentos, setLancamentos] = useState<LancamentoRelatorio[]>([])
+  const [servicos, setServicos] = useState<ServicoRelatorio[]>([])
   const [movimentosEstoque, setMovimentosEstoque] = useState<MovimentoEstoqueRelatorio[]>([])
   const [parcelas, setParcelas] = useState<ParcelaRelatorio[]>([])
   const [estoqueAtual, setEstoqueAtual] = useState({ unidades: 0, alertas: 0, produtosCriticos: 0 })
@@ -117,7 +128,7 @@ export default function RelatoriosPage() {
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, movimentosResult, parcelasResult, estoqueResult] = await Promise.all([
+    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, parcelasResult, estoqueResult] = await Promise.all([
       supabase
         .from('vendas')
         .select('id, total, data_venda, forma_pagamento, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
@@ -126,9 +137,14 @@ export default function RelatoriosPage() {
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('lancamentos')
-        .select('tipo, descricao, valor, data_lancamento, categoria_nome')
+        .select('tipo, descricao, valor, data_lancamento, categoria_nome, referencia_tipo')
         .gte('data_lancamento', dataInicio)
         .lte('data_lancamento', dataFim),
+      supabase
+        .from('servicos')
+        .select('status, tipo, valor, custo_estimado, pago, data_entrada')
+        .gte('data_entrada', dataInicio)
+        .lte('data_entrada', dataFim),
       supabase
         .from('estoque_movimentacoes')
         .select('tipo, quantidade, created_at, produto:produtos(categoria)')
@@ -145,6 +161,7 @@ export default function RelatoriosPage() {
 
     setVendas(((vendasResult.data ?? []) as unknown) as VendaRelatorio[])
     setLancamentos((lancamentosResult.data as LancamentoRelatorio[]) ?? [])
+    setServicos((servicosResult.data as ServicoRelatorio[]) ?? [])
     setMovimentosEstoque(((movimentosResult.data ?? []) as unknown) as MovimentoEstoqueRelatorio[])
     setParcelas((parcelasResult.data as ParcelaRelatorio[]) ?? [])
 
@@ -172,6 +189,23 @@ export default function RelatoriosPage() {
     ), 0)
     const despesas = lancamentos.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.valor, 0)
     const entradas = lancamentos.filter((item) => item.tipo === 'entrada').reduce((sum, item) => sum + item.valor, 0)
+
+    const servicosAtivos = servicos.filter((s) => s.status !== 'cancelado')
+    const servicoValorTotal = servicosAtivos.reduce((sum, s) => sum + (s.valor ?? 0), 0)
+    const servicoRecebido = servicosAtivos
+      .filter((s) => s.pago)
+      .reduce((sum, s) => sum + (s.valor ?? 0), 0)
+    const servicoSaidas = servicosAtivos
+      .reduce((sum, s) => sum + (s.custo_estimado ?? 0), 0)
+    const servicoLucro = servicoRecebido - servicoSaidas
+    const servicosQtd = servicos.length
+    const servicosPagos = servicosAtivos.filter((s) => s.pago)
+    const servicosEmAberto = servicosAtivos.filter((s) => !s.pago)
+    const servicoTicketMedio = servicosAtivos.length > 0
+      ? servicosAtivos.reduce((sum, s) => sum + s.valor, 0) / servicosAtivos.length
+      : 0
+    const servicosAbertoValor = servicosEmAberto.reduce((sum, s) => sum + (s.valor ?? 0), 0)
+
     const estoqueEntradas = movimentosEstoque.filter((item) => item.tipo === 'entrada' || item.tipo === 'devolucao').reduce((sum, item) => sum + item.quantidade, 0)
     const estoqueSaidas = movimentosEstoque.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.quantidade, 0)
     const crediarioRecebido = parcelas
@@ -189,6 +223,16 @@ export default function RelatoriosPage() {
       entradas,
       ticketMedio: vendas.length > 0 ? faturamento / vendas.length : 0,
       vendasQtd: vendas.length,
+      servicoValorTotal,
+      servicoRecebido,
+      servicoSaidas,
+      servicoLucro,
+      servicosQtd,
+      servicoTicketMedio,
+      servicosPagosQtd: servicosPagos.length,
+      servicosEmAberto: servicosEmAberto.length,
+      servicosAbertoValor,
+      servicosCancelados: servicos.filter((s) => s.status === 'cancelado').length,
       estoqueEntradas,
       estoqueSaidas,
       estoqueSaldo: estoqueEntradas - estoqueSaidas,
@@ -196,7 +240,7 @@ export default function RelatoriosPage() {
       crediarioAVencer,
       crediarioParcelas: parcelas.length,
     }
-  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, parcelas, vendas])
+  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, parcelas, servicos, vendas])
 
   const charts = useMemo(() => {
     const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
@@ -238,17 +282,35 @@ export default function RelatoriosPage() {
       estoqueCat[label] = (estoqueCat[label] ?? 0) + movimento.quantidade
     })
 
+    const servicosStatusMap: Record<string, number> = {}
+    servicos.forEach((s) => {
+      servicosStatusMap[s.status] = (servicosStatusMap[s.status] ?? 0) + 1
+    })
+    const servicosStatus = Object.entries(servicosStatusMap)
+      .map(([status, value]) => ({ name: SERVICO_STATUS_LABEL[status as ServicoStatus] ?? status, value }))
+      .sort((a, b) => b.value - a.value)
+
+    const servicosTipoMap: Record<string, number> = {}
+    servicos.filter((s) => s.status !== 'cancelado').forEach((s) => {
+      servicosTipoMap[s.tipo] = (servicosTipoMap[s.tipo] ?? 0) + s.valor
+    })
+    const servicosTipo = Object.entries(servicosTipoMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+
     return {
       serieFinanceira: Object.values(serieMap),
       vendasProduto: Object.entries(vendasProduto).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
       despesasCategoria: Object.entries(despesasCat).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
       lancamentos: Object.entries(lancamentosMap).map(([name, value]) => ({ name, value })).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
       estoqueCategoria: Object.entries(estoqueCat).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+      servicosStatus,
+      servicosTipo,
     }
-  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, vendas])
+  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, servicos, vendas])
 
   const investimentoData = useMemo(() => {
-    // Custo do estoque atual por produto
     const produtoMap = new Map<string, {
       produto_nome: string; categoria: ProdutoCategoria
       custo_estoque: number; potencial: number; estoque_qtd: number
@@ -270,7 +332,6 @@ export default function RelatoriosPage() {
       }
     })
 
-    // Custo + receita do que já foi vendido no período
     const vendasMap = new Map<string, {
       nome_produto: string
       vendido_valor: number
@@ -302,14 +363,12 @@ export default function RelatoriosPage() {
       const vnd = vendasMap.get(id)
       const custo_estoque = est?.custo_estoque ?? 0
       const custo_vendido = vnd?.custo_vendido ?? 0
-      // investido = custo do estoque atual + custo do que foi vendido
       const investido = custo_estoque + custo_vendido
       const potencial = est?.potencial ?? 0
       const estoque_qtd = est?.estoque_qtd ?? 0
       const vendido_valor = vnd?.vendido_valor ?? 0
       const vendido_qtd = vnd?.vendido_qtd ?? 0
       const total_qtd = estoque_qtd + vendido_qtd
-      // retorno total = o que já arrecadou + o que ainda pode arrecadar
       const retorno_total = vendido_valor + potencial
       const pct_vendido = total_qtd > 0 ? (vendido_qtd / total_qtd) * 100 : 0
       const margem_potencial = investido > 0 ? ((retorno_total - investido) / investido) * 100 : 0
@@ -336,7 +395,7 @@ export default function RelatoriosPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Relatorios" subtitle="Analises separadas por vendas, estoque, despesas e crediario" />
+      <PageHeader title="Relatorios" subtitle="Analises separadas por vendas, servicos, estoque, despesas e crediario" />
 
       <Card>
         <div className="space-y-4">
@@ -353,7 +412,7 @@ export default function RelatoriosPage() {
           />
 
           <div className="border-t border-gold-100 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-2">
               {REPORT_SECTIONS.map((section) => (
                 <button
                   key={section.key}
@@ -421,8 +480,8 @@ export default function RelatoriosPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard label="Entradas" value={formatMoney(metrics.entradas)} changeType="up" />
                 <MetricCard label="Despesas" value={formatMoney(metrics.despesas)} changeType="down" />
-                <MetricCard label="Lucro Liquido" value={formatMoney(metrics.lucroLiquido)} changeType={metrics.lucroLiquido >= 0 ? 'up' : 'down'} accent />
-                <MetricCard label="Saldo Caixa" value={formatMoney(metrics.entradas - metrics.despesas)} changeType={metrics.entradas >= metrics.despesas ? 'up' : 'down'} />
+                <MetricCard label="Lucro Liquido" value={formatMoney(metrics.entradas - metrics.despesas)} changeType={metrics.entradas >= metrics.despesas ? 'up' : 'down'} accent />
+                <MetricCard label="Lucro Bruto Vendas" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -493,11 +552,64 @@ export default function RelatoriosPage() {
             </ReportBlock>
           )}
 
+          {activeSection === 'servicos' && (
+            <ReportBlock>
+              <SectionTitle title="Servicos" subtitle="Ordens de servico criadas no periodo, receita e custos associados" />
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard label="Recebido" value={formatMoney(metrics.servicoRecebido)} changeType="up" accent />
+                <MetricCard label="Custos" value={formatMoney(metrics.servicoSaidas)} changeType={metrics.servicoSaidas > 0 ? 'down' : 'neutral'} />
+                <MetricCard label="Lucro" value={formatMoney(metrics.servicoLucro)} changeType={metrics.servicoLucro >= 0 ? 'up' : 'down'} />
+                <MetricCard label="Ordens no Periodo" value={String(metrics.servicosQtd)} changeType="neutral" />
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard label="Ticket Medio" value={metrics.servicoTicketMedio > 0 ? formatMoney(metrics.servicoTicketMedio) : '-'} changeType="neutral" />
+                <MetricCard label="Pagas" value={String(metrics.servicosPagosQtd)} changeType="neutral" />
+                <MetricCard label="A Receber" value={formatMoney(metrics.servicosAbertoValor)} change={`${metrics.servicosEmAberto} ordem(ns)`} changeType="neutral" />
+                <MetricCard label="Canceladas" value={String(metrics.servicosCancelados)} changeType={metrics.servicosCancelados > 0 ? 'down' : 'neutral'} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader title="Distribuicao por Status" />
+                  {charts.servicosStatus.length === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem servicos no periodo" />
+                  ) : (
+                    <PieReport data={charts.servicosStatus} />
+                  )}
+                </Card>
+                <Card>
+                  <CardHeader title="Valor por Tipo de Servico" />
+                  {charts.servicosTipo.length === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem servicos no periodo" />
+                  ) : (
+                    <BarCompareReport data={charts.servicosTipo} />
+                  )}
+                </Card>
+              </div>
+
+              {metrics.servicoValorTotal > 0 && (
+                <Card>
+                  <CardHeader title="Resultado dos Servicos" />
+                  <BarCompareReport
+                    data={[
+                      { name: 'Valor', value: metrics.servicoValorTotal },
+                      { name: 'Recebido', value: metrics.servicoRecebido },
+                      { name: 'A receber', value: metrics.servicosAbertoValor },
+                      { name: 'Custos', value: metrics.servicoSaidas },
+                      { name: 'Lucro', value: metrics.servicoLucro },
+                    ]}
+                  />
+                </Card>
+              )}
+            </ReportBlock>
+          )}
+
           {activeSection === 'estoque' && (
             <ReportBlock>
               <SectionTitle title="Estoque" subtitle="Movimentacoes do periodo, situacao atual e retorno potencial por produto" />
 
-              {/* Movimentações do período */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard label="Entradas no Estoque" value={`${metrics.estoqueEntradas} un`} changeType="up" />
                 <MetricCard label="Saidas do Estoque" value={`${metrics.estoqueSaidas} un`} changeType="down" />
@@ -505,7 +617,6 @@ export default function RelatoriosPage() {
                 <MetricCard label="Alertas Atuais" value={String(estoqueAtual.alertas)} changeType={estoqueAtual.alertas > 0 ? 'down' : 'neutral'} accent={estoqueAtual.alertas > 0} />
               </div>
 
-              {/* Investimento vs Retorno — resumo */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard label="Total Investido" value={formatMoney(investimentoData.totalInvestido)} changeType="neutral" />
                 <MetricCard label="Retorno Total" value={formatMoney(investimentoData.totalRetorno)} changeType="up" accent />
@@ -513,7 +624,6 @@ export default function RelatoriosPage() {
                 <MetricCard label="Realizado" value={`${investimentoData.pctRealizado.toFixed(0)}%`} changeType={investimentoData.pctRealizado >= 50 ? 'up' : 'neutral'} />
               </div>
 
-              {/* Gráficos de movimentação */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader title="Movimentacoes por Categoria" />
@@ -533,7 +643,6 @@ export default function RelatoriosPage() {
                 </Card>
               </div>
 
-              {/* Investimento vs Retorno por produto */}
               <Card padding="none">
                 <div className="p-5 border-b border-gold-100">
                   <h3 className="text-sm font-semibold text-dark-700">Investimento vs Retorno Potencial por Produto</h3>
@@ -556,7 +665,6 @@ export default function RelatoriosPage() {
 
                       return (
                         <div key={p.produto_id} className="p-4 sm:p-5 hover:bg-cream-50/30 transition-colors">
-                          {/* Header */}
                           <div className="flex items-start justify-between gap-3 mb-3">
                             <div className="min-w-0">
                               <p className="font-semibold text-dark-700 text-sm leading-tight">{p.produto_nome}</p>
@@ -574,7 +682,6 @@ export default function RelatoriosPage() {
                             </div>
                           </div>
 
-                          {/* Valores */}
                           <div className="grid grid-cols-3 gap-2 mb-4">
                             <div className="rounded-xl border border-gold-100 bg-cream-50 p-3 text-center">
                               <p className="text-[10px] font-medium text-dark-300 uppercase tracking-wide mb-1">Total Investido</p>
@@ -611,7 +718,6 @@ export default function RelatoriosPage() {
                             </div>
                           </div>
 
-                          {/* Barra de progresso */}
                           <div>
                             <div className="flex justify-between text-xs text-dark-400 mb-1.5">
                               <span>

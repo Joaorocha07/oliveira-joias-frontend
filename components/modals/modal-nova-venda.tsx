@@ -9,6 +9,7 @@ import { Modal, Button, Select, Input, Spinner } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
+import { ModalQuickVendedor } from '@/components/modals/modal-quick-vendedor'
 import { vendaSchema, type VendaFormData } from '@/schemas/venda'
 import { createVenda } from '@/services/vendas'
 import { useAuth } from '@/context/auth-context'
@@ -41,6 +42,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   const alert = useAlert()
   const [itemProdutos, setItemProdutos] = useState<Record<number, ItemProdutoState>>({})
   const [quickClienteOpen, setQuickClienteOpen] = useState(false)
+  const [quickVendedorOpen, setQuickVendedorOpen] = useState(false)
   const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
@@ -224,6 +226,11 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     setClienteDisplayValue(cliente.nome)
   }
 
+  function handleQuickVendedorSuccess(vendedor: { id: string; nome: string }) {
+    setValue('vendedor_id', vendedor.id)
+    setVendedorDisplayValue(vendedor.nome)
+  }
+
   async function onSave(data: VendaFormData) {
     if (!user) return
 
@@ -320,6 +327,8 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
                     return true
                   }}
                   onSearch={searchVendedores}
+                  onCreateNew={() => setQuickVendedorOpen(true)}
+                  createNewLabel="Cadastrar vendedor"
                   placeholder="Buscar vendedor..."
                 />
               )}
@@ -568,6 +577,11 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         open={quickClienteOpen}
         onClose={() => setQuickClienteOpen(false)}
         onSuccess={handleQuickClienteSuccess}
+      />
+      <ModalQuickVendedor
+        open={quickVendedorOpen}
+        onClose={() => setQuickVendedorOpen(false)}
+        onSuccess={handleQuickVendedorSuccess}
       />
     </>
   )

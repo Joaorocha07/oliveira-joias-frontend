@@ -57,7 +57,7 @@ export default function ServicosPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('servicos')
-      .select('*, cliente:clientes(nome, telefone), responsavel:profiles!servicos_responsavel_id_fkey(nome)')
+      .select('*, cliente:clientes(nome, telefone), origem:origens_cliente(id, nome), responsavel:profiles!servicos_responsavel_id_fkey(nome)')
       .gte('data_entrada', dataInicio)
       .lte('data_entrada', dataFim)
       .order('created_at', { ascending: false })
@@ -108,7 +108,9 @@ export default function ServicosPage() {
     if (error) {
       alert.error('Erro', 'Erro ao atualizar status.')
     } else {
-      setServicos((prev) => prev.map((s) => s.id === id ? { ...s, status } : s))
+      setServicos((prev) => prev.map((s) => (
+        s.id === id ? { ...s, status, pago: status === 'concluido' } : s
+      )))
     }
   }
 

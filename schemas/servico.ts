@@ -11,6 +11,8 @@ const servicoStatuses = [
 
 export const servicoSchema = z.object({
   cliente_id: z.string().nullable(),
+  origem_id: z.string().nullable(),
+  origem_outro: z.string().nullable(),
   tipo: z.string().min(1, 'Tipo é obrigatório'),
   descricao: z.string().min(1, 'Descrição é obrigatória'),
   observacoes_internas: z.string(),
@@ -22,6 +24,10 @@ export const servicoSchema = z.object({
   forma_pagamento: z.enum(formasPagamento).nullable(),
   responsavel_id: z.string().nullable(),
   pago: z.boolean(),
+  // Crediário fields — only used when forma_pagamento === 'crediario'
+  num_parcelas: z.number().min(1).optional(),
+  entrada_crediario: z.number().min(0).optional(),
+  dia_vencimento: z.number().min(1).max(28).optional(),
 })
 
 export type ServicoFormData = z.infer<typeof servicoSchema>

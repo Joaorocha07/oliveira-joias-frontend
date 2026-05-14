@@ -9,6 +9,7 @@ import { Modal, Button, Select, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
+import { ModalQuickVendedor } from '@/components/modals/modal-quick-vendedor'
 import { updateVenda } from '@/services/vendas'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/auth-context'
@@ -67,6 +68,7 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
   const { user } = useAuth()
   const alert = useAlert()
   const [quickClienteOpen, setQuickClienteOpen] = useState(false)
+  const [quickVendedorOpen, setQuickVendedorOpen] = useState(false)
   const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
@@ -138,6 +140,11 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
   function handleQuickClienteSuccess(cliente: { id: string; nome: string; telefone: string | null }) {
     setValue('cliente_id', cliente.id)
     setClienteDisplayValue(cliente.nome)
+  }
+
+  function handleQuickVendedorSuccess(vendedor: { id: string; nome: string }) {
+    setValue('vendedor_id', vendedor.id)
+    setVendedorDisplayValue(vendedor.nome)
   }
 
   async function onSave(data: FormData) {
@@ -288,6 +295,8 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
                   return true
                 }}
                 onSearch={searchVendedores}
+                onCreateNew={() => setQuickVendedorOpen(true)}
+                createNewLabel="Cadastrar vendedor"
                 placeholder="Buscar vendedor..."
               />
             )}
@@ -379,6 +388,11 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
       open={quickClienteOpen}
       onClose={() => setQuickClienteOpen(false)}
       onSuccess={handleQuickClienteSuccess}
+    />
+    <ModalQuickVendedor
+      open={quickVendedorOpen}
+      onClose={() => setQuickVendedorOpen(false)}
+      onSuccess={handleQuickVendedorSuccess}
     />
     </>
   )

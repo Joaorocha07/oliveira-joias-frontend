@@ -13,7 +13,8 @@
       "Bash(grep -rl \"from\\('kit_itens'\\\\\\\\|from\\('compra_itens'\\\\\\\\|from\\('categorias'\" \"D:\\\\projetos\\\\oliveira-joias-frontend\" --include='*.ts' --include='*.tsx')",
       "Bash(cd /d D:\\\\projetos\\\\oliveira-joias-frontend)",
       "Bash(powershell -Command \"Get-ChildItem -Force -Recurse -Depth 3 | Select-Object -First 100\")",
-      "PowerShell(cd \"D:\\\\projetos\\\\oliveira-joias-frontend\"; Get-ChildItem -Recurse -Depth 3 | Where-Object {$_.Extension -in @\\('.tsx', '.ts', '.css'\\)} | Select-Object -First 100 | ForEach-Object {$_.FullName})"
+      "PowerShell(cd \"D:\\\\projetos\\\\oliveira-joias-frontend\"; Get-ChildItem -Recurse -Depth 3 | Where-Object {$_.Extension -in @\\('.tsx', '.ts', '.css'\\)} | Select-Object -First 100 | ForEach-Object {$_.FullName})",
+      "Bash(Get-Content *)"
     ]
   }
 }

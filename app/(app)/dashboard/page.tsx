@@ -6,7 +6,6 @@ import { ptBR } from 'date-fns/locale'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { ShoppingCart, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
   MetricCard, Card, CardHeader, Badge, Spinner, EmptyState,
@@ -27,12 +26,36 @@ interface DashboardVenda {
   data_venda: string
 }
 
+interface DashboardLancamento {
+  tipo: 'entrada' | 'saida'
+  valor: number
+  referencia_tipo: string | null
+}
+
+interface DashboardParcela {
+  valor: number
+  valor_pago: number | null
+}
+
+interface DashboardServico {
+  id: string
+  status: string
+  valor: number
+  pago: boolean
+}
+
 interface DashboardState {
   faturamentoPeriodo: number
   faturamentoAnterior: number
+  entradasPeriodo: number
+  saidasPeriodo: number
   saldoCaixa: number
   crediarioAberto: number
+  crediarioAbertoValor: number
+  servicosRecebidos: number
+  servicosPeriodo: number
   servicosAndamento: number
+  estoqueCriticoQtd: number
   vendasRecentes: VendaComCliente[]
   estoqueCritico: VwEstoqueAtual[]
   faturamentoSeries: PeriodStat[]
@@ -42,9 +65,15 @@ interface DashboardState {
 const INITIAL: DashboardState = {
   faturamentoPeriodo: 0,
   faturamentoAnterior: 0,
+  entradasPeriodo: 0,
+  saidasPeriodo: 0,
   saldoCaixa: 0,
   crediarioAberto: 0,
+  crediarioAbertoValor: 0,
+  servicosRecebidos: 0,
+  servicosPeriodo: 0,
   servicosAndamento: 0,
+  estoqueCriticoQtd: 0,
   vendasRecentes: [],
   estoqueCritico: [],
   faturamentoSeries: [],
@@ -100,17 +129,16 @@ export default function DashboardPage() {
         .gte('data_venda', periodoAnteriorInicio)
         .lte('data_venda', periodoAnteriorFim),
       supabase.from('lancamentos')
-        .select('tipo, valor')
+        .select('tipo, valor, referencia_tipo')
         .gte('data_lancamento', dataInicio)
         .lte('data_lancamento', dataFim),
       supabase.from('crediario_parcelas')
-        .select('id')
+        .select('valor, valor_pago')
         .in('status', ['pendente', 'vencido'])
         .gte('data_vencimento', dataInicio)
         .lte('data_vencimento', dataFim),
       supabase.from('servicos')
-        .select('id')
-        .in('status', ['aguardando', 'em_andamento'])
+        .select('id, status, valor, pago')
         .gte('data_entrada', dataInicio)
         .lte('data_entrada', dataFim),
       supabase.from('vendas')
@@ -127,21 +155,45 @@ export default function DashboardPage() {
     ])
 
     const vendas = ((vendasPeriodo ?? []) as unknown) as DashboardVenda[]
+    const lancamentosPeriodo = ((lancamentos ?? []) as unknown) as DashboardLancamento[]
+    const parcelasPeriodo = ((parcelasPendentes ?? []) as unknown) as DashboardParcela[]
+    const servicosPeriodoRows = ((servicos ?? []) as unknown) as DashboardServico[]
     const faturamentoPeriodo = vendas.reduce((sum, venda) => sum + (venda.total || 0), 0)
     const faturamentoAnterior = (vendasPeriodoAnterior ?? []).reduce((sum, venda) => sum + (venda.total || 0), 0)
-    const saldoCaixa = (lancamentos ?? []).reduce(
+    const entradasPeriodo = lancamentosPeriodo
+      .filter((lancamento) => lancamento.tipo === 'entrada')
+      .reduce((sum, lancamento) => sum + (lancamento.valor ?? 0), 0)
+    const saidasPeriodo = lancamentosPeriodo
+      .filter((lancamento) => lancamento.tipo === 'saida')
+      .reduce((sum, lancamento) => sum + (lancamento.valor ?? 0), 0)
+    const saldoCaixa = lancamentosPeriodo.reduce(
       (sum, lancamento) => lancamento.tipo === 'entrada' ? sum + lancamento.valor : sum - lancamento.valor,
       0,
     )
+    const servicosAtivos = servicosPeriodoRows.filter((servico) => servico.status !== 'cancelado')
+    const servicosRecebidos = servicosAtivos
+      .filter((servico) => servico.pago)
+      .reduce((sum, servico) => sum + (servico.valor ?? 0), 0)
+    const crediarioAbertoValor = parcelasPeriodo.reduce(
+      (sum, parcela) => sum + Math.max(0, (parcela.valor ?? 0) - (parcela.valor_pago ?? 0)),
+      0,
+    )
+    const estoqueCriticoRows = (estoqueCritico as VwEstoqueAtual[]) ?? []
 
     setState({
       faturamentoPeriodo,
       faturamentoAnterior,
+      entradasPeriodo,
+      saidasPeriodo,
       saldoCaixa,
-      crediarioAberto: parcelasPendentes?.length ?? 0,
-      servicosAndamento: servicos?.length ?? 0,
+      crediarioAberto: parcelasPeriodo.length,
+      crediarioAbertoValor,
+      servicosRecebidos,
+      servicosPeriodo: servicosAtivos.length,
+      servicosAndamento: servicosPeriodoRows.filter((servico) => ['aguardando', 'em_andamento'].includes(servico.status)).length,
+      estoqueCriticoQtd: estoqueCriticoRows.length,
       vendasRecentes: (vendasRecentes as VendaComCliente[]) ?? [],
-      estoqueCritico: (estoqueCritico as VwEstoqueAtual[]) ?? [],
+      estoqueCritico: estoqueCriticoRows,
       faturamentoSeries: buildFaturamentoSeries(vendas, dataInicio, dataFim),
       loading: false,
     })
@@ -155,6 +207,7 @@ export default function DashboardPage() {
   const variacao = state.faturamentoAnterior > 0
     ? ((state.faturamentoPeriodo - state.faturamentoAnterior) / state.faturamentoAnterior * 100).toFixed(1)
     : null
+  const movimentoTotal = state.faturamentoPeriodo + state.servicosRecebidos
 
   if (state.loading) {
     return (
@@ -188,7 +241,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          label="Faturamento"
+          label="Vendas"
           value={formatMoney(state.faturamentoPeriodo)}
           change={variacao
             ? `${parseFloat(variacao) >= 0 ? '+' : ''}${variacao}% vs periodo anterior`
@@ -199,21 +252,54 @@ export default function DashboardPage() {
           accent
         />
         <MetricCard
+          label="Servicos Recebidos"
+          value={formatMoney(state.servicosRecebidos)}
+          change={`${state.servicosPeriodo} ordem(ns) no periodo`}
+          changeType="neutral"
+        />
+        <MetricCard
           label="Saldo em Caixa"
           value={formatMoney(state.saldoCaixa)}
           changeType={state.saldoCaixa >= 0 ? 'up' : 'down'}
         />
         <MetricCard
-          label="Parcelas em Aberto"
-          value={state.crediarioAberto}
-          changeType="neutral"
-        />
-        <MetricCard
-          label="Servicos em Andamento"
-          value={state.servicosAndamento}
-          changeType="neutral"
+          label="Crediario em Aberto"
+          value={formatMoney(state.crediarioAbertoValor)}
+          change={`${state.crediarioAberto} parcela(s)`}
+          changeType={state.crediarioAbertoValor > 0 ? 'down' : 'neutral'}
         />
       </div>
+
+      <Card>
+        <CardHeader
+          title="Resumo Geral do Periodo"
+          subtitle="Vendas, servicos, caixa, crediario e estoque em uma visao unica"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="rounded-lg border border-gold-100 bg-cream-50 p-4">
+            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Movimento Total</p>
+            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{formatMoney(movimentoTotal)}</p>
+            <p className="text-xs text-dark-300 mt-1">Vendas + servicos recebidos</p>
+          </div>
+          <div className="rounded-lg border border-gold-100 bg-white p-4">
+            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Caixa</p>
+            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{formatMoney(state.entradasPeriodo - state.saidasPeriodo)}</p>
+            <p className="text-xs text-dark-300 mt-1">
+              {formatMoney(state.entradasPeriodo)} entradas / {formatMoney(state.saidasPeriodo)} saidas
+            </p>
+          </div>
+          <div className="rounded-lg border border-gold-100 bg-white p-4">
+            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Operacao</p>
+            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{state.servicosAndamento}</p>
+            <p className="text-xs text-dark-300 mt-1">servico(s) em andamento</p>
+          </div>
+          <div className="rounded-lg border border-gold-100 bg-white p-4">
+            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Alertas</p>
+            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{state.estoqueCriticoQtd}</p>
+            <p className="text-xs text-dark-300 mt-1">item(ns) com estoque critico</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">

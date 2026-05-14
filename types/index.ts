@@ -263,6 +263,8 @@ export interface Servico {
   id: string
   numero: number
   cliente_id: string | null
+  origem_id: string | null
+  origem_outro: string | null
   tipo: string
   descricao: string
   observacoes_internas: string | null
@@ -280,6 +282,7 @@ export interface Servico {
   created_at: string
   updated_at: string
   cliente?: Cliente
+  origem?: OrigemCliente
   responsavel?: Profile
 }
 
@@ -348,6 +351,7 @@ export type VendaComCliente = Venda & {
 
 export type ServicoComCliente = Omit<Servico, 'cliente' | 'responsavel'> & {
   cliente?: ClienteResumo | null
+  origem?: Pick<OrigemCliente, 'id' | 'nome'> | null
   responsavel?: ProfileResumo | null
 }
 
