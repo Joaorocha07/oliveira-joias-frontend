@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Users, Pencil, ToggleLeft, ToggleRight, ShieldCheck, User } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
@@ -40,6 +40,7 @@ const EMPTY_FORM: VendedorForm = {
 }
 
 export default function VendedoresPage() {
+  const alert = useAlert()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -56,7 +57,7 @@ export default function VendedoresPage() {
       .select('*')
       .order('nome')
     if (error) {
-      toast.error('Erro ao carregar equipe.')
+      alert.error('Erro', 'Erro ao carregar equipe.')
     } else {
       setProfiles((data as Profile[]) ?? [])
     }
@@ -102,10 +103,10 @@ export default function VendedoresPage() {
   }
 
   async function handleSave() {
-    if (!form.nome.trim()) { toast.error('Nome é obrigatório.'); return }
-    if (!form.email.trim()) { toast.error('E-mail é obrigatório.'); return }
-    if (!editando && !form.senha.trim()) { toast.error('Senha é obrigatória.'); return }
-    if (!editando && form.senha.length < 6) { toast.error('Senha deve ter ao menos 6 caracteres.'); return }
+    if (!form.nome.trim()) { alert.error('Atenção', 'Nome é obrigatório.'); return }
+    if (!form.email.trim()) { alert.error('Atenção', 'E-mail é obrigatório.'); return }
+    if (!editando && !form.senha.trim()) { alert.error('Atenção', 'Senha é obrigatória.'); return }
+    if (!editando && form.senha.length < 6) { alert.error('Atenção', 'Senha deve ter ao menos 6 caracteres.'); return }
 
     setSalvando(true)
 
@@ -121,15 +122,16 @@ export default function VendedoresPage() {
         .eq('id', editando.id)
 
       if (error) {
-        toast.error(`Erro ao atualizar: ${error.message}`)
+        alert.error('Erro', `Erro ao atualizar: ${error.message}`)
       } else {
-        toast.success('Perfil atualizado.')
         setProfiles((prev) => prev.map((p) =>
           p.id === editando.id
             ? { ...p, nome: form.nome.trim(), cpf: form.cpf.trim() || null, telefone: form.telefone.trim() || null, role: form.role }
             : p
         ))
-        setModalOpen(false)
+        alert.success('Perfil Atualizado!', 'As informações foram salvas com sucesso.', {
+          onConfirm: () => setModalOpen(false),
+        })
       }
     } else {
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
@@ -142,7 +144,7 @@ export default function VendedoresPage() {
       })
 
       if (signUpError) {
-        toast.error(`Erro ao criar usuário: ${signUpError.message}`)
+        alert.error('Erro ao Criar Usuário', signUpError.message)
         setSalvando(false)
         return
       }
@@ -161,11 +163,12 @@ export default function VendedoresPage() {
           })
 
         if (profileError) {
-          toast.error(`Usuário criado, mas erro ao salvar perfil: ${profileError.message}`)
+          alert.error('Atenção', `Usuário criado, mas erro ao salvar perfil: ${profileError.message}`)
         } else {
-          toast.success('Vendedor cadastrado. Um e-mail de confirmação foi enviado.')
           await loadProfiles()
-          setModalOpen(false)
+          alert.success('Vendedor Cadastrado!', 'Um e-mail de confirmação foi enviado ao novo usuário.', {
+            onConfirm: () => setModalOpen(false),
+          })
         }
       }
     }
@@ -182,13 +185,16 @@ export default function VendedoresPage() {
       .eq('id', confirmToggle.id)
 
     if (error) {
-      toast.error('Erro ao alterar status.')
+      alert.error('Erro', 'Erro ao alterar status.')
     } else {
-      toast.success(confirmToggle.ativo ? 'Acesso desativado.' : 'Acesso reativado.')
       setProfiles((prev) => prev.map((p) =>
         p.id === confirmToggle.id ? { ...p, ativo: !confirmToggle.ativo } : p
       ))
       setConfirmToggle(null)
+      alert.success(
+        confirmToggle.ativo ? 'Acesso Desativado' : 'Acesso Reativado',
+        confirmToggle.ativo ? 'O usuário não poderá mais acessar o sistema.' : 'O usuário pode acessar o sistema novamente.',
+      )
     }
     setToggling(false)
   }
@@ -219,7 +225,7 @@ export default function VendedoresPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Users size={24} />}
+            imageSrc="/images/Team goals-rafiki.svg"
             title="Nenhum membro encontrado"
             description={search ? 'Tente outro termo.' : 'Cadastre o primeiro vendedor.'}
             action={!search && (

@@ -71,14 +71,14 @@ export function SearchableSelect({
 
   useEffect(() => {
     if (value) return
-    const timeoutId = window.setTimeout(() => setSelectedLabel(''), 0)
-    return () => window.clearTimeout(timeoutId)
+    const id = window.setTimeout(() => setSelectedLabel(''), 0)
+    return () => window.clearTimeout(id)
   }, [value])
 
   useEffect(() => {
     if (displayValue === undefined) return
-    const timeoutId = window.setTimeout(() => setSelectedLabel(displayValue), 0)
-    return () => window.clearTimeout(timeoutId)
+    const id = window.setTimeout(() => setSelectedLabel(displayValue), 0)
+    return () => window.clearTimeout(id)
   }, [displayValue])
 
   useEffect(() => {
@@ -87,7 +87,6 @@ export function SearchableSelect({
     setTimeout(() => inputRef.current?.focus(), 10)
   }, [open, updatePos])
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     function handler(e: MouseEvent) {
@@ -103,7 +102,6 @@ export function SearchableSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [dropdownId, open])
 
-  // Debounced search
   useEffect(() => {
     if (!open) return
     clearTimeout(debounceRef.current)
@@ -124,7 +122,6 @@ export function SearchableSelect({
   async function handleSelect(opt: SelectOption) {
     const result = await onChange(opt.id, opt)
     if (result === false) return
-
     setSelectedLabel(opt.label)
     setOpen(false)
     setQuery('')
@@ -140,22 +137,19 @@ export function SearchableSelect({
   const showLabel = selectedLabel || optionLabel || ''
 
   return (
-    <div ref={containerRef} className={cn('flex flex-col gap-1', className)}>
+    <div ref={containerRef} className={cn('flex flex-col gap-1.5', className)}>
       {label && <label className="label-base">{label}</label>}
+
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
           'input-base text-left flex items-center justify-between gap-2 cursor-pointer',
-          error && 'border-red-400',
+          open && 'border-gold-500 shadow-[0_0_0_3px_rgba(201,168,76,0.12)]',
+          error && 'input-error',
         )}
       >
-        <span
-          className={cn(
-            'flex-1 truncate text-sm',
-            !showLabel && 'text-dark-300',
-          )}
-        >
+        <span className={cn('flex-1 truncate text-sm', !showLabel && 'text-[#9E9484]')}>
           {showLabel || placeholder}
         </span>
         <span className="flex items-center gap-1 flex-shrink-0">
@@ -164,21 +158,22 @@ export function SearchableSelect({
               role="button"
               tabIndex={-1}
               onClick={handleClear}
-              className="p-0.5 hover:bg-gold-100 rounded text-dark-300 hover:text-dark-600 transition-colors"
+              className="p-0.5 hover:bg-gold-50 rounded text-dark-300 hover:text-dark-500 transition-colors"
             >
               <X size={12} />
             </span>
           )}
           <ChevronDown
-            size={14}
+            size={16}
             className={cn(
-              'text-dark-300 transition-transform duration-150',
+              'text-gold-600 transition-transform duration-150',
               open && 'rotate-180',
             )}
           />
         </span>
       </button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {error && <p className="text-xs text-[#C75B5B]">{error}</p>}
 
       {open &&
         typeof window !== 'undefined' &&
@@ -192,50 +187,57 @@ export function SearchableSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="bg-white border border-gold-200 rounded-xl shadow-2xl overflow-hidden"
+            className="bg-white border border-gold-100 rounded-[10px] shadow-[0_8px_30px_rgba(26,21,16,0.12)] overflow-hidden"
           >
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-gold-100">
-              <Search size={13} className="text-dark-300 flex-shrink-0" />
+            {/* Busca */}
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gold-100">
+              <Search size={14} className="text-gold-600 flex-shrink-0" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={placeholder}
-                className="flex-1 text-sm outline-none text-dark-700 placeholder:text-dark-300 bg-transparent"
+                className="flex-1 text-sm outline-none text-dark-500 placeholder:text-dark-300 bg-transparent"
               />
               {loading && <Spinner size={13} />}
             </div>
+
+            {/* Opções */}
             <div className="max-h-48 overflow-y-auto">
               {!loading && options.length === 0 && (
-                <p className="text-xs text-dark-300 text-center py-4">
-                  {query ? 'Nenhum resultado' : 'Digite para buscar'}
+                <p className="text-sm text-dark-300 text-center py-4 px-3">
+                  {query ? 'Nenhum resultado encontrado' : 'Digite para buscar'}
                 </p>
               )}
               {options.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
-                  className="w-full text-left px-3 py-2.5 text-sm hover:bg-cream-100 transition-colors"
+                  className={cn(
+                    'w-full text-left px-3.5 py-2.5 text-sm transition-colors',
+                    opt.id === value
+                      ? 'bg-gold-50 text-gold-500 font-medium'
+                      : 'text-dark-500 hover:bg-gold-50',
+                  )}
                   onClick={() => handleSelect(opt)}
                 >
-                  <div className="text-dark-700 font-medium">{opt.label}</div>
+                  <div className="font-medium">{opt.label}</div>
                   {opt.sublabel && (
                     <div className="text-xs text-dark-300 mt-0.5">{opt.sublabel}</div>
                   )}
                 </button>
               ))}
             </div>
+
+            {/* Criar novo */}
             {onCreateNew && (
               <div className="border-t border-gold-100">
                 <button
                   type="button"
-                  onClick={() => {
-                    onCreateNew()
-                    setOpen(false)
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gold-700 hover:bg-gold-50 transition-colors"
+                  onClick={() => { onCreateNew(); setOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3.5 py-2.5 text-sm text-gold-500 hover:bg-gold-50 transition-colors font-medium"
                 >
-                  <Plus size={13} />
+                  <Plus size={14} />
                   {createNewLabel}
                 </button>
               </div>

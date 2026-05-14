@@ -14,7 +14,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, hint, leftAddon, rightAddon, wrapperClassName, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
     return (
-      <div className={cn('flex flex-col gap-1', wrapperClassName)}>
+      <div className={cn('flex flex-col gap-1.5', wrapperClassName)}>
         {label && (
           <label htmlFor={inputId} className="label-base">
             {label}
@@ -22,7 +22,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative flex items-center">
           {leftAddon && (
-            <span className="absolute left-3 text-dark-300 pointer-events-none select-none">
+            <span className="absolute left-3 text-gold-600 pointer-events-none select-none flex items-center">
               {leftAddon}
             </span>
           )}
@@ -31,20 +31,20 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             className={cn(
               'input-base',
-              !!leftAddon && 'pl-8',
-              !!rightAddon && 'pr-8',
-              !!error && 'border-red-400 focus:border-red-400',
+              !!leftAddon && 'pl-10',
+              !!rightAddon && 'pr-10',
+              !!error && 'input-error',
               className
             )}
             {...props}
           />
           {rightAddon && (
-            <span className="absolute right-3 text-dark-300 pointer-events-none select-none">
+            <span className="absolute right-3 text-gold-600 pointer-events-none select-none flex items-center">
               {rightAddon}
             </span>
           )}
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-[#C75B5B]">{error}</p>}
         {hint && !error && <p className="text-xs text-dark-300">{hint}</p>}
       </div>
     )

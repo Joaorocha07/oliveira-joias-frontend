@@ -220,7 +220,7 @@ export default function DashboardPage() {
           <CardHeader title="Faturamento - Periodo Selecionado" />
           {state.faturamentoSeries.length === 0 ? (
             <EmptyState
-              icon={<ShoppingCart size={24} />}
+              imageSrc="/images/Analytics-rafiki.svg"
               title="Sem faturamento no periodo"
             />
           ) : (
@@ -258,7 +258,7 @@ export default function DashboardPage() {
           <CardHeader title="Vendas Recentes" />
           {state.vendasRecentes.length === 0 ? (
             <EmptyState
-              icon={<ShoppingCart size={24} />}
+              imageSrc="/images/Shopping-bro.svg"
               title="Sem vendas no periodo"
             />
           ) : (
@@ -316,7 +316,7 @@ export default function DashboardPage() {
       {state.estoqueCritico.length === 0 && state.vendasRecentes.length === 0 && (
         <Card>
           <EmptyState
-            icon={<AlertTriangle size={24} />}
+            imageSrc="/images/No data-cuate.svg"
             title="Nenhum dado disponivel"
             description="Ajuste o periodo ou conecte o banco de dados para visualizar o painel."
           />

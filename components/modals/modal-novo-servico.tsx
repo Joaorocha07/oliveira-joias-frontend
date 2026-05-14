@@ -3,7 +3,7 @@
 import { useEffect, useCallback } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
@@ -60,6 +60,7 @@ function buildDefaults(servico?: ServicoComCliente | null): ServicoFormData {
 
 export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum }: ModalNovoServicoProps) {
   const { user } = useAuth()
+  const alert = useAlert()
   const isEditing = !!servico
 
   const {
@@ -114,11 +115,13 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
       : await createServico(data, user.id)
 
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success(isEditing ? 'Serviço atualizado.' : 'Serviço criado com sucesso.')
-      onSuccess()
-      onClose()
+      alert.success(
+        isEditing ? 'Serviço Atualizado!' : 'Serviço Criado!',
+        isEditing ? 'As alterações foram salvas com sucesso.' : 'Ordem de serviço criada com sucesso.',
+        { onConfirm: () => { onSuccess(); onClose() } },
+      )
     }
   }
 

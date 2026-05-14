@@ -6,9 +6,15 @@ import { cn } from '@/lib/cn'
 import { Button } from './button'
 
 const iconVariantClasses = {
-  danger:  'bg-red-100 text-red-600',
-  warning: 'bg-amber-100 text-amber-600',
-  info:    'bg-gold-100 text-gold-700',
+  danger:  'bg-[rgba(199,91,91,0.12)] text-[#C75B5B]',
+  warning: 'bg-[rgba(201,168,76,0.12)] text-gold-500',
+  info:    'bg-[rgba(91,142,184,0.12)] text-[#5B8EB8]',
+}
+
+const iconVariantBorder = {
+  danger:  'border-[rgba(199,91,91,0.2)]',
+  warning: 'border-[rgba(201,168,76,0.2)]',
+  info:    'border-[rgba(91,142,184,0.2)]',
 }
 
 interface AlertDialogProps {
@@ -36,38 +42,39 @@ export function AlertDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-desc"
     >
-      {/* Backdrop */}
+      {/* Overlay */}
       <div
-        className="absolute inset-0 bg-dark-900/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-[rgba(26,21,16,0.55)] backdrop-blur-[6px]"
         onClick={!loading ? onClose : undefined}
         aria-hidden="true"
       />
 
       {/* Painel */}
-      <div className="relative w-full max-w-sm bg-white rounded-2xl border border-gold-100 shadow-2xl">
+      <div className="relative w-full max-w-[420px] bg-white rounded-[20px] border border-[rgba(232,213,163,0.3)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
         {/* Botão fechar */}
         <button
           type="button"
           onClick={onClose}
           disabled={loading}
-          className="absolute top-3 right-3 flex items-center justify-center w-8 h-8 rounded-lg text-dark-300 hover:text-dark-600 hover:bg-cream-200 transition-colors disabled:opacity-40"
+          className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-lg text-dark-300 hover:text-dark-500 hover:bg-gold-50 transition-all duration-200 disabled:opacity-40"
           aria-label="Fechar"
         >
           <X size={16} />
         </button>
 
         {/* Conteúdo */}
-        <div className="px-6 pt-8 pb-5 flex flex-col items-center text-center">
+        <div className="px-8 pt-10 pb-6 flex flex-col items-center text-center">
           {icon && (
             <div className={cn(
-              'flex items-center justify-center w-14 h-14 rounded-full mb-4 flex-shrink-0',
+              'flex items-center justify-center w-[72px] h-[72px] rounded-full border-2 mb-5 flex-shrink-0',
               iconVariantClasses[iconVariant],
+              iconVariantBorder[iconVariant],
             )}>
               {icon}
             </div>
@@ -75,21 +82,26 @@ export function AlertDialog({
 
           <h2
             id="alert-dialog-title"
-            className="font-display text-xl font-medium text-dark-800 mb-2"
+            className={cn(
+              'font-display text-xl font-semibold mb-2.5',
+              iconVariant === 'danger'  && 'text-[#C75B5B]',
+              iconVariant === 'warning' && 'text-dark-500',
+              iconVariant === 'info'    && 'text-[#5B8EB8]',
+            )}
           >
             {title}
           </h2>
 
-          <p id="alert-dialog-desc" className="text-sm text-dark-400 leading-relaxed">
+          <p id="alert-dialog-desc" className="text-[15px] text-dark-400 leading-relaxed">
             {description}
           </p>
         </div>
 
         {/* Ações */}
-        <div className="px-6 pb-6 flex gap-3">
+        <div className="px-8 pb-8 flex gap-3">
           <Button
-            variant="secondary"
-            className="flex-1"
+            variant="ghost"
+            className="flex-1 border border-gold-200 text-dark-400 hover:bg-gold-50 hover:border-gold-500"
             onClick={onClose}
             disabled={loading}
           >

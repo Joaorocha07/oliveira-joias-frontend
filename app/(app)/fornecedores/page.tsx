@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Truck, Pencil, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
@@ -22,6 +22,7 @@ const EMPTY_FORM: FornecedorInsert = {
 
 export default function FornecedoresPage() {
   const { user } = useAuth()
+  const alert = useAlert()
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -36,7 +37,7 @@ export default function FornecedoresPage() {
     const { data, error } = await supabase
       .from('fornecedores').select('*').eq('ativo', true).order('nome')
 
-    if (error) { toast.error('Erro ao carregar fornecedores.') }
+    if (error) { alert.error('Erro', 'Erro ao carregar fornecedores.') }
     else { setFornecedores(data ?? []) }
     setLoading(false)
   }
@@ -68,16 +69,22 @@ export default function FornecedoresPage() {
   }
 
   async function handleSave() {
-    if (!form.nome.trim()) { toast.error('Nome é obrigatório.'); return }
+    if (!form.nome.trim()) { alert.error('Atenção', 'Nome é obrigatório.'); return }
     setSalvando(true)
     if (editando) {
       const { error } = await supabase.from('fornecedores').update(form).eq('id', editando.id)
-      if (error) { toast.error('Erro ao atualizar.') }
-      else { toast.success('Fornecedor atualizado.'); setFornecedores((p) => p.map((f) => f.id === editando.id ? { ...f, ...form } : f)); setModalOpen(false) }
+      if (error) { alert.error('Erro', 'Erro ao atualizar.') }
+      else {
+        setFornecedores((p) => p.map((f) => f.id === editando.id ? { ...f, ...form } : f))
+        alert.success('Fornecedor Atualizado!', 'Os dados foram salvos com sucesso.', { onConfirm: () => setModalOpen(false) })
+      }
     } else {
       const { data, error } = await supabase.from('fornecedores').insert([form]).select().single()
-      if (error) { toast.error('Erro ao cadastrar.') }
-      else { toast.success('Fornecedor cadastrado.'); setFornecedores((p) => [...p, data as Fornecedor]); setModalOpen(false) }
+      if (error) { alert.error('Erro', 'Erro ao cadastrar.') }
+      else {
+        setFornecedores((p) => [...p, data as Fornecedor])
+        alert.success('Fornecedor Cadastrado!', 'Fornecedor adicionado com sucesso.', { onConfirm: () => setModalOpen(false) })
+      }
     }
     setSalvando(false)
   }
@@ -86,8 +93,11 @@ export default function FornecedoresPage() {
     if (!confirmDelete) return
     setDeletando(true)
     const { error } = await supabase.from('fornecedores').update({ ativo: false }).eq('id', confirmDelete.id)
-    if (error) { toast.error('Erro ao remover.') }
-    else { toast.success('Fornecedor removido.'); setFornecedores((p) => p.filter((f) => f.id !== confirmDelete.id)) }
+    if (error) { alert.error('Erro', 'Erro ao remover.') }
+    else {
+      setFornecedores((p) => p.filter((f) => f.id !== confirmDelete.id))
+      alert.success('Fornecedor Removido!', 'O fornecedor foi removido do cadastro.')
+    }
     setDeletando(false)
     setConfirmDelete(null)
   }
@@ -112,7 +122,7 @@ export default function FornecedoresPage() {
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
-          <EmptyState icon={<Truck size={24} />} title="Nenhum fornecedor encontrado"
+          <EmptyState imageSrc="/images/Profile Interface-rafiki.svg" title="Nenhum fornecedor encontrado"
             description={search ? 'Tente outro termo.' : 'Cadastre o primeiro fornecedor.'}
             action={!search && <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>Novo</Button>}
           />

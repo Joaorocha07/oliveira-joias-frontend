@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, ShoppingCart, Pencil, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner,
@@ -39,6 +39,7 @@ export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> 
 }
 
 export default function VendasPage() {
+  const alert = useAlert()
   const [vendas, setVendas] = useState<VendaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -73,7 +74,7 @@ export default function VendasPage() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      toast.error('Erro ao carregar vendas.')
+      alert.error('Erro', 'Erro ao carregar vendas.')
     } else {
       setVendas((data as VendaRow[]) ?? [])
     }
@@ -110,10 +111,10 @@ export default function VendasPage() {
     setDeletando(confirmDelete.id)
     const { error } = await deleteVenda(confirmDelete.id)
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success('Venda excluída.')
       setVendas((prev) => prev.filter((v) => v.id !== confirmDelete.id))
+      alert.success('Venda Excluída!', 'A venda foi removida com sucesso.')
     }
     setDeletando(null)
     setConfirmDelete(null)
@@ -173,7 +174,7 @@ export default function VendasPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<ShoppingCart size={24} />}
+            imageSrc="/images/Shopping-bro.svg"
             title="Nenhuma venda encontrada"
             description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhuma venda no período selecionado.'}
           />

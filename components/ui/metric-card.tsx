@@ -12,14 +12,14 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, change, changeType = 'neutral', accent, className }: MetricCardProps) {
   return (
-    <Card className={cn(accent && 'border-l-4 border-l-gold-500', className)}>
-      <p className="text-[10px] sm:text-xs uppercase tracking-wide text-dark-300 mb-1">{label}</p>
-      <p className="font-display text-xl sm:text-2xl font-medium text-dark-700">{value}</p>
+    <Card className={cn(accent && 'border-l-[3px] border-l-gold-500', className)}>
+      <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold mb-2">{label}</p>
+      <p className="font-display text-2xl font-semibold text-dark-500 tabular-nums">{value}</p>
       {change && (
         <p className={cn(
-          'text-xs mt-1',
-          changeType === 'up'      && 'text-green-600',
-          changeType === 'down'    && 'text-red-600',
+          'text-xs mt-1.5 font-medium',
+          changeType === 'up'      && 'text-[#5B8C5B]',
+          changeType === 'down'    && 'text-[#C75B5B]',
           changeType === 'neutral' && 'text-dark-300',
         )}>
           {change}

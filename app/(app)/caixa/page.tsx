@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Wallet, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, MetricCard, Button,
@@ -37,6 +37,7 @@ const EMPTY_FORM: LancamentoInsert = {
 
 export default function CaixaPage() {
   const { user } = useAuth()
+  const alert = useAlert()
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([])
   const [loading, setLoading] = useState(true)
   const [categorias, setCategorias] = useState<CategoriaLancamento[]>([])
@@ -64,7 +65,7 @@ export default function CaixaPage() {
       .order('data_lancamento', { ascending: false })
 
     if (error) {
-      toast.error('Erro ao carregar lançamentos.')
+      alert.error('Erro', 'Erro ao carregar lançamentos.')
     } else {
       setLancamentos(data ?? [])
     }
@@ -79,8 +80,7 @@ export default function CaixaPage() {
       .order('nome')
 
     if (error) {
-      toast.error(`Categorias: ${error.message}`)
-      console.error('loadCategorias error:', error)
+      alert.error('Erro', `Erro ao carregar categorias: ${error.message}`)
       setCategorias([])
     } else {
       setCategorias((data as CategoriaLancamento[]) ?? [])
@@ -162,8 +162,8 @@ export default function CaixaPage() {
   }
 
   async function handleSave() {
-    if (!form.descricao.trim()) { toast.error('Descrição é obrigatória.'); return }
-    if (!form.valor || form.valor <= 0) { toast.error('Valor deve ser maior que zero.'); return }
+    if (!form.descricao.trim()) { alert.error('Atenção', 'Descrição é obrigatória.'); return }
+    if (!form.valor || form.valor <= 0) { alert.error('Atenção', 'Valor deve ser maior que zero.'); return }
 
     setSalvando(true)
 
@@ -176,12 +176,12 @@ export default function CaixaPage() {
         .single()
 
       if (error) {
-        toast.error(`Erro ao atualizar: ${error.message}`)
+        alert.error('Erro', `Erro ao atualizar: ${error.message}`)
       } else {
-        toast.success('Lançamento atualizado.')
-        setModalOpen(false)
-        setEditando(null)
         if (data) setLancamentos((prev) => prev.map((l) => l.id === editando.id ? data as Lancamento : l))
+        alert.success('Lançamento Atualizado!', 'As alterações foram salvas.', {
+          onConfirm: () => { setModalOpen(false); setEditando(null) },
+        })
       }
     } else {
       const { data, error } = await supabase
@@ -191,17 +191,17 @@ export default function CaixaPage() {
         .single()
 
       if (error) {
-        toast.error(`Lançamento: ${error.message}`)
-        console.error('handleSave error:', error)
+        alert.error('Erro', `Erro ao registrar lançamento: ${error.message}`)
       } else {
-        toast.success('Lançamento registrado.')
-        setModalOpen(false)
         if (data) {
           const lancamento = data as Lancamento
           const belongsToCurrentPeriod =
             lancamento.data_lancamento >= dataInicio && lancamento.data_lancamento <= dataFim
           if (belongsToCurrentPeriod) setLancamentos((prev) => [lancamento, ...prev])
         }
+        alert.success('Lançamento Registrado!', 'Movimento de caixa registrado com sucesso.', {
+          onConfirm: () => setModalOpen(false),
+        })
       }
     }
 
@@ -217,11 +217,11 @@ export default function CaixaPage() {
       .eq('id', confirmDelete.id)
 
     if (error) {
-      toast.error(`Erro ao excluir: ${error.message}`)
+      alert.error('Erro', `Erro ao excluir: ${error.message}`)
     } else {
-      toast.success('Lançamento excluído.')
       setLancamentos((prev) => prev.filter((l) => l.id !== confirmDelete.id))
       setConfirmDelete(null)
+      alert.success('Lançamento Excluído!', 'O lançamento foi removido do caixa.')
     }
     setDeletando(false)
   }
@@ -299,7 +299,7 @@ export default function CaixaPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Wallet size={24} />}
+            imageSrc="/images/Push notifications-rafiki.svg"
             title="Nenhum lançamento encontrado"
             description={search || filtroTipo || filtroCategoria ? 'Tente ajustar os filtros.' : `Nenhum movimento em ${periodoLabel}.`}
           />

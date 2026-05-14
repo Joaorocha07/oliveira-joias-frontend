@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import { Modal, Button, Input } from '@/components/ui'
 import { MaskedInput } from '@/components/forms/masked-input'
@@ -15,13 +15,14 @@ interface Props {
 
 export function ModalQuickCliente({ open, onClose, onSuccess }: Props) {
   const { user } = useAuth()
+  const alert = useAlert()
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   async function handleSave() {
     if (!nome.trim()) {
-      toast.error('Nome é obrigatório.')
+      alert.error('Atenção', 'Nome é obrigatório.')
       return
     }
     setSalvando(true)
@@ -37,13 +38,12 @@ export function ModalQuickCliente({ open, onClose, onSuccess }: Props) {
       .single()
 
     if (error) {
-      toast.error('Erro ao cadastrar cliente.')
+      alert.error('Erro', 'Não foi possível cadastrar o cliente.')
     } else if (data) {
-      toast.success('Cliente cadastrado.')
-      onSuccess({ id: data.id as string, nome: data.nome as string, telefone: data.telefone as string | null })
-      setNome('')
-      setTelefone('')
-      onClose()
+      const cliente = { id: data.id as string, nome: data.nome as string, telefone: data.telefone as string | null }
+      alert.success('Cliente Cadastrado!', 'Cliente cadastrado com sucesso.', {
+        onConfirm: () => { onSuccess(cliente); setNome(''); setTelefone(''); onClose() },
+      })
     }
     setSalvando(false)
   }

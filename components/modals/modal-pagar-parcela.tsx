@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { pagarParcelaSchema, type PagarParcelaFormData } from '@/schemas/crediario'
@@ -25,6 +25,7 @@ const FORMAS = [
 
 export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPagarParcelaProps) {
   const { user } = useAuth()
+  const alert = useAlert()
 
   const {
     register,
@@ -57,11 +58,9 @@ export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPa
     if (!parcela || !user) return
     const { error } = await pagarParcela(parcela.id, parcela.crediario_id, data, user.id)
     if (error) {
-      toast.error(error)
+      alert.error('Erro ao Pagar', error)
     } else {
-      toast.success('Parcela paga com sucesso.')
-      onSuccess()
-      onClose()
+      alert.success('Parcela Paga!', 'Parcela registrada com sucesso.', { onConfirm: () => { onSuccess(); onClose() } })
     }
   }
 

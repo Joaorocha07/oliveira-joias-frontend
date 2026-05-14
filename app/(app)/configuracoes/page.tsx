@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { User, Mail, Phone, Shield } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
 import { PageHeader, Card, CardHeader, Button, Input, Divider } from '@/components/ui'
 import { getInitials } from '@/utils'
@@ -16,6 +16,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function ConfiguracoesPage() {
   const { profile, updateProfile, user } = useAuth()
+  const alert = useAlert()
   const [salvando, setSalvando] = useState(false)
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
@@ -25,16 +26,16 @@ export default function ConfiguracoesPage() {
     const telefone = String(formData.get('telefone') ?? '')
 
     if (!nome.trim()) {
-      toast.error('Nome é obrigatório.')
+      alert.error('Atenção', 'Nome é obrigatório.')
       return
     }
 
     setSalvando(true)
     const { error } = await updateProfile({ nome, telefone: telefone || null })
     if (error) {
-      toast.error('Erro ao salvar configurações.')
+      alert.error('Erro', 'Erro ao salvar configurações.')
     } else {
-      toast.success('Perfil atualizado com sucesso.')
+      alert.success('Perfil Atualizado!', 'Suas informações foram salvas com sucesso.')
     }
     setSalvando(false)
   }

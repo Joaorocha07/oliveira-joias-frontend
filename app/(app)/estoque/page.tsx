@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Diamond, Pencil, Trash2, ArrowUpDown } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, MetricCard, Button, SearchInput, Select,
@@ -20,6 +20,7 @@ interface ProdutoComEstoque extends Produto {
 }
 
 export default function EstoquePage() {
+  const alert = useAlert()
   const [produtos, setProdutos] = useState<ProdutoComEstoque[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -46,7 +47,7 @@ export default function EstoquePage() {
       .order('nome')
 
     if (error) {
-      toast.error('Erro ao carregar produtos.')
+      alert.error('Erro', 'Erro ao carregar produtos.')
       setLoading(false)
       return
     }
@@ -121,11 +122,11 @@ export default function EstoquePage() {
     }
 
     if (error) {
-      toast.error('Erro ao excluir produto.')
+      alert.error('Erro', 'Erro ao excluir produto.')
     } else {
-      toast.success('Produto excluído.')
       setProdutos((prev) => prev.filter((p) => p.id !== deleteTarget.id))
       setDeleteTarget(null)
+      alert.success('Produto Excluído!', 'O produto foi removido do catálogo.')
     }
     setDeleteLoading(false)
   }
@@ -135,10 +136,10 @@ export default function EstoquePage() {
     setDeleteLoading(true)
     const { error } = await desativarProduto(deleteTarget.id)
     if (error) {
-      toast.error('Erro ao desativar produto.')
+      alert.error('Erro', 'Erro ao desativar produto.')
     } else {
-      toast.success('Produto desativado.')
       setProdutos((prev) => prev.map((p) => p.id === deleteTarget.id ? { ...p, ativo: false } : p))
+      alert.success('Produto Desativado!', 'O produto foi desativado e não aparecerá nas vendas.')
     }
     setDeleteLoading(false)
     setDeactivateOpen(false)
@@ -221,7 +222,7 @@ export default function EstoquePage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Diamond size={24} />}
+            imageSrc="/images/Jewelry shop-pana.svg"
             title="Nenhum produto encontrado"
             description="Ajuste os filtros ou cadastre o primeiro produto."
             action={!search && !filtroCategoria && (

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
@@ -84,6 +84,7 @@ type Tab = typeof TABS[number]
 
 export function ModalProduto({ open, onClose, onSuccess, produto }: ModalProdutoProps) {
   const { user } = useAuth()
+  const alert = useAlert()
   const isEditing = !!produto
   const [activeTab, setActiveTab] = useState<Tab>('Dados Gerais')
 
@@ -136,11 +137,13 @@ export function ModalProduto({ open, onClose, onSuccess, produto }: ModalProduto
       : await createProduto(data, user.id)
 
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success(isEditing ? 'Produto atualizado.' : 'Produto cadastrado.')
-      onSuccess()
-      onClose()
+      alert.success(
+        isEditing ? 'Produto Atualizado!' : 'Produto Cadastrado!',
+        isEditing ? 'As alterações foram salvas com sucesso.' : 'Produto adicionado ao catálogo.',
+        { onConfirm: () => { onSuccess(); onClose() } },
+      )
     }
   }
 

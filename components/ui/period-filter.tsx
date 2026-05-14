@@ -1,5 +1,5 @@
 import { format, startOfMonth, subDays, subMonths } from 'date-fns'
-import { Button } from './button'
+import { cn } from '@/lib/cn'
 import { Input } from './input'
 
 export type PeriodPreset = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses' | 'tudo' | 'custom'
@@ -26,11 +26,11 @@ export function getPeriodRange(preset: Exclude<PeriodPreset, 'custom'>) {
 }
 
 const PRESETS: { key: Exclude<PeriodPreset, 'custom'>; label: string }[] = [
-  { key: 'hoje', label: 'Hoje' },
-  { key: 'sete_dias', label: '7 dias' },
-  { key: 'mes', label: 'Mês' },
+  { key: 'hoje',       label: 'Hoje' },
+  { key: 'sete_dias',  label: '7 dias' },
+  { key: 'mes',        label: 'Mês' },
   { key: 'tres_meses', label: '3 meses' },
-  { key: 'tudo', label: 'Tudo' },
+  { key: 'tudo',       label: 'Tudo' },
 ]
 
 export function PeriodFilter({ dataInicio, dataFim, activePreset, onChange, className }: PeriodFilterProps) {
@@ -50,21 +50,28 @@ export function PeriodFilter({ dataInicio, dataFim, activePreset, onChange, clas
   return (
     <div className={className ?? 'flex flex-col lg:flex-row gap-3 lg:items-end'}>
       <div className="flex flex-wrap gap-2">
-        {PRESETS.map((preset) => (
-          <Button
-            key={preset.key}
-            type="button"
-            variant={activePreset === preset.key ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => applyPreset(preset.key)}
-          >
-            {preset.label}
-          </Button>
-        ))}
+        {PRESETS.map((preset) => {
+          const isActive = activePreset === preset.key
+          return (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => applyPreset(preset.key)}
+              className={cn(
+                'px-3.5 py-1.5 rounded-lg text-[13px] font-medium border transition-all duration-200',
+                isActive
+                  ? 'bg-gold-500 text-white border-gold-500'
+                  : 'bg-transparent text-dark-400 border-gold-200 hover:bg-gold-50 hover:border-gold-400'
+              )}
+            >
+              {preset.label}
+            </button>
+          )
+        })}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:ml-auto">
-        <Input label="De" type="date" value={dataInicio} onChange={(e) => setInicio(e.target.value)} />
-        <Input label="Ate" type="date" value={dataFim} onChange={(e) => setFim(e.target.value)} />
+        <Input label="De"  type="date" value={dataInicio} onChange={(e) => setInicio(e.target.value)} />
+        <Input label="Até" type="date" value={dataFim}    onChange={(e) => setFim(e.target.value)} />
       </div>
     </div>
   )

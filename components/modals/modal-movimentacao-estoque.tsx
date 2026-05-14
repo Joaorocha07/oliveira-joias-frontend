@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select, Input } from '@/components/ui'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { estoqueSchema, type EstoqueFormData } from '@/schemas/estoque'
@@ -37,6 +37,7 @@ export function ModalMovimentacaoEstoque({
   variacaoId,
 }: ModalMovimentacaoEstoqueProps) {
   const { user } = useAuth()
+  const alert = useAlert()
   const [variacoes, setVariacoes] = useState<ProdutoVariacao[]>([])
   const [estoqueAtual, setEstoqueAtual] = useState<number | null>(null)
 
@@ -114,11 +115,11 @@ export function ModalMovimentacaoEstoque({
     if (!user) return
     const { error } = await createMovimentacao(data, user.id)
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success('Movimentação registrada.')
-      onSuccess()
-      onClose()
+      alert.success('Movimentação Registrada!', 'Estoque atualizado com sucesso.', {
+        onConfirm: () => { onSuccess(); onClose() },
+      })
     }
   }
 

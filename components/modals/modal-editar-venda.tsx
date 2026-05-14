@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select, Input } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
@@ -65,6 +65,7 @@ function buildDefaults(venda: VendaRow): FormData {
 
 export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }: ModalEditarVendaProps) {
   const { user } = useAuth()
+  const alert = useAlert()
   const [quickClienteOpen, setQuickClienteOpen] = useState(false)
   const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
@@ -96,7 +97,7 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
         .select('id, nome, ativo, created_at')
         .order('nome')
         .then(({ data, error }) => {
-          if (error) toast.error('Erro ao carregar origens.')
+          if (error) alert.error('Erro', 'Erro ao carregar origens.')
           else setOrigens((data as OrigemCliente[]) ?? [])
         })
     }
@@ -143,9 +144,8 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
     if (!venda || !user) return
     const { error } = await updateVenda(venda.id, subtotal, data, user.id)
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success('Venda atualizada.')
       onSuccess({
         cliente_id: data.cliente_id,
         vendedor_id: data.vendedor_id,
@@ -161,7 +161,9 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
         vendedor: data.vendedor_id ? { nome: vendedorDisplayValue ?? venda.vendedor?.nome ?? 'Vendedor' } : null,
         origem: data.origem_id && origemSelecionada ? { id: origemSelecionada.id, nome: origemSelecionada.nome } : null,
       })
-      onClose()
+      alert.success('Venda Atualizada!', 'As alterações foram salvas com sucesso.', {
+        onConfirm: () => onClose(),
+      })
     }
   }
 

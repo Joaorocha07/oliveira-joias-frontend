@@ -396,7 +396,7 @@ export default function RelatoriosPage() {
                 <Card>
                   <CardHeader title="Vendas por Produto" />
                   {charts.vendasProduto.length === 0 ? (
-                    <EmptyState icon={<BarChart3 size={24} />} title="Sem vendas no periodo" />
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas no periodo" />
                   ) : (
                     <PieReport data={charts.vendasProduto} />
                   )}
@@ -450,7 +450,7 @@ export default function RelatoriosPage() {
 
                   {caixaChartMode === 'evolucao' && (
                     charts.serieFinanceira.length === 0 ? (
-                      <EmptyState icon={<BarChart3 size={24} />} title="Sem lancamentos no periodo" />
+                      <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem lancamentos no periodo" />
                     ) : (
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={charts.serieFinanceira} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
@@ -467,7 +467,7 @@ export default function RelatoriosPage() {
 
                   {caixaChartMode === 'categorias' && (
                     charts.despesasCategoria.length === 0 ? (
-                      <EmptyState icon={<BarChart3 size={24} />} title="Sem despesas no periodo" />
+                      <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem despesas no periodo" />
                     ) : (
                       <PieReport data={charts.despesasCategoria} offset={3} />
                     )
@@ -475,7 +475,7 @@ export default function RelatoriosPage() {
 
                   {caixaChartMode === 'lancamentos' && (
                     charts.lancamentos.length === 0 ? (
-                      <EmptyState icon={<BarChart3 size={24} />} title="Sem lancamentos no periodo" />
+                      <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem lancamentos no periodo" />
                     ) : (
                       <BarCompareReport data={charts.lancamentos} />
                     )
@@ -484,7 +484,7 @@ export default function RelatoriosPage() {
                 <Card>
                   <CardHeader title="Resumo dos Lancamentos" />
                   {charts.lancamentos.length === 0 ? (
-                    <EmptyState icon={<BarChart3 size={24} />} title="Sem lancamentos no periodo" />
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem lancamentos no periodo" />
                   ) : (
                     <BarCompareReport data={charts.lancamentos.slice(0, 8)} />
                   )}
@@ -518,7 +518,7 @@ export default function RelatoriosPage() {
                 <Card>
                   <CardHeader title="Movimentacoes por Categoria" />
                   {charts.estoqueCategoria.length === 0 ? (
-                    <EmptyState icon={<BarChart3 size={24} />} title="Sem movimentacoes no periodo" />
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem movimentacoes no periodo" />
                   ) : (
                     <BarCompareReport data={charts.estoqueCategoria} unit=" un" />
                   )}
@@ -542,7 +542,7 @@ export default function RelatoriosPage() {
 
                 {investimentoData.produtos.length === 0 ? (
                   <div className="p-6">
-                    <EmptyState icon={<BarChart3 size={24} />} title="Nenhum produto com dados de investimento" />
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhum produto com dados de investimento" />
                   </div>
                 ) : (
                   <div className="divide-y divide-gold-50">
@@ -689,7 +689,7 @@ function PieReport({ data, offset = 0 }: { data: CategoriaData[]; offset?: numbe
 
 function BarCompareReport({ data, unit = '' }: { data: { name: string; value: number }[]; unit?: string }) {
   if (data.every((item) => item.value === 0)) {
-    return <EmptyState icon={<BarChart3 size={24} />} title="Sem dados no periodo" />
+    return <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem dados no periodo" />
   }
 
   return (

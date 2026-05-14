@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { editarCrediarioSchema, type EditarCrediarioFormData } from '@/schemas/crediario'
@@ -19,6 +19,7 @@ interface ModalEditarCrediarioProps {
 }
 
 export function ModalEditarCrediario({ open, onClose, onSuccess, crediario }: ModalEditarCrediarioProps) {
+  const alert = useAlert()
   const {
     register,
     handleSubmit,
@@ -54,11 +55,11 @@ export function ModalEditarCrediario({ open, onClose, onSuccess, crediario }: Mo
     if (!crediario) return
     const { error } = await updateCrediario(crediario.id, data)
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success('Crediário atualizado.')
-      onSuccess()
-      onClose()
+      alert.success('Crediário Atualizado!', 'As alterações foram salvas com sucesso.', {
+        onConfirm: () => { onSuccess(); onClose() },
+      })
     }
   }
 

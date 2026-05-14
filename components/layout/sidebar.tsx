@@ -7,7 +7,6 @@ import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
   Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog,
 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
 import { getInitials } from '@/utils'
@@ -21,16 +20,16 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { section: 'Principal', href: '/dashboard', icon: <LayoutDashboard size={16} />, label: 'Painel Geral' },
-  { href: '/vendas',       icon: <ShoppingCart size={16} />, label: 'Vendas' },
-  { href: '/crediario',    icon: <CreditCard size={16} />,   label: 'Crediário' },
-  { section: 'Cadastros', href: '/estoque',  icon: <Diamond size={16} />,  label: 'Estoque' },
-  { href: '/servicos',     icon: <Wrench size={16} />,       label: 'Serviços' },
-  { href: '/clientes',     icon: <Users size={16} />,        label: 'Clientes' },
-  { href: '/fornecedores', icon: <Truck size={16} />,        label: 'Fornecedores' },
-  { href: '/vendedores',   icon: <UserCog size={16} />,      label: 'Equipe de Vendas' },
-  { section: 'Financeiro', href: '/caixa',  icon: <Wallet size={16} />,   label: 'Caixa & Financeiro' },
-  { href: '/relatorios',   icon: <BarChart3 size={16} />,    label: 'Relatórios' },
+  { section: 'Principal', href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Painel Geral' },
+  { href: '/vendas',       icon: <ShoppingCart size={18} />, label: 'Vendas' },
+  { href: '/crediario',    icon: <CreditCard size={18} />,   label: 'Crediário' },
+  { section: 'Cadastros', href: '/estoque',  icon: <Diamond size={18} />,  label: 'Estoque' },
+  { href: '/servicos',     icon: <Wrench size={18} />,       label: 'Serviços' },
+  { href: '/clientes',     icon: <Users size={18} />,        label: 'Clientes' },
+  { href: '/fornecedores', icon: <Truck size={18} />,        label: 'Fornecedores' },
+  { href: '/vendedores',   icon: <UserCog size={18} />,      label: 'Equipe de Vendas' },
+  { section: 'Financeiro', href: '/caixa',  icon: <Wallet size={18} />,   label: 'Caixa & Financeiro' },
+  { href: '/relatorios',   icon: <BarChart3 size={18} />,    label: 'Relatórios' },
 ]
 
 interface SidebarProps {
@@ -49,7 +48,6 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
   async function handleSignOut() {
     setSigningOut(true)
     await signOut()
-    toast.success('Até logo!')
     router.replace('/login')
     setSigningOut(false)
   }
@@ -57,20 +55,20 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
   return (
     <>
       <aside className={cn(
-        'flex flex-col bg-dark-800 border-r border-dark-700 transition-all duration-200 flex-shrink-0',
+        'flex flex-col bg-dark-800 border-r border-white/[0.04] transition-all duration-200 flex-shrink-0',
         collapsed ? 'w-14' : 'w-56'
       )}>
         {/* Logo */}
-        <div className="px-4 py-5 border-b border-dark-700 flex items-center justify-between">
+        <div className="px-4 py-5 border-b border-white/[0.06] flex items-center justify-between">
           {!collapsed && (
             <div>
-              <p className="font-display text-lg text-gold-300 leading-tight">Oliveira Joias</p>
-              <p className="text-[10px] text-dark-300 tracking-widest uppercase mt-0.5">Sistema de Gestão</p>
+              <p className="font-display text-lg text-gold-500 leading-tight tracking-wide">Oliveira Joias</p>
+              <p className="text-[10px] text-dark-300 tracking-[1.5px] uppercase mt-0.5">Sistema de Gestão</p>
             </div>
           )}
           <button
             onClick={onToggle}
-            className="p-1 rounded-lg text-dark-300 hover:text-gold-300 hover:bg-dark-700 transition-colors ml-auto"
+            className="p-1 rounded-lg text-dark-300 hover:text-gold-500 hover:bg-white/[0.04] transition-colors ml-auto"
             aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
@@ -84,7 +82,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
             return (
               <div key={item.href}>
                 {item.section && !collapsed && (
-                  <p className="px-2 pt-3 pb-1 text-[10px] uppercase tracking-widest text-dark-300 select-none">
+                  <p className="px-2.5 pt-4 pb-1.5 text-[10px] uppercase tracking-[1.5px] text-dark-400 select-none font-semibold">
                     {item.section}
                   </p>
                 )}
@@ -93,14 +91,20 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
                   title={collapsed ? item.label : undefined}
                   onClick={onMobileClose}
                   className={cn(
-                    'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all',
-                    'text-dark-300 hover:text-gold-300 hover:bg-dark-700',
-                    isActive && 'text-gold-300 bg-dark-700 border-l-2 border-gold-500 pl-2',
+                    'flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition-all duration-150',
+                    isActive
+                      ? 'bg-[rgba(201,168,76,0.12)] text-gold-500 border-l-[3px] border-l-gold-500 pl-[7px]'
+                      : 'text-dark-300 hover:text-dark-200/80 hover:bg-white/[0.04]',
                     collapsed && 'justify-center px-0'
                   )}
                 >
-                  <span className="flex-shrink-0">{item.icon}</span>
-                  {!collapsed && <span>{item.label}</span>}
+                  <span className={cn(
+                    'flex-shrink-0 transition-colors duration-150',
+                    isActive ? 'text-gold-500' : 'text-dark-300'
+                  )}>
+                    {item.icon}
+                  </span>
+                  {!collapsed && <span className="leading-none">{item.label}</span>}
                 </Link>
               </div>
             )
@@ -108,21 +112,21 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
         </nav>
 
         {/* User footer */}
-        <div className="px-2 py-3 border-t border-dark-700">
+        <div className="px-2 py-3 border-t border-white/[0.06]">
           {!collapsed ? (
             <div className="flex items-center gap-2.5 px-2 py-2">
-              <div className="w-7 h-7 rounded-full bg-gold-500 flex items-center justify-center text-xs font-medium text-dark-800 flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gold-500 flex items-center justify-center text-xs font-semibold text-white flex-shrink-0">
                 {profile ? getInitials(profile.nome) : '?'}
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-xs font-medium text-dark-100 truncate">{profile?.nome || 'Usuário'}</p>
-                <p className="text-[10px] text-dark-300 capitalize">{profile?.role}</p>
+                <p className="text-xs font-medium text-white/80 truncate">{profile?.nome || 'Usuário'}</p>
+                <p className="text-[10px] text-dark-300 capitalize mt-0.5">{profile?.role}</p>
               </div>
               <div className="flex gap-1">
                 <Link
                   href="/configuracoes"
                   onClick={onMobileClose}
-                  className="p-1 rounded text-dark-300 hover:text-gold-300 transition-colors"
+                  className="p-1.5 rounded text-dark-300 hover:text-gold-500 transition-colors"
                   title="Configurações"
                 >
                   <Settings size={13} />
@@ -130,7 +134,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
                 <button
                   type="button"
                   onClick={() => setSignOutOpen(true)}
-                  className="p-1 rounded text-dark-300 hover:text-red-400 transition-colors"
+                  className="p-1.5 rounded text-dark-300 hover:text-[#C75B5B] transition-colors"
                   title="Sair"
                 >
                   <LogOut size={13} />
@@ -141,7 +145,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
             <button
               type="button"
               onClick={() => setSignOutOpen(true)}
-              className="w-full flex justify-center p-2 text-dark-300 hover:text-red-400 transition-colors"
+              className="w-full flex justify-center p-2 text-dark-300 hover:text-[#C75B5B] transition-colors"
               title="Sair"
             >
               <LogOut size={15} />
@@ -154,7 +158,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
         open={signOutOpen}
         onClose={() => setSignOutOpen(false)}
         onConfirm={handleSignOut}
-        icon={<LogOut size={22} />}
+        icon={<LogOut size={28} />}
         iconVariant="danger"
         title="Sair da conta?"
         description={

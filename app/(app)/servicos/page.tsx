@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Wrench, Pencil, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
@@ -40,6 +40,7 @@ function threeMonthsStart() {
 }
 
 export default function ServicosPage() {
+  const alert = useAlert()
   const [servicos, setServicos] = useState<ServicoComCliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -62,7 +63,7 @@ export default function ServicosPage() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      toast.error('Erro ao carregar serviços.')
+      alert.error('Erro', 'Erro ao carregar serviços.')
     } else {
       setServicos((data as ServicoComCliente[]) ?? [])
     }
@@ -105,7 +106,7 @@ export default function ServicosPage() {
   async function handleStatusChange(id: string, status: ServicoStatus) {
     const { error } = await updateServicoStatus(id, status)
     if (error) {
-      toast.error('Erro ao atualizar status.')
+      alert.error('Erro', 'Erro ao atualizar status.')
     } else {
       setServicos((prev) => prev.map((s) => s.id === id ? { ...s, status } : s))
     }
@@ -116,10 +117,10 @@ export default function ServicosPage() {
     setDeletando(true)
     const { error } = await deleteServico(confirmDelete.id)
     if (error) {
-      toast.error('Erro ao excluir serviço.')
+      alert.error('Erro', 'Erro ao excluir serviço.')
     } else {
-      toast.success('Serviço excluído.')
       setServicos((prev) => prev.filter((s) => s.id !== confirmDelete.id))
+      alert.success('Serviço Excluído!', 'A ordem de serviço foi removida.')
     }
     setDeletando(false)
     setConfirmDelete(null)
@@ -186,7 +187,7 @@ export default function ServicosPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Wrench size={24} />}
+            imageSrc="/images/software tester-bro.svg"
             title="Nenhum serviço encontrado"
             description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhuma ordem de serviço no período.'}
           />

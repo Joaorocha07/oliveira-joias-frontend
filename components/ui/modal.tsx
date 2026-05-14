@@ -27,31 +27,40 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
       aria-modal="true"
       aria-label={title}
     >
+      {/* Overlay */}
       <div
-        className="absolute inset-0 bg-dark-800/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-[rgba(26,21,16,0.55)] backdrop-blur-[6px]"
         onClick={onClose}
         aria-hidden="true"
       />
+
+      {/* Container */}
       <div className={cn(
-        'relative w-full bg-white rounded-2xl border border-gold-100 shadow-xl',
-        'flex flex-col max-h-[90vh]',
+        'relative w-full bg-white rounded-2xl flex flex-col max-h-[90vh]',
+        'border border-[rgba(232,213,163,0.3)]',
+        'shadow-[0_20px_60px_rgba(26,21,16,0.15)]',
         sizeClasses[size]
       )}>
-        <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-gold-100 flex-shrink-0">
-          <h3 className="font-display text-base md:text-lg font-medium text-dark-700">{title}</h3>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gold-100 flex-shrink-0">
+          <h3 className="font-display text-lg font-semibold text-dark-500">{title}</h3>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-lg text-dark-300 hover:text-dark-600 hover:bg-cream-200 transition-colors -mr-2"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-dark-300 hover:text-dark-500 hover:bg-gold-50 transition-all duration-200"
             aria-label="Fechar"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="px-4 py-4 md:px-6 overflow-y-auto flex-1">
+
+        {/* Body */}
+        <div className="px-6 py-6 overflow-y-auto flex-1">
           {children}
         </div>
+
+        {/* Footer */}
         {footer && (
-          <div className="px-4 py-3 md:px-6 md:py-4 border-t border-gold-100 flex items-center justify-end gap-2 flex-shrink-0 bg-cream-50/50 rounded-b-2xl">
+          <div className="px-6 pt-4 pb-6 border-t border-gold-100 flex items-center justify-end gap-3 flex-shrink-0">
             {footer}
           </div>
         )}

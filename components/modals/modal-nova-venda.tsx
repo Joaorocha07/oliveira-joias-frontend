@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2, Package } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select, Input, Spinner } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
@@ -38,6 +38,7 @@ function round2(n: number) {
 
 export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps) {
   const { user } = useAuth()
+  const alert = useAlert()
   const [itemProdutos, setItemProdutos] = useState<Record<number, ItemProdutoState>>({})
   const [quickClienteOpen, setQuickClienteOpen] = useState(false)
   const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
@@ -108,7 +109,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         .select('id, nome, ativo, created_at')
         .order('nome')
         .then(({ data, error }) => {
-          if (error) toast.error('Erro ao carregar origens.')
+          if (error) alert.error('Erro', 'Erro ao carregar origens.')
           else setOrigens((data as OrigemCliente[]) ?? [])
         })
     }
@@ -185,7 +186,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     if (variacoes.length === 0) {
       setItemProdutos((prev) => ({ ...prev, [index]: { variacoes: [], loading: false } }))
       setError(`itens.${index}.produto_id`, { type: 'manual', message: 'Produto sem estoque disponível.' })
-      toast.error('Este produto acabou e não pode ser selecionado.')
+      alert.error('Sem Estoque', 'Este produto acabou e não pode ser selecionado.')
       return false
     }
 
@@ -235,17 +236,17 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
 
     if (stockErrorIndex >= 0) {
       setError(`itens.${stockErrorIndex}.quantidade`, { type: 'manual', message: 'Quantidade maior que o estoque disponível.' })
-      toast.error('A quantidade informada passa do estoque disponível.')
+      alert.error('Estoque Insuficiente', 'A quantidade informada passa do estoque disponível.')
       return
     }
 
     const { error } = await createVenda(data, user.id)
     if (error) {
-      toast.error(error)
+      alert.error('Erro', error)
     } else {
-      toast.success('Venda registrada com sucesso.')
-      onSuccess()
-      onClose()
+      alert.success('Venda Registrada!', 'Venda registrada com sucesso.', {
+        onConfirm: () => { onSuccess(); onClose() },
+      })
     }
   }
 

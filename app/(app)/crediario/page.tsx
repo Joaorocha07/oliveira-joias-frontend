@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { CreditCard } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, SearchInput, Select, Spinner, EmptyState,
@@ -70,6 +70,7 @@ function ParcelasBadge({ c }: { c: CrediarioRow }) {
 // ── Page ──────────────────────────────────────────────────────────
 
 export default function CrediarioPage() {
+  const alert = useAlert()
   const [crediarios, setCrediarios] = useState<CrediarioRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -94,7 +95,7 @@ export default function CrediarioPage() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      toast.error('Erro ao carregar crediários.')
+      alert.error('Erro', 'Erro ao carregar crediários.')
       setLoading(false)
       return null
     }
@@ -183,7 +184,7 @@ export default function CrediarioPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<CreditCard size={24} />}
+            imageSrc="/images/Ecommerce checkout laptop-cuate.svg"
             title="Nenhum crediário encontrado"
             description={search || filtroStatus ? 'Tente ajustar os filtros.' : 'Nenhum crediário registrado.'}
           />

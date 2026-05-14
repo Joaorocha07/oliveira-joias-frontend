@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Users, Phone, Mail, Pencil, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
@@ -22,6 +22,7 @@ const EMPTY_FORM: ClienteInsert = {
 
 export default function ClientesPage() {
   const { user } = useAuth()
+  const alert = useAlert()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -45,7 +46,7 @@ export default function ClientesPage() {
       .order('nome')
 
     if (error) {
-      toast.error('Erro ao carregar clientes.')
+      alert.error('Erro', 'Erro ao carregar clientes.')
     } else {
       setClientes(data ?? [])
     }
@@ -94,7 +95,7 @@ export default function ClientesPage() {
 
   async function handleSave() {
     if (!form.nome.trim()) {
-      toast.error('Nome é obrigatório.')
+      alert.error('Atenção', 'Nome é obrigatório.')
       return
     }
     setSalvando(true)
@@ -102,20 +103,22 @@ export default function ClientesPage() {
     if (editando) {
       const { error } = await supabase.from('clientes').update(form).eq('id', editando.id)
       if (error) {
-        toast.error('Erro ao atualizar cliente.')
+        alert.error('Erro', 'Erro ao atualizar cliente.')
       } else {
-        toast.success('Cliente atualizado.')
         setClientes((prev) => prev.map((c) => c.id === editando.id ? { ...c, ...form } : c))
-        setModalOpen(false)
+        alert.success('Cliente Atualizado!', 'Os dados do cliente foram salvos.', {
+          onConfirm: () => setModalOpen(false),
+        })
       }
     } else {
       const { data, error } = await supabase.from('clientes').insert([form]).select().single()
       if (error) {
-        toast.error('Erro ao cadastrar cliente.')
+        alert.error('Erro', 'Erro ao cadastrar cliente.')
       } else {
-        toast.success('Cliente cadastrado.')
         setClientes((prev) => [...prev, data as Cliente])
-        setModalOpen(false)
+        alert.success('Cliente Cadastrado!', 'Cliente adicionado com sucesso.', {
+          onConfirm: () => setModalOpen(false),
+        })
       }
     }
     setSalvando(false)
@@ -143,11 +146,11 @@ export default function ClientesPage() {
     setDeletando(true)
     const { error } = await supabase.from('clientes').delete().eq('id', confirmDelete.id)
     if (error) {
-      toast.error('Erro ao excluir cliente.')
+      alert.error('Erro', 'Erro ao excluir cliente.')
     } else {
-      toast.success('Cliente excluído.')
       setClientes((prev) => prev.filter((c) => c.id !== confirmDelete.id))
       setConfirmDelete(null)
+      alert.success('Cliente Excluído!', 'O cliente foi removido com sucesso.')
     }
     setDeletando(false)
   }
@@ -161,7 +164,7 @@ export default function ClientesPage() {
       password: senha,
     })
     if (authError) {
-      toast.error('Senha incorreta.')
+      alert.error('Senha Incorreta', 'Verifique sua senha e tente novamente.')
       setVerificando(false)
       return
     }
@@ -169,21 +172,21 @@ export default function ClientesPage() {
     const { data: vendas } = await supabase.from('vendas').select('id').eq('cliente_id', dangerCliente.id)
     for (const v of vendas ?? []) {
       const { error } = await deleteVenda(v.id)
-      if (error) { toast.error(`Erro ao excluir venda: ${error}`); setVerificando(false); return }
+      if (error) { alert.error('Erro', `Erro ao excluir venda: ${error}`); setVerificando(false); return }
     }
 
     const { error: servicosError } = await supabase.from('servicos').delete().eq('cliente_id', dangerCliente.id)
-    if (servicosError) { toast.error(`Erro ao excluir serviços: ${servicosError.message}`); setVerificando(false); return }
+    if (servicosError) { alert.error('Erro', `Erro ao excluir serviços: ${servicosError.message}`); setVerificando(false); return }
 
     const { error: clienteError } = await supabase.from('clientes').delete().eq('id', dangerCliente.id)
-    if (clienteError) { toast.error(`Erro: ${clienteError.message}`); setVerificando(false); return }
+    if (clienteError) { alert.error('Erro', clienteError.message); setVerificando(false); return }
 
-    toast.success('Cliente e todos os registros excluídos.')
     setClientes((prev) => prev.filter((c) => c.id !== dangerCliente.id))
     setDangerCliente(null)
     setVinculos(null)
     setSenha('')
     setVerificando(false)
+    alert.success('Cliente Excluído!', 'Cliente e todos os registros foram removidos permanentemente.')
   }
 
   return (
@@ -212,7 +215,7 @@ export default function ClientesPage() {
           <div className="flex justify-center py-16"><Spinner size={24} /></div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            icon={<Users size={24} />}
+            imageSrc="/images/Profile Interface-rafiki.svg"
             title="Nenhum cliente encontrado"
             description={search ? 'Tente outro termo.' : 'Cadastre o primeiro cliente.'}
             action={

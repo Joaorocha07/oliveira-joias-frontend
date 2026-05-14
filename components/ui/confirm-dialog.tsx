@@ -24,7 +24,12 @@ export function ConfirmDialog({
       size="sm"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+          <Button
+            variant="ghost"
+            className="border border-gold-200 text-dark-400 hover:bg-gold-50 hover:border-gold-500"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancelar
           </Button>
           <Button
@@ -37,7 +42,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-sm text-dark-500">{description}</p>
+      <p className="text-sm text-dark-400 leading-relaxed">{description}</p>
     </Modal>
   )
 }
