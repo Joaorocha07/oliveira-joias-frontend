@@ -24,7 +24,7 @@ interface ModalNovoServicoProps {
   displayNum?: number
 }
 
-const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'entregue', 'cancelado']
+const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'cancelado']
 const FORMAS: FormaPagamento[] = ['dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'crediario', 'transferencia', 'cheque']
 
 function buildDefaults(servico?: ServicoComCliente | null): ServicoFormData {

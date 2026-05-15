@@ -9,7 +9,7 @@ export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_cred
 export type CrediarioStatus = 'em_dia' | 'vencido' | 'quitado' | 'cancelado'
 export type ParcelaStatus = 'pendente' | 'pago' | 'vencido' | 'cancelado'
 export type LancamentoTipo = 'entrada' | 'saida'
-export type ServicoStatus = 'orcamento' | 'aguardando' | 'em_andamento' | 'concluido' | 'entregue' | 'cancelado'
+export type ServicoStatus = 'orcamento' | 'aguardando' | 'em_andamento' | 'concluido' | 'cancelado'
 export type EstoqueMovimentoTipo = 'entrada' | 'saida' | 'ajuste' | 'devolucao'
 export type ProdutoCategoria = 'anel' | 'colar' | 'brinco' | 'pulseira' | 'alianca' | 'pingente' | 'relogio' | 'kit' | 'outro'
 

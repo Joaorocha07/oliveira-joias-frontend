@@ -16,7 +16,7 @@ import {
 import { updateServicoStatus, deleteServico } from '@/services/servicos'
 import type { ServicoComCliente, ServicoStatus } from '@/types'
 
-const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'entregue', 'cancelado']
+const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'cancelado']
 
 type PeriodoAtalho = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses'
 
