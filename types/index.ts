@@ -3,6 +3,7 @@
 // ============================================================
 
 export type UserRole = 'admin' | 'vendedor' | 'caixa' | 'visualizador'
+export type VendaTipo = 'normal' | 'livre'
 export type VendaStatus = 'orcamento' | 'pendente' | 'pago' | 'crediario' | 'cancelado'
 export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'crediario' | 'transferencia' | 'cheque' | 'misto'
 export type CrediarioStatus = 'em_dia' | 'vencido' | 'quitado' | 'cancelado'
@@ -171,6 +172,7 @@ export interface VwEstoqueAtual {
 export interface Venda {
   id: string
   numero: number
+  tipo: VendaTipo
   cliente_id: string | null
   vendedor_id: string | null
   origem_id: string | null
@@ -182,6 +184,8 @@ export interface Venda {
   total: number
   valor_pago: number
   troco: number
+  descricao_livre: string | null
+  custo_livre: number | null
   observacoes: string | null
   data_venda: string
   created_at: string

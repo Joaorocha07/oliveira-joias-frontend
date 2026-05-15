@@ -17,6 +17,7 @@ const itemSchema = z.object({
 
 export const vendaSchema = z
   .object({
+    tipo: z.enum(['normal', 'livre'] as const),
     cliente_id: z.string().nullable(),
     vendedor_id: z.string().nullable(),
     origem_id: z.string().nullable(),
@@ -25,7 +26,13 @@ export const vendaSchema = z
     forma_pagamento: z.enum(formasPagamento),
     desconto: z.number().min(0),
     observacoes: z.string(),
-    itens: z.array(itemSchema).min(1, 'Adicione pelo menos 1 item'),
+    // Venda normal
+    itens: z.array(itemSchema),
+    // Venda livre
+    descricao_livre: z.string(),
+    valor_livre: z.number().min(0),
+    custo_livre: z.number().min(0),
+    // Crediário
     num_parcelas: z.number().int().min(1).max(60),
     entrada: z.number().min(0),
     dia_vencimento: z.number().int().min(1).max(28),
@@ -37,6 +44,29 @@ export const vendaSchema = z
         message: 'Cliente obrigatório para venda no crediário',
         code: z.ZodIssueCode.custom,
       })
+    }
+    if (data.tipo === 'normal' && data.itens.length === 0) {
+      ctx.addIssue({
+        path: ['itens'],
+        message: 'Adicione pelo menos 1 item',
+        code: z.ZodIssueCode.custom,
+      })
+    }
+    if (data.tipo === 'livre') {
+      if (!data.descricao_livre.trim()) {
+        ctx.addIssue({
+          path: ['descricao_livre'],
+          message: 'Descrição obrigatória',
+          code: z.ZodIssueCode.custom,
+        })
+      }
+      if (data.valor_livre <= 0) {
+        ctx.addIssue({
+          path: ['valor_livre'],
+          message: 'Valor da venda obrigatório',
+          code: z.ZodIssueCode.custom,
+        })
+      }
     }
   })
 

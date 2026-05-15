@@ -60,6 +60,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   } = useForm<VendaFormData>({
     resolver: zodResolver(vendaSchema) as never,
     defaultValues: {
+      tipo: 'normal',
       cliente_id: null,
       vendedor_id: null,
       origem_id: null,
@@ -69,6 +70,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       desconto: 0,
       observacoes: '',
       itens: [],
+      descricao_livre: '',
+      valor_livre: 0,
+      custo_livre: 0,
       num_parcelas: 1,
       entrada: 0,
       dia_vencimento: 10,
@@ -77,19 +81,25 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
 
   const { fields, append, remove } = useFieldArray({ control, name: 'itens' })
 
+  const watchedTipo = watch('tipo')
   const watchedItens = watch('itens')
   const watchedDesconto = watch('desconto')
   const watchedFormaPagamento = watch('forma_pagamento')
+  const watchedValorLivre = watch('valor_livre')
+  const isLivre = watchedTipo === 'livre'
   const isCrediario = watchedFormaPagamento === 'crediario'
 
-  const subtotal = (watchedItens ?? []).reduce((acc, item) => {
-    return acc + round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
-  }, 0)
+  const subtotal = isLivre
+    ? round2(watchedValorLivre ?? 0)
+    : (watchedItens ?? []).reduce((acc, item) => {
+        return acc + round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
+      }, 0)
   const total = round2(Math.max(0, subtotal - (watchedDesconto ?? 0)))
 
   useEffect(() => {
     if (open) {
       reset({
+        tipo: 'normal',
         cliente_id: null,
         vendedor_id: null,
         origem_id: null,
@@ -99,6 +109,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         desconto: 0,
         observacoes: '',
         itens: [],
+        descricao_livre: '',
+        valor_livre: 0,
+        custo_livre: 0,
         num_parcelas: 1,
         entrada: 0,
         dia_vencimento: 10,
@@ -234,17 +247,19 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   async function onSave(data: VendaFormData) {
     if (!user) return
 
-    const stockErrorIndex = data.itens.findIndex((item, index) => {
-      const variacoes = itemProdutos[index]?.variacoes ?? []
-      const selectedVariation = variacoes.find((v) => v.id === item.variacao_id)
-      if (!selectedVariation) return true
-      return item.quantidade > selectedVariation.estoque_atual
-    })
+    if (data.tipo === 'normal') {
+      const stockErrorIndex = data.itens.findIndex((item, index) => {
+        const variacoes = itemProdutos[index]?.variacoes ?? []
+        const selectedVariation = variacoes.find((v) => v.id === item.variacao_id)
+        if (!selectedVariation) return true
+        return item.quantidade > selectedVariation.estoque_atual
+      })
 
-    if (stockErrorIndex >= 0) {
-      setError(`itens.${stockErrorIndex}.quantidade`, { type: 'manual', message: 'Quantidade maior que o estoque disponível.' })
-      alert.error('Estoque Insuficiente', 'A quantidade informada passa do estoque disponível.')
-      return
+      if (stockErrorIndex >= 0) {
+        setError(`itens.${stockErrorIndex}.quantidade`, { type: 'manual', message: 'Quantidade maior que o estoque disponível.' })
+        alert.error('Estoque Insuficiente', 'A quantidade informada passa do estoque disponível.')
+        return
+      }
     }
 
     const { error } = await createVenda(data, user.id)
@@ -274,6 +289,62 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         }
       >
         <form id="form-nova-venda" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-5">
+          {/* Toggle tipo */}
+          <div className="grid grid-cols-1 gap-2 rounded-xl border border-gold-200 bg-cream-50 p-1.5 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => { setValue('tipo', 'normal'); clearErrors() }}
+              className={`group flex min-h-[58px] items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
+                !isLivre
+                  ? 'border-gold-500 bg-gold-50 text-dark-700 shadow-[0_10px_26px_rgba(166,139,60,0.18)] ring-1 ring-gold-400/60'
+                  : 'border-transparent bg-white text-dark-500 hover:border-gold-200 hover:bg-cream-100'
+              }`}
+              aria-pressed={!isLivre}
+            >
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-base font-semibold ${
+                !isLivre
+                  ? 'border-gold-600 bg-gold-500 text-dark-900'
+                  : 'border-gold-200 bg-cream-50 text-gold-600 group-hover:border-gold-400'
+              }`}>
+                N
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold leading-tight">Venda Normal</span>
+                <span className={`mt-0.5 block text-xs leading-tight ${
+                  !isLivre ? 'text-dark-500' : 'text-dark-300'
+                }`}>
+                  Produtos do estoque
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setValue('tipo', 'livre'); clearErrors() }}
+              className={`group flex min-h-[58px] items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
+                isLivre
+                  ? 'border-gold-500 bg-gold-50 text-dark-700 shadow-[0_10px_26px_rgba(166,139,60,0.18)] ring-1 ring-gold-400/60'
+                  : 'border-transparent bg-white text-dark-500 hover:border-gold-200 hover:bg-cream-100'
+              }`}
+              aria-pressed={isLivre}
+            >
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-base font-semibold ${
+                isLivre
+                  ? 'border-gold-600 bg-gold-500 text-dark-900'
+                  : 'border-gold-200 bg-cream-50 text-gold-600 group-hover:border-gold-400'
+              }`}>
+                L
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold leading-tight">Venda Livre</span>
+                <span className={`mt-0.5 block text-xs leading-tight ${
+                  isLivre ? 'text-dark-500' : 'text-dark-300'
+                }`}>
+                  Valor manual
+                </span>
+              </span>
+            </button>
+          </div>
+
           {/* Cliente + Data */}
           <div className="grid grid-cols-2 gap-4">
             <Controller
@@ -360,126 +431,172 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
             />
           )}
 
-          {/* Itens */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-dark-600">Itens da venda</h4>
-              <Button type="button" variant="ghost" size="sm" leftIcon={<Plus size={13} />} onClick={addItem}>
-                Adicionar item
-              </Button>
-            </div>
-
-            {fields.length === 0 && (
-              <div className="border border-dashed border-gold-200 rounded-xl p-6 text-center">
-                <Package size={20} className="mx-auto mb-2 text-dark-300" />
-                <p className="text-sm text-dark-400">Nenhum item adicionado</p>
-                <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={addItem}>
-                  Adicionar primeiro item
+          {/* Itens (venda normal) */}
+          {!isLivre && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-dark-600">Itens da venda</h4>
+                <Button type="button" variant="ghost" size="sm" leftIcon={<Plus size={13} />} onClick={addItem}>
+                  Adicionar item
                 </Button>
               </div>
-            )}
 
-            {typeof errors.itens?.message === 'string' && (
-              <p className="text-xs text-red-600">{errors.itens.message}</p>
-            )}
-
-            {fields.map((field, index) => {
-              const itemState = itemProdutos[index]
-              const itemErrors = errors.itens?.[index]
-              const item = watchedItens?.[index]
-              const produtoId = item?.produto_id
-              const selectedVariation = itemState?.variacoes.find((v) => v.id === item?.variacao_id)
-              const estoqueDisponivel = selectedVariation?.estoque_atual ?? (
-                itemState?.variacoes.length === 1 ? itemState.variacoes[0].estoque_atual : undefined
-              )
-
-              return (
-                <div key={field.id} className="border border-gold-100 rounded-xl p-4 bg-cream-50/50 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-dark-400">Item {index + 1}</span>
-                    <Button type="button" variant="danger-ghost" size="icon" onClick={() => removeItem(index)}>
-                      <Trash2 size={13} />
-                    </Button>
-                  </div>
-
-                  <SearchableSelect
-                    label="Produto"
-                    value={produtoId || null}
-                    onChange={(id) => { if (!id) return; return handleProdutoSelect(index, id) }}
-                    onSearch={searchProdutos}
-                    placeholder="Buscar produto..."
-                    error={itemErrors?.produto_id?.message}
-                  />
-
-                  {itemState?.loading && (
-                    <div className="flex items-center gap-2 text-xs text-dark-400">
-                      <Spinner size={12} /> Carregando variações...
-                    </div>
-                  )}
-
-                  {itemState && itemState.variacoes.length > 1 && (
-                    <Select
-                      label="Variação"
-                      placeholder="Selecione a variação..."
-                      error={itemErrors?.variacao_id?.message}
-                      {...register(`itens.${index}.variacao_id`)}
-                    >
-                      {itemState.variacoes.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.nome}: {v.valor} (estoque: {v.estoque_atual})
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-
-                  {estoqueDisponivel !== undefined && (
-                    <p className="text-xs text-dark-400">Estoque disponível: {estoqueDisponivel} un.</p>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <Input
-                      label="Qtd"
-                      type="number"
-                      min={1}
-                      max={estoqueDisponivel}
-                      error={itemErrors?.quantidade?.message}
-                      {...register(`itens.${index}.quantidade`, {
-                        valueAsNumber: true,
-                        validate: (quantidade) => {
-                          if (estoqueDisponivel === undefined) return true
-                          return quantidade <= estoqueDisponivel || `Disponível: ${estoqueDisponivel} un.`
-                        },
-                      })}
-                    />
-                    <Controller
-                      name={`itens.${index}.preco_unitario`}
-                      control={control}
-                      render={({ field: f }) => (
-                        <CurrencyInput label="Preço unit." value={f.value} onChange={f.onChange} error={itemErrors?.preco_unitario?.message} />
-                      )}
-                    />
-                    <Controller
-                      name={`itens.${index}.desconto`}
-                      control={control}
-                      render={({ field: f }) => (
-                        <CurrencyInput label="Desconto" value={f.value} onChange={f.onChange} />
-                      )}
-                    />
-                  </div>
-
-                  {(() => {
-                    if (!item) return null
-                    const sub = round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
-                    return (
-                      <div className="text-right text-sm text-dark-500">
-                        Subtotal: <strong className="text-dark-700">{formatMoney(sub)}</strong>
-                      </div>
-                    )
-                  })()}
+              {fields.length === 0 && (
+                <div className="border border-dashed border-gold-200 rounded-xl p-6 text-center">
+                  <Package size={20} className="mx-auto mb-2 text-dark-300" />
+                  <p className="text-sm text-dark-400">Nenhum item adicionado</p>
+                  <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={addItem}>
+                    Adicionar primeiro item
+                  </Button>
                 </div>
-              )
-            })}
-          </div>
+              )}
+
+              {typeof errors.itens?.message === 'string' && (
+                <p className="text-xs text-red-600">{errors.itens.message}</p>
+              )}
+
+              {fields.map((field, index) => {
+                const itemState = itemProdutos[index]
+                const itemErrors = errors.itens?.[index]
+                const item = watchedItens?.[index]
+                const produtoId = item?.produto_id
+                const selectedVariation = itemState?.variacoes.find((v) => v.id === item?.variacao_id)
+                const estoqueDisponivel = selectedVariation?.estoque_atual ?? (
+                  itemState?.variacoes.length === 1 ? itemState.variacoes[0].estoque_atual : undefined
+                )
+
+                return (
+                  <div key={field.id} className="border border-gold-100 rounded-xl p-4 bg-cream-50/50 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-dark-400">Item {index + 1}</span>
+                      <Button type="button" variant="danger-ghost" size="icon" onClick={() => removeItem(index)}>
+                        <Trash2 size={13} />
+                      </Button>
+                    </div>
+
+                    <SearchableSelect
+                      label="Produto"
+                      value={produtoId || null}
+                      onChange={(id) => { if (!id) return; return handleProdutoSelect(index, id) }}
+                      onSearch={searchProdutos}
+                      placeholder="Buscar produto..."
+                      error={itemErrors?.produto_id?.message}
+                    />
+
+                    {itemState?.loading && (
+                      <div className="flex items-center gap-2 text-xs text-dark-400">
+                        <Spinner size={12} /> Carregando variações...
+                      </div>
+                    )}
+
+                    {itemState && itemState.variacoes.length > 1 && (
+                      <Select
+                        label="Variação"
+                        placeholder="Selecione a variação..."
+                        error={itemErrors?.variacao_id?.message}
+                        {...register(`itens.${index}.variacao_id`)}
+                      >
+                        {itemState.variacoes.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.nome}: {v.valor} (estoque: {v.estoque_atual})
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+
+                    {estoqueDisponivel !== undefined && (
+                      <p className="text-xs text-dark-400">Estoque disponível: {estoqueDisponivel} un.</p>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <Input
+                        label="Qtd"
+                        type="number"
+                        min={1}
+                        max={estoqueDisponivel}
+                        error={itemErrors?.quantidade?.message}
+                        {...register(`itens.${index}.quantidade`, {
+                          valueAsNumber: true,
+                          validate: (quantidade) => {
+                            if (estoqueDisponivel === undefined) return true
+                            return quantidade <= estoqueDisponivel || `Disponível: ${estoqueDisponivel} un.`
+                          },
+                        })}
+                      />
+                      <Controller
+                        name={`itens.${index}.preco_unitario`}
+                        control={control}
+                        render={({ field: f }) => (
+                          <CurrencyInput label="Preço unit." value={f.value} onChange={f.onChange} error={itemErrors?.preco_unitario?.message} />
+                        )}
+                      />
+                      <Controller
+                        name={`itens.${index}.desconto`}
+                        control={control}
+                        render={({ field: f }) => (
+                          <CurrencyInput label="Desconto" value={f.value} onChange={f.onChange} />
+                        )}
+                      />
+                    </div>
+
+                    {(() => {
+                      if (!item) return null
+                      const sub = round2(Math.max(0, (item.quantidade ?? 0) * (item.preco_unitario ?? 0) - (item.desconto ?? 0)))
+                      return (
+                        <div className="text-right text-sm text-dark-500">
+                          Subtotal: <strong className="text-dark-700">{formatMoney(sub)}</strong>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Campos venda livre */}
+          {isLivre && (
+            <div className="flex flex-col gap-4 border border-dashed border-gold-300 rounded-xl p-4 bg-gold-50/20">
+              <div className="flex flex-col gap-1">
+                <label className="label-base">Descrição do serviço/produto *</label>
+                <textarea
+                  className={`input-base resize-none ${errors.descricao_livre ? 'border-red-400' : ''}`}
+                  rows={3}
+                  placeholder="Ex: Conserto de aliança, solda e polimento..."
+                  {...register('descricao_livre')}
+                />
+                {errors.descricao_livre && (
+                  <p className="text-xs text-red-600">{errors.descricao_livre.message}</p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Controller
+                  name="valor_livre"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Valor da venda *"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.valor_livre?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  name="custo_livre"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Custo/Despesa *"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.custo_livre?.message}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Forma de pagamento + Desconto total */}
           <div className="grid grid-cols-2 gap-4">
