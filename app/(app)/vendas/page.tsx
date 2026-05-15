@@ -6,14 +6,16 @@ import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner,
-  EmptyState, ConfirmDialog, ActionMenu, PeriodFilter, getPeriodRange, type PeriodPreset,
+  EmptyState, ActionMenu, PeriodFilter, getPeriodRange, type PeriodPreset,
   Pagination,
 } from '@/components/ui'
 import { usePagination } from '@/hooks/use-pagination'
 import { ModalNovaVenda } from '@/components/modals/modal-nova-venda'
 import { ModalEditarVenda } from '@/components/modals/modal-editar-venda'
+import { ModalConfirmarExclusaoVenda } from '@/components/modals/modal-confirmar-exclusao-venda'
 import { DrawerDetalheVenda } from '@/components/vendas/drawer-detalhe-venda'
-import { deleteVenda } from '@/services/vendas'
+import { deleteVenda, previewDeleteVenda } from '@/services/vendas'
+import type { DeleteVendaPreview } from '@/services/vendas'
 import {
   formatMoney, formatDate, vendaStatusVariant,
   VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
@@ -52,6 +54,8 @@ export default function VendasPage() {
   const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
   const [deletando, setDeletando] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<VendaRow | null>(null)
+  const [deletePreview, setDeletePreview] = useState<DeleteVendaPreview | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
   const [editando, setEditando] = useState<VendaRow | null>(null)
   const [modalNovaVenda, setModalNovaVenda] = useState(false)
   const [drawerVenda, setDrawerVenda] = useState<VendaRow | null>(null)
@@ -110,6 +114,20 @@ export default function VendasPage() {
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
+  async function handleIniciarDelete(venda: VendaRow) {
+    setConfirmDelete(venda)
+    setDeletePreview(null)
+    setLoadingPreview(true)
+    const { data, error } = await previewDeleteVenda(venda.id)
+    setLoadingPreview(false)
+    if (error) {
+      alert.error('Erro', error)
+      setConfirmDelete(null)
+      return
+    }
+    setDeletePreview(data)
+  }
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeletando(confirmDelete.id)
@@ -122,6 +140,7 @@ export default function VendasPage() {
     }
     setDeletando(null)
     setConfirmDelete(null)
+    setDeletePreview(null)
   }
 
   function handleEditSuccess(updated: Partial<VendaRow>) {
@@ -228,7 +247,7 @@ export default function VendasPage() {
                       <ActionMenu
                         items={[
                           { label: 'Editar', icon: <Pencil size={14} />, onClick: () => { setEditando(venda) } },
-                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => { setConfirmDelete(venda) }, variant: 'danger' },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => { void handleIniciarDelete(venda) }, variant: 'danger' },
                         ]}
                       />
                     </div>
@@ -343,7 +362,7 @@ export default function VendasPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setConfirmDelete(venda) }}
+                              onClick={(e) => { e.stopPropagation(); void handleIniciarDelete(venda) }}
                               className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                               title="Excluir venda"
                             >
@@ -362,14 +381,14 @@ export default function VendasPage() {
         )}
       </Card>
 
-      <ConfirmDialog
+      <ModalConfirmarExclusaoVenda
         open={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
+        onClose={() => { setConfirmDelete(null); setDeletePreview(null) }}
         onConfirm={handleDelete}
-        title="Excluir venda"
-        description={`Deseja excluir a venda #${confirmDelete ? displayNumMap.get(confirmDelete.id) : ''}? Esta ação não pode ser desfeita.`}
-        confirmLabel="Excluir"
         loading={!!deletando}
+        loadingPreview={loadingPreview}
+        displayNum={confirmDelete ? displayNumMap.get(confirmDelete.id) : undefined}
+        preview={deletePreview}
       />
 
       <ModalNovaVenda
@@ -392,7 +411,7 @@ export default function VendasPage() {
         venda={drawerVenda}
         displayNum={drawerVenda ? displayNumMap.get(drawerVenda.id) : undefined}
         onEditar={() => { if (!drawerVenda) return; setEditando(drawerVenda); setDrawerVenda(null) }}
-        onExcluir={() => { if (!drawerVenda) return; setConfirmDelete(drawerVenda); setDrawerVenda(null) }}
+        onExcluir={() => { if (!drawerVenda) return; void handleIniciarDelete(drawerVenda); setDrawerVenda(null) }}
       />
     </div>
   )

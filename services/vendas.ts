@@ -3,6 +3,17 @@ import { gerarDatasParcelas } from '@/utils'
 import type { VendaFormData, VendaItemFormData } from '@/schemas/venda'
 import type { VendaStatus, FormaPagamento } from '@/types'
 
+export interface DeleteVendaPreview {
+  numero: number
+  itens: { nome_produto: string; quantidade: number; variacao_id: string | null }[]
+  crediario: {
+    id: string
+    total: number
+    parcelasPagas: number
+    parcelasTotal: number
+  } | null
+}
+
 export interface UpdateVendaData {
   cliente_id: string | null
   vendedor_id: string | null
@@ -260,7 +271,60 @@ export async function updateVenda(
   return { error: null }
 }
 
+export async function previewDeleteVenda(
+  vendaId: string,
+): Promise<{ data: DeleteVendaPreview | null; error: string | null }> {
+  const { data: venda, error: vendaError } = await supabase
+    .from('vendas')
+    .select('numero')
+    .eq('id', vendaId)
+    .single()
+
+  if (vendaError) return { data: null, error: vendaError.message }
+
+  const { data: itens } = await supabase
+    .from('venda_itens')
+    .select('nome_produto, quantidade, variacao_id')
+    .eq('venda_id', vendaId)
+
+  const { data: crediarios } = await supabase
+    .from('crediario')
+    .select('id, total')
+    .eq('venda_id', vendaId)
+
+  let crediario: DeleteVendaPreview['crediario'] = null
+
+  if (crediarios && crediarios.length > 0) {
+    const c = crediarios[0]
+    const { data: parcelas } = await supabase
+      .from('crediario_parcelas')
+      .select('status')
+      .eq('crediario_id', c.id)
+
+    crediario = {
+      id: c.id,
+      total: c.total as number,
+      parcelasPagas: (parcelas ?? []).filter((p) => p.status === 'pago').length,
+      parcelasTotal: (parcelas ?? []).length,
+    }
+  }
+
+  return {
+    data: {
+      numero: venda.numero as number,
+      itens: (itens ?? []) as DeleteVendaPreview['itens'],
+      crediario,
+    },
+    error: null,
+  }
+}
+
 export async function deleteVenda(vendaId: string): Promise<{ error: string | null }> {
+  // Fetch venda numero early for movement descriptions
+  const { data: vendaData } = await supabase.from('vendas').select('numero').eq('id', vendaId).single()
+  const vendaNumero = vendaData?.numero ?? '?'
+
+  // Delete crediário (all parcelas, including paid ones)
   const { data: crediarios, error: crediarioFetchError } = await supabase
     .from('crediario')
     .select('id')
@@ -268,19 +332,9 @@ export async function deleteVenda(vendaId: string): Promise<{ error: string | nu
 
   if (crediarioFetchError) return { error: crediarioFetchError.message }
 
-  const crediarioIds = (crediarios ?? []).map((crediario) => crediario.id)
+  const crediarioIds = (crediarios ?? []).map((c) => c.id)
 
   if (crediarioIds.length > 0) {
-    const { data: parcelasPagas } = await supabase
-      .from('crediario_parcelas')
-      .select('id')
-      .in('crediario_id', crediarioIds)
-      .eq('status', 'pago')
-
-    if (parcelasPagas && parcelasPagas.length > 0) {
-      return { error: 'Esta venda possui crediário com parcelas já pagas e não pode ser excluída.' }
-    }
-
     const { data: parcelas, error: parcelasFetchError } = await supabase
       .from('crediario_parcelas')
       .select('id')
@@ -288,7 +342,7 @@ export async function deleteVenda(vendaId: string): Promise<{ error: string | nu
 
     if (parcelasFetchError) return { error: parcelasFetchError.message }
 
-    const parcelaIds = (parcelas ?? []).map((parcela) => parcela.id)
+    const parcelaIds = (parcelas ?? []).map((p) => p.id)
 
     if (parcelaIds.length > 0) {
       const { error: lancamentosParcelasError } = await supabase
@@ -313,6 +367,51 @@ export async function deleteVenda(vendaId: string): Promise<{ error: string | nu
       .in('id', crediarioIds)
 
     if (crediarioError) return { error: crediarioError.message }
+  }
+
+  // Restore stock for items that had a variacao_id
+  const { data: itens } = await supabase
+    .from('venda_itens')
+    .select('produto_id, variacao_id, quantidade')
+    .eq('venda_id', vendaId)
+
+  const itensComVariacao = (itens ?? []).filter((item) => item.variacao_id)
+  if (itensComVariacao.length > 0) {
+    const variacaoIds = itensComVariacao.map((i) => i.variacao_id!)
+    const { data: variacoes } = await supabase
+      .from('produto_variacoes')
+      .select('id, estoque_atual')
+      .in('id', variacaoIds)
+
+    const estoqueRunning = Object.fromEntries((variacoes ?? []).map((v) => [v.id, v.estoque_atual as number]))
+
+    const movs = itensComVariacao.map((item) => {
+      const id = item.variacao_id!
+      const estoqueAntes = estoqueRunning[id] ?? 0
+      const estoqueDepois = estoqueAntes + item.quantidade
+      estoqueRunning[id] = estoqueDepois
+      return {
+        variacao_id: id,
+        produto_id: item.produto_id,
+        tipo: 'devolucao' as const,
+        quantidade: item.quantidade,
+        quantidade_antes: estoqueAntes,
+        quantidade_depois: estoqueDepois,
+        motivo: `Estorno Venda #${vendaNumero}`,
+        referencia_id: vendaId,
+        referencia_tipo: 'venda_estorno',
+      }
+    })
+
+    await supabase.from('estoque_movimentacoes').insert(movs)
+
+    const variacoesUnicas = [...new Set(itensComVariacao.map((i) => i.variacao_id!))]
+    for (const variacaoId of variacoesUnicas) {
+      await supabase
+        .from('produto_variacoes')
+        .update({ estoque_atual: estoqueRunning[variacaoId] })
+        .eq('id', variacaoId)
+    }
   }
 
   const cleanupQueries = [
