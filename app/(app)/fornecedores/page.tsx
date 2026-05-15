@@ -6,8 +6,9 @@ import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
-  Modal, Input, Textarea, ConfirmDialog, ActionMenu,
+  Modal, Input, Textarea, ConfirmDialog, ActionMenu, Pagination,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { formatPhone, formatCNPJ } from '@/utils'
 import type { Fornecedor, FornecedorInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
@@ -57,6 +58,8 @@ export default function FornecedoresPage() {
       f.categoria?.toLowerCase().includes(q)
     )
   }, [fornecedores, search])
+
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
   function openCreate() {
     setEditando(null)
@@ -130,7 +133,7 @@ export default function FornecedoresPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((f) => (
+              {paginated.map((f) => (
                 <div key={f.id} className="p-4 hover:bg-cream-50/30 transition-colors">
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
@@ -177,7 +180,7 @@ export default function FornecedoresPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((f) => (
+                  {paginated.map((f) => (
                     <tr key={f.id} className="hover:bg-cream-50/40 transition-colors">
                       <td className="px-5 py-3 font-medium text-dark-700 max-w-[180px]">
                         <span className="block truncate">{f.nome}</span>
@@ -210,6 +213,7 @@ export default function FornecedoresPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
           </>
         )}
       </Card>

@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner,
   EmptyState, ConfirmDialog, ActionMenu, PeriodFilter, getPeriodRange, type PeriodPreset,
+  Pagination,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { ModalNovaVenda } from '@/components/modals/modal-nova-venda'
 import { ModalEditarVenda } from '@/components/modals/modal-editar-venda'
 import { DrawerDetalheVenda } from '@/components/vendas/drawer-detalhe-venda'
@@ -106,6 +108,8 @@ export default function VendasPage() {
     })
   }, [vendas, search, filtroStatus])
 
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeletando(confirmDelete.id)
@@ -182,7 +186,7 @@ export default function VendasPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((venda) => {
+              {paginated.map((venda) => {
                 const numItens = venda.itens?.length ?? 0
                 const totalUnidades = (venda.itens ?? []).reduce((s, i) => s + i.quantidade, 0)
                 return (
@@ -260,7 +264,7 @@ export default function VendasPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((venda) => {
+                  {paginated.map((venda) => {
                     const numItens = venda.itens?.length ?? 0
                     const totalUnidades = (venda.itens ?? []).reduce((s, i) => s + i.quantidade, 0)
                     return (
@@ -353,6 +357,7 @@ export default function VendasPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
           </>
         )}
       </Card>

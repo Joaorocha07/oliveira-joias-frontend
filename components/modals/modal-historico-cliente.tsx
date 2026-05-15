@@ -4,7 +4,8 @@ import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import { X, ShoppingBag, Wrench, BarChart3, Star, Phone, Mail, CreditCard } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { Badge, Spinner } from '@/components/ui'
+import { Badge, Spinner, Pagination } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import {
   formatDate, formatMoney, formatCPF, formatPhone,
   vendaStatusVariant, servicoStatusVariant,
@@ -216,6 +217,8 @@ function groupByDate(vendas: VendaComItens[]) {
 }
 
 function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(vendas)
+
   if (vendas.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -232,7 +235,7 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
     )
   }
 
-  const groups = groupByDate(vendas)
+  const groups = groupByDate(paginated)
 
   return (
     <div className="space-y-5">
@@ -287,6 +290,7 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
           </div>
         </div>
       ))}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} className="px-0 pb-0" />
     </div>
   )
 }
@@ -294,6 +298,8 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
 // ── TAB SERVIÇOS ─────────────────────────────────────────────────
 
 function TabServicos({ servicos }: { servicos: Servico[] }) {
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(servicos)
+
   if (servicos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -312,7 +318,7 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
 
   return (
     <div className="space-y-2.5">
-      {servicos.map((servico) => (
+      {paginated.map((servico) => (
         <div key={servico.id} className="border border-[#F0EBE0] rounded-xl px-3 sm:px-4 py-3 hover:border-[#E8D5A3] hover:bg-[#FAF7F0]/60 transition-colors">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -335,6 +341,7 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
           </div>
         </div>
       ))}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} className="px-0 pb-0" />
     </div>
   )
 }

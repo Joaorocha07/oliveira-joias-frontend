@@ -6,8 +6,9 @@ import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
-  Modal, Input, Textarea, ConfirmDialog, ActionMenu,
+  Modal, Input, Textarea, ConfirmDialog, ActionMenu, Pagination,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { formatPhone, formatCPF } from '@/utils'
 import type { Cliente, ClienteInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
@@ -70,6 +71,8 @@ export default function ClientesPage() {
       c.cpf?.includes(q)
     )
   }, [clientes, search])
+
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
   function openCreate() {
     setEditando(null)
@@ -232,7 +235,7 @@ export default function ClientesPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((cliente) => (
+              {paginated.map((cliente) => (
                 <div
                   key={cliente.id}
                   className="p-4 hover:bg-[#FAF7F0] active:bg-[#F5ECD0]/60 transition-colors cursor-pointer"
@@ -288,7 +291,7 @@ export default function ClientesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((cliente) => (
+                  {paginated.map((cliente) => (
                     <tr
                       key={cliente.id}
                       className="hover:bg-[#FAF7F0] transition-colors cursor-pointer"
@@ -345,6 +348,7 @@ export default function ClientesPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
           </>
         )}
       </Card>

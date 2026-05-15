@@ -6,8 +6,9 @@ import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
-  ActionMenu, ConfirmDialog, Input,
+  ActionMenu, ConfirmDialog, Input, Pagination,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { ModalNovoServico } from '@/components/modals/modal-novo-servico'
 import {
   formatMoney, formatDate, today, servicoStatusVariant, SERVICO_STATUS_LABEL,
@@ -90,6 +91,8 @@ export default function ServicosPage() {
       return matchSearch && matchStatus
     })
   }, [servicos, search, filtroStatus])
+
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
   function setPeriodo(atalho: PeriodoAtalho) {
     const hoje = today()
@@ -197,7 +200,7 @@ export default function ServicosPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((s) => (
+              {paginated.map((s) => (
                 <div key={s.id} className="p-4 hover:bg-cream-50/30 transition-colors">
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
@@ -254,7 +257,7 @@ export default function ServicosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((s) => (
+                  {paginated.map((s) => (
                     <tr key={s.id} className="hover:bg-cream-50/40 transition-colors">
                       <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{displayNumMap.get(s.id)}</td>
                       <td className="px-5 py-3 font-medium text-dark-700 max-w-[160px]">
@@ -304,6 +307,7 @@ export default function ServicosPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
           </>
         )}
       </Card>

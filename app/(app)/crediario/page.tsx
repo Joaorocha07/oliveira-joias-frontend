@@ -6,8 +6,9 @@ import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, SearchInput, Select, Spinner, EmptyState,
-  PeriodFilter, getPeriodRange, type PeriodPreset,
+  PeriodFilter, getPeriodRange, type PeriodPreset, Pagination,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { ModalPagarParcela } from '@/components/modals/modal-pagar-parcela'
 import { ModalEditarCrediario } from '@/components/modals/modal-editar-crediario'
 import { DrawerDetalheCrediario, type CrediarioRow } from '@/components/crediario/drawer-detalhe-crediario'
@@ -126,6 +127,8 @@ export default function CrediarioPage() {
     })
   }, [crediarios, search, filtroStatus])
 
+  const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
+
   function openDrawer(c: CrediarioRow) {
     setSelectedCrediario(c)
     setDrawerOpen(true)
@@ -192,7 +195,7 @@ export default function CrediarioPage() {
           <>
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
-              {filtered.map((c) => {
+              {paginated.map((c) => {
                 const computedStatus = computeStatus(c)
                 const prox = proxVencimento(c.parcelas)
                 return (
@@ -238,7 +241,7 @@ export default function CrediarioPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
-                  {filtered.map((c) => {
+                  {paginated.map((c) => {
                     const computedStatus = computeStatus(c)
                     const prox = proxVencimento(c.parcelas)
                     return (
@@ -277,6 +280,7 @@ export default function CrediarioPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
           </>
         )}
       </Card>
