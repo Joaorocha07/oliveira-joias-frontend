@@ -33,9 +33,12 @@ interface SerieData { periodo: string; entradas: number; despesas: number }
 
 interface VendaRelatorio {
   id: string
+  tipo: 'normal' | 'livre'
   total: number
   data_venda: string
   forma_pagamento: string
+  descricao_livre: string | null
+  custo_livre: number | null
   itens?: {
     produto_id: string | null
     subtotal: number
@@ -131,7 +134,7 @@ export default function RelatoriosPage() {
     const [vendasResult, lancamentosResult, servicosResult, movimentosResult, parcelasResult, estoqueResult] = await Promise.all([
       supabase
         .from('vendas')
-        .select('id, total, data_venda, forma_pagamento, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+        .select('id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim)
         .not('status', 'eq', 'cancelado'),
@@ -184,9 +187,10 @@ export default function RelatoriosPage() {
 
   const metrics = useMemo(() => {
     const faturamento = vendas.reduce((sum, venda) => sum + (venda.total ?? 0), 0)
-    const custo = vendas.reduce((sum, venda) => (
-      sum + (venda.itens ?? []).reduce((itemSum, item) => itemSum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
-    ), 0)
+    const custo = vendas.reduce((sum, venda) => {
+      if (venda.tipo === 'livre') return sum + (venda.custo_livre ?? 0)
+      return sum + (venda.itens ?? []).reduce((itemSum, item) => itemSum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
+    }, 0)
     const despesas = lancamentos.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.valor, 0)
     const entradas = lancamentos.filter((item) => item.tipo === 'entrada').reduce((sum, item) => sum + item.valor, 0)
 
@@ -255,10 +259,15 @@ export default function RelatoriosPage() {
 
     const vendasProduto: Record<string, number> = {}
     vendas.forEach((venda) => {
-      ;(venda.itens ?? []).forEach((item) => {
-        const label = item.nome_produto || 'Produto sem nome'
-        vendasProduto[label] = (vendasProduto[label] ?? 0) + (item.subtotal ?? 0)
-      })
+      if (venda.tipo === 'livre') {
+        const label = venda.descricao_livre || 'Venda Livre'
+        vendasProduto[label] = (vendasProduto[label] ?? 0) + (venda.total ?? 0)
+      } else {
+        ;(venda.itens ?? []).forEach((item) => {
+          const label = item.nome_produto || 'Produto sem nome'
+          vendasProduto[label] = (vendasProduto[label] ?? 0) + (item.subtotal ?? 0)
+        })
+      }
     })
 
     const despesasCat: Record<string, number> = {}

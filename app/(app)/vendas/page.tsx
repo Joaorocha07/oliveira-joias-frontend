@@ -20,9 +20,10 @@ import {
   formatMoney, formatDate, vendaStatusVariant,
   VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
-import type { Venda, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
+import type { Venda, VendaTipo, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
 
 export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> & {
+  tipo: VendaTipo
   cliente?: ClienteResumo | null
   vendedor?: ProfileResumo | null
   origem?: Pick<OrigemCliente, 'id' | 'nome'> | null
@@ -65,7 +66,7 @@ export default function VendasPage() {
     const { data, error } = await supabase
       .from('vendas')
       .select(`
-        *,
+        *, tipo, descricao_livre, custo_livre,
         cliente:clientes(nome, telefone),
         vendedor:profiles(nome, role),
         itens:venda_itens(
@@ -102,6 +103,7 @@ export default function VendasPage() {
       const matchSearch = !search ||
         v.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
         String(v.numero).includes(search) ||
+        v.descricao_livre?.toLowerCase().includes(search.toLowerCase()) ||
         v.itens?.some((i) =>
           i.nome_produto.toLowerCase().includes(search.toLowerCase()) ||
           i.produto?.codigo.toLowerCase().includes(search.toLowerCase()) ||
@@ -220,18 +222,24 @@ export default function VendasPage() {
                           <span className="flex-shrink-0 text-[10px] font-mono text-dark-400 bg-cream-100 border border-gold-100 px-1.5 py-0.5 rounded">
                             #{displayNumMap.get(venda.id)}
                           </span>
+                          {venda.tipo === 'livre' && (
+                            <Badge variant="warning" className="text-[10px] py-0 px-1.5">Livre</Badge>
+                          )}
                           <p className="font-medium text-dark-700 text-sm truncate">
                             {venda.cliente?.nome || <span className="text-dark-300 italic">Sem cliente</span>}
                           </p>
                         </div>
                         <p className="text-xs text-dark-400 mt-1">
                           {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
-                          {numItens > 0 && (
+                          {venda.tipo === 'normal' && numItens > 0 && (
                             <span className="text-dark-300"> · {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}</span>
                           )}
                         </p>
                         <p className="text-xs text-dark-300 mt-0.5">{formatDate(venda.data_venda)}</p>
-                        {(venda.itens ?? []).length > 0 && (
+                        {venda.tipo === 'livre' && venda.descricao_livre && (
+                          <p className="mt-1.5 text-[11px] text-dark-400 truncate italic">{venda.descricao_livre}</p>
+                        )}
+                        {venda.tipo === 'normal' && (venda.itens ?? []).length > 0 && (
                           <div className="mt-1.5 space-y-0.5">
                             {(venda.itens ?? []).slice(0, 2).map((item) => (
                               <p key={item.id} className="text-[11px] text-dark-400 truncate">
@@ -292,12 +300,22 @@ export default function VendasPage() {
                         className="hover:bg-cream-50/40 transition-colors group cursor-pointer"
                         onClick={() => setDrawerVenda(venda)}
                       >
-                        <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{displayNumMap.get(venda.id)}</td>
+                        <td className="px-5 py-3 text-dark-400 font-mono text-xs">
+                          <div className="flex items-center gap-1.5">
+                            #{displayNumMap.get(venda.id)}
+                            {venda.tipo === 'livre' && (
+                              <Badge variant="warning" className="text-[9px] py-0 px-1">Livre</Badge>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-3 max-w-[180px]">
                           <p className="font-medium text-dark-700 truncate">
                             {venda.cliente?.nome || <span className="text-dark-300 italic font-normal">Sem cliente</span>}
                           </p>
-                          {(venda.itens ?? []).length > 0 && (
+                          {venda.tipo === 'livre' && venda.descricao_livre && (
+                            <p className="text-[11px] text-dark-400 truncate leading-tight italic mt-0.5">{venda.descricao_livre}</p>
+                          )}
+                          {venda.tipo === 'normal' && (venda.itens ?? []).length > 0 && (
                             <div className="mt-0.5 space-y-px">
                               {(venda.itens ?? []).slice(0, 2).map((item) => (
                                 <p key={item.id} className="text-[11px] text-dark-400 truncate leading-tight">
@@ -313,29 +331,35 @@ export default function VendasPage() {
                           )}
                         </td>
                         <td className="hidden md:table-cell px-5 py-3 text-dark-400">
-                          <div className="flex flex-col gap-1 max-w-[320px]">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-[11px] font-medium bg-cream-100 border border-gold-100 rounded-full text-dark-500">
-                                {numItens}
-                              </span>
-                              <span className="text-xs text-dark-400">
-                                {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}
-                              </span>
+                          {venda.tipo === 'livre' ? (
+                            <p className="text-[11px] text-dark-400 max-w-[320px] line-clamp-2 italic">
+                              {venda.descricao_livre || '—'}
+                            </p>
+                          ) : (
+                            <div className="flex flex-col gap-1 max-w-[320px]">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-[11px] font-medium bg-cream-100 border border-gold-100 rounded-full text-dark-500">
+                                  {numItens}
+                                </span>
+                                <span className="text-xs text-dark-400">
+                                  {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}
+                                </span>
+                              </div>
+                              {(venda.itens ?? []).slice(0, 3).map((item) => (
+                                <p key={item.id} className="text-[11px] text-dark-400 truncate leading-tight">
+                                  <span className="font-semibold text-dark-600">{item.quantidade}x</span> {item.nome_produto}
+                                  {item.variacao && (
+                                    <span className="text-dark-300"> - {item.variacao.nome}: {item.variacao.valor}</span>
+                                  )}
+                                </p>
+                              ))}
+                              {(venda.itens ?? []).length > 3 && (
+                                <p className="text-[11px] text-dark-300 italic leading-tight">
+                                  +{(venda.itens ?? []).length - 3} mais
+                                </p>
+                              )}
                             </div>
-                            {(venda.itens ?? []).slice(0, 3).map((item) => (
-                              <p key={item.id} className="text-[11px] text-dark-400 truncate leading-tight">
-                                <span className="font-semibold text-dark-600">{item.quantidade}x</span> {item.nome_produto}
-                                {item.variacao && (
-                                  <span className="text-dark-300"> - {item.variacao.nome}: {item.variacao.valor}</span>
-                                )}
-                              </p>
-                            ))}
-                            {(venda.itens ?? []).length > 3 && (
-                              <p className="text-[11px] text-dark-300 italic leading-tight">
-                                +{(venda.itens ?? []).length - 3} mais
-                              </p>
-                            )}
-                          </div>
+                          )}
                         </td>
                         <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(venda.data_venda)}</td>
                         <td className="hidden lg:table-cell px-5 py-3 text-dark-400">

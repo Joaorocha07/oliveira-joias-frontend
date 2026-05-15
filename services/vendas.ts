@@ -34,13 +34,17 @@ export async function createVenda(
   data: VendaFormData,
   userId: string,
 ): Promise<{ error: string | null }> {
-  const subtotal = data.itens.reduce((acc, item) => acc + itemSubtotal(item), 0)
+  const isLivre = data.tipo === 'livre'
+  const subtotal = isLivre
+    ? Math.round(data.valor_livre * 100) / 100
+    : data.itens.reduce((acc, item) => acc + itemSubtotal(item), 0)
   const total = Math.max(0, Math.round((subtotal - data.desconto) * 100) / 100)
 
   // 1. Venda
   const { data: venda, error: vendaError } = await supabase
     .from('vendas')
     .insert({
+      tipo: data.tipo,
       cliente_id: data.cliente_id || null,
       vendedor_id: data.vendedor_id || userId,
       origem_id: data.origem_id || null,
@@ -52,6 +56,8 @@ export async function createVenda(
       total,
       valor_pago: total,
       troco: 0,
+      descricao_livre: isLivre ? data.descricao_livre : null,
+      custo_livre: isLivre ? data.custo_livre : null,
       observacoes: data.observacoes || null,
       data_venda: data.data_venda,
     })
@@ -60,22 +66,24 @@ export async function createVenda(
 
   if (vendaError) return { error: vendaError.message }
 
-  // 2. Itens
-  const { error: itensError } = await supabase.from('venda_itens').insert(
-    data.itens.map((item) => ({
-      venda_id: venda.id,
-      produto_id: item.produto_id,
-      variacao_id: item.variacao_id || null,
-      nome_produto: item.nome_produto,
-      descricao: null,
-      quantidade: item.quantidade,
-      preco_unitario: item.preco_unitario,
-      custo_unitario: item.custo_unitario,
-      desconto: item.desconto,
-      subtotal: itemSubtotal(item),
-    })),
-  )
-  if (itensError) return { error: itensError.message }
+  // 2. Itens (apenas venda normal)
+  if (!isLivre) {
+    const { error: itensError } = await supabase.from('venda_itens').insert(
+      data.itens.map((item) => ({
+        venda_id: venda.id,
+        produto_id: item.produto_id,
+        variacao_id: item.variacao_id || null,
+        nome_produto: item.nome_produto,
+        descricao: null,
+        quantidade: item.quantidade,
+        preco_unitario: item.preco_unitario,
+        custo_unitario: item.custo_unitario,
+        desconto: item.desconto,
+        subtotal: itemSubtotal(item),
+      })),
+    )
+    if (itensError) return { error: itensError.message }
+  }
 
   // 3. Crediário
   if (data.forma_pagamento === 'crediario' && data.cliente_id) {
@@ -120,46 +128,48 @@ export async function createVenda(
     if (parcelasError) return { error: parcelasError.message }
   }
 
-  // 4. Estoque (itens com variacao_id)
-  const itensComVariacao = data.itens.filter((item) => item.variacao_id)
-  if (itensComVariacao.length > 0) {
-    const variacaoIds = itensComVariacao.map((item) => item.variacao_id!)
-    const { data: variacoes } = await supabase
-      .from('produto_variacoes')
-      .select('id, estoque_atual')
-      .in('id', variacaoIds)
-
-    // running map to correctly handle same variation appearing multiple times
-    const estoqueRunning = Object.fromEntries((variacoes ?? []).map((v) => [v.id, v.estoque_atual as number]))
-
-    const movs = itensComVariacao.map((item) => {
-      const id = item.variacao_id!
-      const estoqueAntes = estoqueRunning[id] ?? 0
-      const estoqueDepois = Math.max(0, estoqueAntes - item.quantidade)
-      estoqueRunning[id] = estoqueDepois
-      return {
-        variacao_id: id,
-        produto_id: item.produto_id,
-        tipo: 'saida',
-        quantidade: item.quantidade,
-        quantidade_antes: estoqueAntes,
-        quantidade_depois: estoqueDepois,
-        motivo: `Venda #${venda.numero}`,
-        referencia_id: venda.id,
-        referencia_tipo: 'venda',
-        created_by: userId,
-      }
-    })
-
-    await supabase.from('estoque_movimentacoes').insert(movs)
-
-    // One UPDATE per variation with the final computed stock
-    const variacoesUnicas = [...new Set(itensComVariacao.map((i) => i.variacao_id!))]
-    for (const variacaoId of variacoesUnicas) {
-      await supabase
+  // 4. Estoque (apenas venda normal com variacao_id)
+  if (!isLivre) {
+    const itensComVariacao = data.itens.filter((item) => item.variacao_id)
+    if (itensComVariacao.length > 0) {
+      const variacaoIds = itensComVariacao.map((item) => item.variacao_id!)
+      const { data: variacoes } = await supabase
         .from('produto_variacoes')
-        .update({ estoque_atual: estoqueRunning[variacaoId] })
-        .eq('id', variacaoId)
+        .select('id, estoque_atual')
+        .in('id', variacaoIds)
+
+      // running map to correctly handle same variation appearing multiple times
+      const estoqueRunning = Object.fromEntries((variacoes ?? []).map((v) => [v.id, v.estoque_atual as number]))
+
+      const movs = itensComVariacao.map((item) => {
+        const id = item.variacao_id!
+        const estoqueAntes = estoqueRunning[id] ?? 0
+        const estoqueDepois = Math.max(0, estoqueAntes - item.quantidade)
+        estoqueRunning[id] = estoqueDepois
+        return {
+          variacao_id: id,
+          produto_id: item.produto_id,
+          tipo: 'saida',
+          quantidade: item.quantidade,
+          quantidade_antes: estoqueAntes,
+          quantidade_depois: estoqueDepois,
+          motivo: `Venda #${venda.numero}`,
+          referencia_id: venda.id,
+          referencia_tipo: 'venda',
+          created_by: userId,
+        }
+      })
+
+      await supabase.from('estoque_movimentacoes').insert(movs)
+
+      // One UPDATE per variation with the final computed stock
+      const variacoesUnicas = [...new Set(itensComVariacao.map((i) => i.variacao_id!))]
+      for (const variacaoId of variacoesUnicas) {
+        await supabase
+          .from('produto_variacoes')
+          .update({ estoque_atual: estoqueRunning[variacaoId] })
+          .eq('id', variacaoId)
+      }
     }
   }
 

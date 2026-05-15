@@ -15,7 +15,9 @@
       "Bash(powershell -Command \"Get-ChildItem -Force -Recurse -Depth 3 | Select-Object -First 100\")",
       "PowerShell(cd \"D:\\\\projetos\\\\oliveira-joias-frontend\"; Get-ChildItem -Recurse -Depth 3 | Where-Object {$_.Extension -in @\\('.tsx', '.ts', '.css'\\)} | Select-Object -First 100 | ForEach-Object {$_.FullName})",
       "Bash(Get-Content *)",
-      "Bash(dir *)"
+      "Bash(dir *)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "mcp__plugin_context-mode_context-mode__ctx_search"
     ]
   }
 }
