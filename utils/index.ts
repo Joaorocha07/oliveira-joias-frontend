@@ -78,7 +78,6 @@ export const SERVICO_STATUS_LABEL: Record<ServicoStatus, string> = {
   aguardando: 'Aguardando',
   em_andamento: 'Em Andamento',
   concluido: 'Concluído',
-  entregue: 'Entregue',
   cancelado: 'Cancelado',
 }
 
@@ -165,7 +164,6 @@ export function servicoStatusVariant(status: ServicoStatus): BadgeVariant {
     aguardando: 'warning',
     em_andamento: 'info',
     concluido: 'success',
-    entregue: 'gold',
     cancelado: 'danger',
   }
   return map[status]
