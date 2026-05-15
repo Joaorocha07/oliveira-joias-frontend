@@ -12,6 +12,7 @@ import { formatPhone, formatCPF } from '@/utils'
 import type { Cliente, ClienteInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
 import { deleteVenda } from '@/services/vendas'
+import { ModalHistoricoCliente } from '@/components/modals/modal-historico-cliente'
 
 const EMPTY_FORM: ClienteInsert = {
   nome: '', cpf: null, rg: null, email: null, telefone: null, whatsapp: null,
@@ -37,6 +38,7 @@ export default function ClientesPage() {
   const [dangerCliente, setDangerCliente] = useState<Cliente | null>(null)
   const [senha, setSenha] = useState('')
   const [verificando, setVerificando] = useState(false)
+  const [historicoCliente, setHistoricoCliente] = useState<Cliente | null>(null)
 
   async function loadClientes() {
     const { data, error } = await supabase
@@ -207,7 +209,7 @@ export default function ClientesPage() {
             value={search}
             onChange={setSearch}
             placeholder="Buscar por nome, telefone, CPF..."
-            className="max-w-sm"
+            className="w-full"
           />
         </div>
 
@@ -231,29 +233,43 @@ export default function ClientesPage() {
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
               {filtered.map((cliente) => (
-                <div key={cliente.id} className="p-4 hover:bg-cream-50/30 transition-colors">
-                  <div className="flex items-start gap-2">
+                <div
+                  key={cliente.id}
+                  className="p-4 hover:bg-[#FAF7F0] active:bg-[#F5ECD0]/60 transition-colors cursor-pointer"
+                  onClick={() => setHistoricoCliente(cliente)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHistoricoCliente(cliente) }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#C9A84C] text-xs font-semibold font-display">
+                      {cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-dark-700 text-sm truncate">{cliente.nome}</p>
-                      {cliente.telefone && (
-                        <p className="flex items-center gap-1.5 text-xs text-dark-400 mt-1">
-                          <Phone size={11} className="text-dark-300 flex-shrink-0" />
-                          {formatPhone(cliente.telefone)}
-                        </p>
-                      )}
-                      {cliente.email && (
-                        <p className="flex items-center gap-1.5 text-xs text-dark-400 mt-0.5 truncate">
-                          <Mail size={11} className="text-dark-300 flex-shrink-0" />
-                          {cliente.email}
-                        </p>
-                      )}
+                      <div className="flex flex-wrap gap-x-3 mt-0.5">
+                        {cliente.telefone && (
+                          <p className="flex items-center gap-1 text-xs text-dark-400">
+                            <Phone size={10} className="text-dark-300 flex-shrink-0" />
+                            {formatPhone(cliente.telefone)}
+                          </p>
+                        )}
+                        {cliente.email && (
+                          <p className="flex items-center gap-1 text-xs text-dark-400 truncate">
+                            <Mail size={10} className="text-dark-300 flex-shrink-0" />
+                            <span className="truncate">{cliente.email}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <ActionMenu
-                      items={[
-                        { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(cliente) },
-                        { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => void iniciarDelete(cliente), variant: 'danger' },
-                      ]}
-                    />
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ActionMenu
+                        items={[
+                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(cliente) },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => void iniciarDelete(cliente), variant: 'danger' },
+                        ]}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -273,9 +289,18 @@ export default function ClientesPage() {
                 </thead>
                 <tbody className="divide-y divide-gold-50">
                   {filtered.map((cliente) => (
-                    <tr key={cliente.id} className="hover:bg-cream-50/40 transition-colors">
-                      <td className="px-5 py-3 font-medium text-dark-700 max-w-[180px]">
-                        <span className="block truncate">{cliente.nome}</span>
+                    <tr
+                      key={cliente.id}
+                      className="hover:bg-[#FAF7F0] transition-colors cursor-pointer"
+                      onClick={() => setHistoricoCliente(cliente)}
+                    >
+                      <td className="px-5 py-3 max-w-[200px]">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#C9A84C] text-[10px] font-semibold font-display">
+                            {cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
+                          </div>
+                          <span className="font-medium text-dark-700 truncate">{cliente.nome}</span>
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-dark-400">
                         {cliente.telefone ? (
@@ -291,7 +316,7 @@ export default function ClientesPage() {
                       <td className="hidden lg:table-cell px-5 py-3 text-dark-400 font-mono text-xs">
                         {cliente.cpf ? formatCPF(cliente.cpf) : '—'}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             type="button"
@@ -438,6 +463,12 @@ export default function ClientesPage() {
         description={`Deseja excluir "${confirmDelete?.nome}" permanentemente? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         loading={deletando}
+      />
+
+      <ModalHistoricoCliente
+        open={!!historicoCliente}
+        onClose={() => setHistoricoCliente(null)}
+        cliente={historicoCliente}
       />
 
       <Modal
