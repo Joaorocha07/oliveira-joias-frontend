@@ -26,6 +26,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
   const [vendas, setVendas] = useState<VendaComItens[]>([])
   const [servicos, setServicos] = useState<Servico[]>([])
   const [loading, setLoading] = useState(false)
+  const clienteId = cliente?.id
 
   useEffect(() => {
     if (!open) return
@@ -35,30 +36,34 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
   }, [open, onClose])
 
   useEffect(() => {
-    if (!open || !cliente) return
-    setTab('compras')
-    setLoading(true)
-    setVendas([])
-    setServicos([])
+    if (!open || !clienteId) return
+    let cancelled = false
 
     void (async () => {
+      setTab('compras')
+      setLoading(true)
+      setVendas([])
+      setServicos([])
+
       const [vendasRes, servicosRes] = await Promise.all([
         supabase
           .from('vendas')
           .select('*, itens:venda_itens(*)')
-          .eq('cliente_id', cliente.id)
+          .eq('cliente_id', clienteId)
           .order('data_venda', { ascending: false }),
         supabase
           .from('servicos')
           .select('*')
-          .eq('cliente_id', cliente.id)
+          .eq('cliente_id', clienteId)
           .order('data_entrada', { ascending: false }),
       ])
+      if (cancelled) return
       setVendas((vendasRes.data ?? []) as VendaComItens[])
       setServicos(servicosRes.data ?? [])
       setLoading(false)
     })()
-  }, [open, cliente?.id])
+    return () => { cancelled = true }
+  }, [open, clienteId])
 
   if (!open || !cliente) return null
 
@@ -71,7 +76,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Histórico de ${cliente.nome}`}
@@ -84,43 +89,44 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
       />
 
       {/* Painel */}
-      <div className="relative w-full max-w-[900px] bg-white rounded-2xl flex flex-col max-h-[90vh] border border-[rgba(232,213,163,0.35)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
+      <div className="relative w-full max-w-[calc(100vw-1rem)] sm:max-w-[900px] bg-white rounded-xl sm:rounded-2xl flex min-h-0 flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] border border-[rgba(232,213,163,0.35)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
 
-        {/* Cabeçalho — banner dourado com dados do cliente */}
-        <div className="flex-shrink-0 rounded-t-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-[#1A1510] to-[#2D2418] px-6 py-5 relative">
-            {/* Ornamento decorativo */}
-            <div className="absolute inset-0 overflow-hidden opacity-[0.06]"
+        {/* Banner com dados do cliente */}
+        <div className="flex-shrink-0 rounded-t-xl sm:rounded-t-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-[#1A1510] to-[#2D2418] px-3 sm:px-6 py-3.5 sm:py-5 relative">
+            <div
+              className="absolute inset-0 opacity-[0.06] pointer-events-none"
               style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, #C9A84C 0%, transparent 60%)' }}
             />
 
-            <div className="relative flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 min-w-0">
-                {/* Avatar com iniciais */}
-                <div className="w-12 h-12 rounded-full border-2 border-[#C9A84C]/40 bg-[#C9A84C]/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[#C9A84C] text-sm font-semibold font-display">{iniciais}</span>
+            <div className="relative flex items-center justify-between gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* Avatar */}
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 border-[#C9A84C]/40 bg-[#C9A84C]/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[#C9A84C] text-xs sm:text-sm font-semibold font-display">{iniciais}</span>
                 </div>
 
                 <div className="min-w-0">
-                  <h3 className="font-display text-lg font-semibold text-white truncate leading-tight">
+                  <h3 className="font-display text-base sm:text-lg font-semibold text-white truncate leading-tight">
                     {cliente.nome}
                   </h3>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
+                  {/* Contatos — empilham em telas muito pequenas */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                     {cliente.cpf && (
-                      <span className="flex items-center gap-1.5 text-xs text-[#C9A84C]/80 font-mono">
-                        <CreditCard size={10} />
+                      <span className="flex min-w-0 items-center gap-1 text-[11px] text-[#C9A84C]/80 font-mono">
+                        <CreditCard size={9} />
                         {formatCPF(cliente.cpf)}
                       </span>
                     )}
                     {cliente.telefone && (
-                      <span className="flex items-center gap-1.5 text-xs text-white/60">
-                        <Phone size={10} />
+                      <span className="flex min-w-0 items-center gap-1 text-[11px] text-white/60">
+                        <Phone size={9} />
                         {formatPhone(cliente.telefone)}
                       </span>
                     )}
                     {cliente.email && (
-                      <span className="flex items-center gap-1.5 text-xs text-white/60 truncate max-w-[200px]">
-                        <Mail size={10} />
+                      <span className="hidden min-[420px]:flex items-center gap-1 text-[11px] text-white/60 truncate max-w-[180px]">
+                        <Mail size={9} />
                         {cliente.email}
                       </span>
                     )}
@@ -139,30 +145,30 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
             </div>
           </div>
 
-          {/* Abas — grudadas ao banner */}
-          <div className="flex border-b border-[#F0EBE0] bg-white px-6">
+          {/* Abas */}
+          <div className="grid grid-cols-3 border-b border-[#F0EBE0] bg-white px-1 sm:flex sm:px-6 sm:overflow-x-auto">
             {TABS.map(({ key, label, Icon }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-all duration-150 ${
+                className={`flex min-w-0 items-center justify-center gap-1 px-1.5 sm:px-4 py-2.5 sm:py-3 text-[11px] sm:text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-all duration-150 ${
                   tab === key
                     ? 'border-[#C9A84C] text-[#A68B3C]'
                     : 'border-transparent text-[#6B5E4E] hover:text-[#2D2418] hover:border-[#D4C9B0]'
                 }`}
               >
-                <Icon size={14} />
-                {label}
+                <Icon size={13} className="shrink-0" />
+                <span className="min-w-0 truncate">{label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Corpo */}
-        <div className="overflow-y-auto flex-1 px-6 py-5">
+        {/* Corpo com scroll */}
+        <div className="min-h-0 overflow-y-auto flex-1 px-2.5 sm:px-6 py-3 sm:py-5">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="flex flex-col items-center justify-center py-14 gap-3">
               <Spinner size={28} />
               <p className="text-sm text-[#9E9484]">Carregando histórico...</p>
             </div>
@@ -212,12 +218,12 @@ function groupByDate(vendas: VendaComItens[]) {
 function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
   if (vendas.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-center">
+      <div className="flex flex-col items-center justify-center py-8 text-center">
         <Image
           src="/images/Shopping-bro.svg"
           alt="Nenhuma compra"
-          width={160}
-          height={160}
+          width={140}
+          height={140}
           className="opacity-80 mb-3"
         />
         <p className="text-sm font-medium text-[#6B5E4E]">Nenhuma compra registrada</p>
@@ -242,34 +248,34 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
           <div className="space-y-2">
             {items.map((venda) => (
               <div key={venda.id} className="border border-[#F0EBE0] rounded-xl overflow-hidden">
-                {/* Header da venda */}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAF7F0]">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+                {/* Header da venda — empilha no mobile */}
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2.5 bg-[#FAF7F0]">
+                  <div className="flex min-w-0 items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono text-[#9E9484]">#{venda.numero}</span>
-                    <span className="text-xs text-[#6B5E4E]">
+                    <span className="text-xs text-[#6B5E4E] truncate">
                       {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
                     </span>
                     <Badge variant={vendaStatusVariant(venda.status)}>
                       {VENDA_STATUS_LABEL[venda.status]}
                     </Badge>
                   </div>
-                  <span className="text-sm font-semibold text-[#2D2418] flex-shrink-0 ml-3">
+                  <span className="text-sm font-semibold text-[#2D2418] text-right">
                     {formatMoney(venda.total)}
                   </span>
                 </div>
 
-                {/* Itens da venda */}
+                {/* Itens */}
                 {(venda.itens ?? []).length > 0 && (
                   <div className="divide-y divide-[#F5ECD0]/80">
                     {(venda.itens ?? []).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between px-4 py-2">
+                      <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-3 sm:px-4 py-2">
                         <div className="flex items-baseline gap-1.5 min-w-0">
-                          <span className="text-sm text-[#2D2418] truncate">{item.nome_produto}</span>
+                          <span className="text-sm text-[#2D2418] leading-snug line-clamp-2">{item.nome_produto}</span>
                           {item.quantidade > 1 && (
                             <span className="text-xs text-[#9E9484] flex-shrink-0">×{item.quantidade}</span>
                           )}
                         </div>
-                        <span className="text-sm text-[#6B5E4E] flex-shrink-0 ml-3">
+                        <span className="text-sm text-[#6B5E4E] text-right whitespace-nowrap">
                           {formatMoney(item.subtotal)}
                         </span>
                       </div>
@@ -290,12 +296,12 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
 function TabServicos({ servicos }: { servicos: Servico[] }) {
   if (servicos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-center">
+      <div className="flex flex-col items-center justify-center py-8 text-center">
         <Image
           src="/images/No data-cuate.svg"
           alt="Nenhum serviço"
-          width={160}
-          height={160}
+          width={140}
+          height={140}
           className="opacity-80 mb-3"
         />
         <p className="text-sm font-medium text-[#6B5E4E]">Nenhum serviço registrado</p>
@@ -307,7 +313,7 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
   return (
     <div className="space-y-2.5">
       {servicos.map((servico) => (
-        <div key={servico.id} className="border border-[#F0EBE0] rounded-xl px-4 py-3 hover:border-[#E8D5A3] hover:bg-[#FAF7F0]/60 transition-colors">
+        <div key={servico.id} className="border border-[#F0EBE0] rounded-xl px-3 sm:px-4 py-3 hover:border-[#E8D5A3] hover:bg-[#FAF7F0]/60 transition-colors">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
@@ -353,15 +359,14 @@ function TabResumo({
   const semMovimentacao = totalComprasCount === 0 && totalServicosCount === 0
 
   return (
-    <div className="space-y-5">
-      {/* Ilustração + gasto total quando vazio */}
+    <div className="space-y-4">
       {semMovimentacao ? (
-        <div className="flex flex-col items-center justify-center py-4 text-center">
+        <div className="flex flex-col items-center justify-center py-6 text-center">
           <Image
             src="/images/Analytics-rafiki.svg"
             alt="Sem movimentações"
-            width={180}
-            height={180}
+            width={160}
+            height={160}
             className="opacity-75 mb-3"
           />
           <p className="text-sm font-medium text-[#6B5E4E]">Nenhuma movimentação encontrada</p>
@@ -371,8 +376,8 @@ function TabResumo({
         </div>
       ) : (
         <>
-          {/* Cards de métricas */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Métricas — 2 colunas no mobile, 4 no desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
             {[
               { label: 'Total em Compras',  value: formatMoney(totalCompras),  highlight: false },
               { label: 'Total em Serviços', value: formatMoney(totalServicos), highlight: false },
@@ -381,14 +386,14 @@ function TabResumo({
             ].map(({ label, value, highlight }) => (
               <div
                 key={label}
-                className={`rounded-xl p-4 ${
+                className={`rounded-xl p-3 sm:p-4 ${
                   highlight
                     ? 'bg-gradient-to-br from-[#F5ECD0] to-[#F0E8C8] border border-[#E8D5A3]'
                     : 'bg-[#FAF7F0] border border-[#F0EBE0]'
                 }`}
               >
-                <p className="text-xs text-[#9E9484] mb-1.5 leading-tight">{label}</p>
-                <p className={`text-base font-semibold font-display leading-tight ${
+                <p className="text-[11px] sm:text-xs text-[#9E9484] mb-1 leading-tight">{label}</p>
+                <p className={`text-sm sm:text-base font-semibold font-display leading-tight ${
                   highlight ? 'text-[#A68B3C]' : 'text-[#2D2418]'
                 }`}>
                   {value}
@@ -403,13 +408,14 @@ function TabResumo({
               <Star size={13} className="text-[#C9A84C]" fill="currentColor" />
               <span className="text-sm font-semibold text-white">Status de Fidelidade</span>
             </div>
-            <div className="bg-[#F5ECD0]/30 px-4 py-4 flex items-start gap-4">
+            <div className="bg-[#F5ECD0]/30 px-4 py-4 flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+              {/* Imagem decorativa — oculta no mobile para economizar espaço */}
               <Image
                 src="/images/Success factors-amico.svg"
                 alt=""
                 width={80}
                 height={80}
-                className="flex-shrink-0 opacity-90"
+                className="flex-shrink-0 opacity-90 hidden sm:block"
                 aria-hidden="true"
               />
               <div className="flex-1 min-w-0">
