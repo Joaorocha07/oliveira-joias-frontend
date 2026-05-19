@@ -113,12 +113,6 @@ function getProdutoCategoria(produto: { categoria: ProdutoCategoria } | { catego
   return Array.isArray(produto) ? produto[0]?.categoria ?? null : produto.categoria
 }
 
-function isLancamentoVendaCrediarioIntegral(item: LancamentoRelatorio) {
-  return item.referencia_tipo === 'venda' &&
-    item.forma_pagamento === 'crediario' &&
-    (item.descricao ?? '').startsWith('Venda #')
-}
-
 function getParcelaVenda(parcela: CrediarioParcelaPaga) {
   const crediario = Array.isArray(parcela.crediario) ? parcela.crediario[0] : parcela.crediario
   const venda = crediario?.venda
@@ -229,7 +223,7 @@ export default function RelatoriosPage() {
 
   const metrics = useMemo(() => {
     const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
-    const lancamentosFinanceiros = lancamentos.filter((item) => !isLancamentoVendaCrediarioIntegral(item))
+    const lancamentosFinanceiros = lancamentos
     // Crediários cujas vendas caem no período (vendas já filtradas por período)
     const vendaIdsNoPeriodo = new Set(vendas.map((v) => v.id))
     const crediariosNoPeriodo = crediariosData.filter((c) => vendaIdsNoPeriodo.has(c.venda_id))
@@ -327,7 +321,7 @@ export default function RelatoriosPage() {
     const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
     const serieMap: Record<string, SerieData> = {}
     const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
-    const lancamentosFinanceiros = lancamentos.filter((item) => !isLancamentoVendaCrediarioIntegral(item))
+    const lancamentosFinanceiros = lancamentos
     const vendaIdsNoPeriodo = new Set(vendas.map((v) => v.id))
     const recebidoPorVendaCrediario = new Map<string, { venda: VendaRelatorio | null; valor: number }>()
 

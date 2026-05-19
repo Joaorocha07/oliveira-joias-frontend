@@ -210,12 +210,7 @@ export default function DashboardPage() {
       ...parcelasPagasAnterior.map((parcela) => ({ valor: parcela.valor_pago ?? 0, data: parcela.data_pagamento ?? periodoAnteriorInicio })),
       ...entradasCrediarioAnterior.map((crediario) => ({ valor: crediario.entrada ?? 0, data: crediario.created_at })),
     ]
-    const lancamentosPeriodo = (((lancamentos ?? []) as unknown) as DashboardLancamento[])
-      .filter((lancamento) => !(
-        lancamento.referencia_tipo === 'venda' &&
-        lancamento.forma_pagamento === 'crediario' &&
-        (lancamento.descricao ?? '').startsWith('Venda #')
-      ))
+    const lancamentosPeriodo = ((lancamentos ?? []) as unknown) as DashboardLancamento[]
     const servicosPeriodoRows = ((servicos ?? []) as unknown) as DashboardServico[]
     const faturamentoPeriodo = recebimentosPeriodo.reduce((sum, recebimento) => sum + recebimento.valor, 0)
     const faturamentoAnterior = recebimentosPeriodoAnterior.reduce((sum, recebimento) => sum + recebimento.valor, 0)
