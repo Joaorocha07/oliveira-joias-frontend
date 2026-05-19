@@ -51,9 +51,10 @@ interface VendaRelatorio {
 
 interface LancamentoRelatorio {
   tipo: 'entrada' | 'saida'
-  descricao: string
+  descricao: string | null
   valor: number
   data_lancamento: string
+  forma_pagamento: string | null
   categoria_nome: string | null
   referencia_tipo: string | null
 }
@@ -74,12 +75,19 @@ interface MovimentoEstoqueRelatorio {
   produto?: { categoria: ProdutoCategoria } | { categoria: ProdutoCategoria }[] | null
 }
 
-interface ParcelaRelatorio {
-  valor: number
+interface CrediarioRow {
+  venda_id: string
+  entrada: number
+  saldo: number
+}
+
+interface CrediarioParcelaPaga {
   valor_pago: number
-  data_vencimento: string
-  data_pagamento: string | null
-  status: string
+  crediario?: {
+    venda?: VendaRelatorio | VendaRelatorio[] | null
+  } | {
+    venda?: VendaRelatorio | VendaRelatorio[] | null
+  }[] | null
 }
 
 function periodKey(dateValue: string, useDay: boolean) {
@@ -94,6 +102,23 @@ function numberFormat(value: number) {
 function getProdutoCategoria(produto: { categoria: ProdutoCategoria } | { categoria: ProdutoCategoria }[] | null | undefined) {
   if (!produto) return null
   return Array.isArray(produto) ? produto[0]?.categoria ?? null : produto.categoria
+}
+
+function isLancamentoVendaCrediarioIntegral(item: LancamentoRelatorio) {
+  return item.referencia_tipo === 'venda' &&
+    item.forma_pagamento === 'crediario' &&
+    (item.descricao ?? '').startsWith('Venda #')
+}
+
+function getParcelaVenda(parcela: CrediarioParcelaPaga) {
+  const crediario = Array.isArray(parcela.crediario) ? parcela.crediario[0] : parcela.crediario
+  const venda = crediario?.venda
+  return Array.isArray(venda) ? venda[0] : venda
+}
+
+function getVendaCusto(venda: VendaRelatorio) {
+  if (venda.tipo === 'livre') return venda.custo_livre ?? 0
+  return (venda.itens ?? []).reduce((sum, item) => sum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
 }
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -122,7 +147,8 @@ export default function RelatoriosPage() {
   const [lancamentos, setLancamentos] = useState<LancamentoRelatorio[]>([])
   const [servicos, setServicos] = useState<ServicoRelatorio[]>([])
   const [movimentosEstoque, setMovimentosEstoque] = useState<MovimentoEstoqueRelatorio[]>([])
-  const [parcelas, setParcelas] = useState<ParcelaRelatorio[]>([])
+  const [crediariosData, setCrediariosData] = useState<CrediarioRow[]>([])
+  const [crediarioParcelasPagas, setCrediarioParcelasPagas] = useState<CrediarioParcelaPaga[]>([])
   const [estoqueAtual, setEstoqueAtual] = useState({ unidades: 0, alertas: 0, produtosCriticos: 0 })
   const [estoqueDetalhado, setEstoqueDetalhado] = useState<VwEstoqueAtual[]>([])
 
@@ -131,7 +157,7 @@ export default function RelatoriosPage() {
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, parcelasResult, estoqueResult] = await Promise.all([
+    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult] = await Promise.all([
       supabase
         .from('vendas')
         .select('id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
@@ -140,7 +166,7 @@ export default function RelatoriosPage() {
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('lancamentos')
-        .select('tipo, descricao, valor, data_lancamento, categoria_nome, referencia_tipo')
+        .select('tipo, descricao, valor, data_lancamento, forma_pagamento, categoria_nome, referencia_tipo')
         .gte('data_lancamento', dataInicio)
         .lte('data_lancamento', dataFim),
       supabase
@@ -154,9 +180,15 @@ export default function RelatoriosPage() {
         .gte('created_at', inicioCompleto)
         .lte('created_at', fimCompleto),
       supabase
+        .from('crediario')
+        .select('venda_id, entrada, saldo')
+        .not('status', 'eq', 'cancelado'),
+      supabase
         .from('crediario_parcelas')
-        .select('valor, valor_pago, data_vencimento, data_pagamento, status')
-        .or(`and(data_vencimento.gte.${dataInicio},data_vencimento.lte.${dataFim}),and(data_pagamento.gte.${dataInicio},data_pagamento.lte.${dataFim})`),
+        .select('valor_pago, crediario:crediario(venda:vendas(id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))))')
+        .eq('status', 'pago')
+        .gte('data_pagamento', dataInicio)
+        .lte('data_pagamento', dataFim),
       supabase
         .from('vw_estoque_atual')
         .select('produto_id, produto_nome, categoria, custo, preco_venda, estoque_atual, status_estoque'),
@@ -166,7 +198,8 @@ export default function RelatoriosPage() {
     setLancamentos((lancamentosResult.data as LancamentoRelatorio[]) ?? [])
     setServicos((servicosResult.data as ServicoRelatorio[]) ?? [])
     setMovimentosEstoque(((movimentosResult.data ?? []) as unknown) as MovimentoEstoqueRelatorio[])
-    setParcelas((parcelasResult.data as ParcelaRelatorio[]) ?? [])
+    setCrediariosData(((crediariosResult.data ?? []) as unknown) as CrediarioRow[])
+    setCrediarioParcelasPagas(((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[])
 
     const estoqueRows = (estoqueResult.data ?? []) as VwEstoqueAtual[]
     const produtosEmAlerta = new Set(estoqueRows.filter((row) => row.status_estoque !== 'normal').map((row) => row.produto_id))
@@ -186,13 +219,41 @@ export default function RelatoriosPage() {
   }, [loadRelatorios])
 
   const metrics = useMemo(() => {
-    const faturamento = vendas.reduce((sum, venda) => sum + (venda.total ?? 0), 0)
-    const custo = vendas.reduce((sum, venda) => {
-      if (venda.tipo === 'livre') return sum + (venda.custo_livre ?? 0)
-      return sum + (venda.itens ?? []).reduce((itemSum, item) => itemSum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
+    const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
+    const lancamentosFinanceiros = lancamentos.filter((item) => !isLancamentoVendaCrediarioIntegral(item))
+    // Crediários cujas vendas caem no período (vendas já filtradas por período)
+    const vendaIdsNoPeriodo = new Set(vendas.map((v) => v.id))
+    const crediariosNoPeriodo = crediariosData.filter((c) => vendaIdsNoPeriodo.has(c.venda_id))
+    const crediarioParcPagas = crediarioParcelasPagas.reduce((s, p) => s + (p.valor_pago ?? 0), 0)
+
+    const recebidoPorVendaCrediario = new Map<string, { venda: VendaRelatorio | null; valor: number }>()
+    crediariosNoPeriodo.forEach((crediario) => {
+      const venda = vendas.find((v) => v.id === crediario.venda_id) ?? null
+      const current = recebidoPorVendaCrediario.get(crediario.venda_id) ?? { venda, valor: 0 }
+      current.valor += crediario.entrada ?? 0
+      if (!current.venda) current.venda = venda
+      recebidoPorVendaCrediario.set(crediario.venda_id, current)
+    })
+    crediarioParcelasPagas.forEach((parcela) => {
+      const venda = getParcelaVenda(parcela)
+      if (!venda) return
+      const current = recebidoPorVendaCrediario.get(venda.id) ?? { venda, valor: 0 }
+      current.valor += parcela.valor_pago ?? 0
+      current.venda = venda
+      recebidoPorVendaCrediario.set(venda.id, current)
+    })
+
+    const crediarioRecebidoComoVenda = Array.from(recebidoPorVendaCrediario.values())
+      .reduce((sum, item) => sum + item.valor, 0)
+    const faturamento = vendasRecebidas.reduce((sum, venda) => sum + (venda.total ?? 0), 0) + crediarioRecebidoComoVenda
+    const custoVendasRecebidas = vendasRecebidas.reduce((sum, venda) => sum + getVendaCusto(venda), 0)
+    const custoCrediarioRecebido = Array.from(recebidoPorVendaCrediario.values()).reduce((sum, item) => {
+      if (!item.venda || item.venda.total <= 0) return sum
+      return sum + (getVendaCusto(item.venda) * Math.min(1, item.valor / item.venda.total))
     }, 0)
-    const despesas = lancamentos.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.valor, 0)
-    const entradas = lancamentos.filter((item) => item.tipo === 'entrada').reduce((sum, item) => sum + item.valor, 0)
+    const custo = custoVendasRecebidas + custoCrediarioRecebido
+    const despesas = lancamentosFinanceiros.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.valor, 0)
+    const entradas = lancamentosFinanceiros.filter((item) => item.tipo === 'entrada').reduce((sum, item) => sum + item.valor, 0)
 
     const servicosAtivos = servicos.filter((s) => s.status !== 'cancelado')
     const servicoValorTotal = servicosAtivos.reduce((sum, s) => sum + (s.valor ?? 0), 0)
@@ -212,12 +273,13 @@ export default function RelatoriosPage() {
 
     const estoqueEntradas = movimentosEstoque.filter((item) => item.tipo === 'entrada' || item.tipo === 'devolucao').reduce((sum, item) => sum + item.quantidade, 0)
     const estoqueSaidas = movimentosEstoque.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.quantidade, 0)
-    const crediarioRecebido = parcelas
-      .filter((parcela) => parcela.status === 'pago' && parcela.data_pagamento && parcela.data_pagamento >= dataInicio && parcela.data_pagamento <= dataFim)
-      .reduce((sum, parcela) => sum + (parcela.valor_pago ?? 0), 0)
-    const crediarioAVencer = parcelas
-      .filter((parcela) => parcela.status !== 'pago' && parcela.data_vencimento >= dataInicio && parcela.data_vencimento <= dataFim)
-      .reduce((sum, parcela) => sum + (parcela.valor ?? 0), 0)
+
+    // RECEBIDO = entradas do período + parcelas pagas no período (pré-computado em state)
+    const crediarioEntradaNoPeriodo = crediariosNoPeriodo.reduce((sum, c) => sum + (c.entrada ?? 0), 0)
+    const crediarioRecebido = crediarioEntradaNoPeriodo + crediarioParcPagas
+
+    // A RECEBER = saldo atual (mantido pela service ao pagar parcelas) dos crediários abertos no período
+    const crediarioAVencer = crediariosNoPeriodo.reduce((sum, c) => sum + (c.saldo ?? 0), 0)
 
     return {
       faturamento,
@@ -225,8 +287,10 @@ export default function RelatoriosPage() {
       lucroLiquido: faturamento - custo - despesas,
       despesas,
       entradas,
-      ticketMedio: vendas.length > 0 ? faturamento / vendas.length : 0,
-      vendasQtd: vendas.length,
+      ticketMedio: vendasRecebidas.length + recebidoPorVendaCrediario.size > 0
+        ? faturamento / (vendasRecebidas.length + recebidoPorVendaCrediario.size)
+        : 0,
+      vendasQtd: vendasRecebidas.length + recebidoPorVendaCrediario.size,
       servicoValorTotal,
       servicoRecebido,
       servicoSaidas,
@@ -242,15 +306,37 @@ export default function RelatoriosPage() {
       estoqueSaldo: estoqueEntradas - estoqueSaidas,
       crediarioRecebido,
       crediarioAVencer,
-      crediarioParcelas: parcelas.length,
+      crediarioParcelas: crediariosNoPeriodo.length,
     }
-  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, parcelas, servicos, vendas])
+  }, [lancamentos, movimentosEstoque, crediariosData, crediarioParcelasPagas, servicos, vendas])
 
   const charts = useMemo(() => {
     const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
     const serieMap: Record<string, SerieData> = {}
+    const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
+    const lancamentosFinanceiros = lancamentos.filter((item) => !isLancamentoVendaCrediarioIntegral(item))
+    const vendaIdsNoPeriodo = new Set(vendas.map((v) => v.id))
+    const recebidoPorVendaCrediario = new Map<string, { venda: VendaRelatorio | null; valor: number }>()
 
-    lancamentos.forEach((item) => {
+    crediariosData
+      .filter((crediario) => vendaIdsNoPeriodo.has(crediario.venda_id))
+      .forEach((crediario) => {
+        const venda = vendas.find((v) => v.id === crediario.venda_id) ?? null
+        const current = recebidoPorVendaCrediario.get(crediario.venda_id) ?? { venda, valor: 0 }
+        current.valor += crediario.entrada ?? 0
+        if (!current.venda) current.venda = venda
+        recebidoPorVendaCrediario.set(crediario.venda_id, current)
+      })
+    crediarioParcelasPagas.forEach((parcela) => {
+      const venda = getParcelaVenda(parcela)
+      if (!venda) return
+      const current = recebidoPorVendaCrediario.get(venda.id) ?? { venda, valor: 0 }
+      current.valor += parcela.valor_pago ?? 0
+      current.venda = venda
+      recebidoPorVendaCrediario.set(venda.id, current)
+    })
+
+    lancamentosFinanceiros.forEach((item) => {
       const key = periodKey(item.data_lancamento, useDay)
       serieMap[key] ??= { periodo: key, entradas: 0, despesas: 0 }
       if (item.tipo === 'entrada') serieMap[key].entradas += item.valor
@@ -258,26 +344,33 @@ export default function RelatoriosPage() {
     })
 
     const vendasProduto: Record<string, number> = {}
-    vendas.forEach((venda) => {
+    const addVendaProduto = (venda: VendaRelatorio, valorRecebido: number) => {
+      if (valorRecebido <= 0) return
       if (venda.tipo === 'livre') {
         const label = venda.descricao_livre || 'Venda Livre'
-        vendasProduto[label] = (vendasProduto[label] ?? 0) + (venda.total ?? 0)
+        vendasProduto[label] = (vendasProduto[label] ?? 0) + valorRecebido
       } else {
+        const totalItens = (venda.itens ?? []).reduce((sum, item) => sum + (item.subtotal ?? 0), 0)
         ;(venda.itens ?? []).forEach((item) => {
           const label = item.nome_produto || 'Produto sem nome'
-          vendasProduto[label] = (vendasProduto[label] ?? 0) + (item.subtotal ?? 0)
+          const proporcao = totalItens > 0 ? (item.subtotal ?? 0) / totalItens : 0
+          vendasProduto[label] = (vendasProduto[label] ?? 0) + valorRecebido * proporcao
         })
       }
+    }
+    vendasRecebidas.forEach((venda) => addVendaProduto(venda, venda.total ?? 0))
+    Array.from(recebidoPorVendaCrediario.values()).forEach((item) => {
+      if (item.venda) addVendaProduto(item.venda, item.valor)
     })
 
     const despesasCat: Record<string, number> = {}
-    lancamentos.filter((item) => item.tipo === 'saida').forEach((item) => {
+    lancamentosFinanceiros.filter((item) => item.tipo === 'saida').forEach((item) => {
       const label = item.categoria_nome ?? 'Outros'
       despesasCat[label] = (despesasCat[label] ?? 0) + item.valor
     })
 
     const lancamentosMap: Record<string, number> = {}
-    lancamentos.forEach((item) => {
+    lancamentosFinanceiros.forEach((item) => {
       const label = item.descricao || (item.tipo === 'entrada' ? 'Entrada' : 'Saida')
       const signedValue = item.tipo === 'entrada' ? item.valor : -item.valor
       lancamentosMap[label] = (lancamentosMap[label] ?? 0) + signedValue
@@ -317,7 +410,7 @@ export default function RelatoriosPage() {
       servicosStatus,
       servicosTipo,
     }
-  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, servicos, vendas])
+  }, [dataFim, dataInicio, lancamentos, movimentosEstoque, crediariosData, crediarioParcelasPagas, servicos, vendas])
 
   const investimentoData = useMemo(() => {
     const produtoMap = new Map<string, {
@@ -452,9 +545,9 @@ export default function RelatoriosPage() {
         <>
           {activeSection === 'vendas' && (
             <ReportBlock>
-              <SectionTitle title="Vendas" subtitle="Faturamento, lucro e distribuicao por produto no periodo selecionado" />
+              <SectionTitle title="Vendas" subtitle="Recebimentos de vendas fora do crediario; parcelas ficam na aba Crediario" />
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard label="Faturamento" value={formatMoney(metrics.faturamento)} changeType="up" accent />
+                <MetricCard label="Vendas Recebidas" value={formatMoney(metrics.faturamento)} changeType="up" accent />
                 <MetricCard label="Lucro Bruto" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
                 <MetricCard label="Ticket Medio" value={metrics.vendasQtd > 0 ? formatMoney(metrics.ticketMedio) : '-'} changeType="neutral" />
                 <MetricCard label="Vendas" value={String(metrics.vendasQtd)} changeType="neutral" />
@@ -771,12 +864,12 @@ export default function RelatoriosPage() {
 
           {activeSection === 'crediario' && (
             <ReportBlock>
-              <SectionTitle title="Crediario" subtitle="Parcelas recebidas e valores com vencimento no periodo" />
+              <SectionTitle title="Crediario" subtitle="Entradas e pagamentos recebidos; saldo devedor dos crediarios abertos no periodo" />
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard label="Recebido" value={formatMoney(metrics.crediarioRecebido)} changeType="up" />
                 <MetricCard label="A Receber" value={formatMoney(metrics.crediarioAVencer)} changeType="neutral" />
-                <MetricCard label="Parcelas no Periodo" value={String(metrics.crediarioParcelas)} changeType="neutral" />
-                <MetricCard label="Saldo Projetado" value={formatMoney(metrics.crediarioRecebido - metrics.crediarioAVencer)} changeType={metrics.crediarioRecebido >= metrics.crediarioAVencer ? 'up' : 'down'} />
+                <MetricCard label="Crediarios no Periodo" value={String(metrics.crediarioParcelas)} changeType="neutral" />
+                <MetricCard label="Saldo Projetado" value={formatMoney(metrics.crediarioAVencer)} changeType={metrics.crediarioAVencer > 0 ? 'down' : 'neutral'} />
               </div>
             </ReportBlock>
           )}

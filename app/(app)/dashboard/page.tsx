@@ -24,18 +24,32 @@ interface PeriodStat {
 interface DashboardVenda {
   total: number
   data_venda: string
+  forma_pagamento: string
+}
+
+interface DashboardRecebimento {
+  valor: number
+  data: string
+}
+
+interface DashboardParcelaPaga {
+  valor_pago: number
+  data_pagamento: string | null
+}
+
+interface DashboardCrediarioEntrada {
+  entrada: number
+  created_at: string
 }
 
 interface DashboardLancamento {
   tipo: 'entrada' | 'saida'
+  descricao: string | null
   valor: number
   referencia_tipo: string | null
+  forma_pagamento: string | null
 }
 
-interface DashboardParcela {
-  valor: number
-  valor_pago: number | null
-}
 
 interface DashboardServico {
   id: string
@@ -80,14 +94,14 @@ const INITIAL: DashboardState = {
   loading: true,
 }
 
-function buildFaturamentoSeries(vendas: DashboardVenda[], dataInicio: string, dataFim: string) {
+function buildFaturamentoSeries(recebimentos: DashboardRecebimento[], dataInicio: string, dataFim: string) {
   const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
   const totals = new Map<string, number>()
 
-  vendas.forEach((venda) => {
-    const date = parseISO(venda.data_venda)
+  recebimentos.forEach((recebimento) => {
+    const date = parseISO(recebimento.data)
     const key = useDay ? format(date, 'dd/MM') : format(date, 'MMM/yy', { locale: ptBR })
-    totals.set(key, (totals.get(key) ?? 0) + (venda.total ?? 0))
+    totals.set(key, (totals.get(key) ?? 0) + (recebimento.valor ?? 0))
   })
 
   return Array.from(totals.entries()).map(([periodo, total]) => ({ periodo, total }))
@@ -112,31 +126,55 @@ export default function DashboardPage() {
     const [
       { data: vendasPeriodo },
       { data: vendasPeriodoAnterior },
+      { data: parcelasPagasPeriodo },
+      { data: parcelasPagasPeriodoAnterior },
+      { data: entradasCrediarioPeriodo },
+      { data: entradasCrediarioPeriodoAnterior },
       { data: lancamentos },
-      { data: parcelasPendentes },
+      { data: crediariosAbertos },
       { data: servicos },
       { data: vendasRecentes },
       { data: estoqueCritico },
     ] = await Promise.all([
       supabase.from('vendas')
-        .select('total, data_venda')
+        .select('total, data_venda, forma_pagamento')
         .neq('status', 'cancelado')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim),
       supabase.from('vendas')
-        .select('total')
+        .select('total, data_venda, forma_pagamento')
         .neq('status', 'cancelado')
         .gte('data_venda', periodoAnteriorInicio)
         .lte('data_venda', periodoAnteriorFim),
+      supabase.from('crediario_parcelas')
+        .select('valor_pago, data_pagamento')
+        .eq('status', 'pago')
+        .gte('data_pagamento', dataInicio)
+        .lte('data_pagamento', dataFim),
+      supabase.from('crediario_parcelas')
+        .select('valor_pago, data_pagamento')
+        .eq('status', 'pago')
+        .gte('data_pagamento', periodoAnteriorInicio)
+        .lte('data_pagamento', periodoAnteriorFim),
+      supabase.from('crediario')
+        .select('entrada, created_at')
+        .gt('entrada', 0)
+        .not('status', 'eq', 'cancelado')
+        .gte('created_at', `${dataInicio}T00:00:00`)
+        .lte('created_at', `${dataFim}T23:59:59`),
+      supabase.from('crediario')
+        .select('entrada, created_at')
+        .gt('entrada', 0)
+        .not('status', 'eq', 'cancelado')
+        .gte('created_at', `${periodoAnteriorInicio}T00:00:00`)
+        .lte('created_at', `${periodoAnteriorFim}T23:59:59`),
       supabase.from('lancamentos')
-        .select('tipo, valor, referencia_tipo')
+        .select('tipo, descricao, valor, referencia_tipo, forma_pagamento')
         .gte('data_lancamento', dataInicio)
         .lte('data_lancamento', dataFim),
-      supabase.from('crediario_parcelas')
-        .select('valor, valor_pago')
-        .in('status', ['pendente', 'vencido'])
-        .gte('data_vencimento', dataInicio)
-        .lte('data_vencimento', dataFim),
+      supabase.from('crediario')
+        .select('saldo')
+        .in('status', ['em_dia', 'vencido']),
       supabase.from('servicos')
         .select('id, status, valor, pago')
         .gte('data_entrada', dataInicio)
@@ -155,11 +193,32 @@ export default function DashboardPage() {
     ])
 
     const vendas = ((vendasPeriodo ?? []) as unknown) as DashboardVenda[]
-    const lancamentosPeriodo = ((lancamentos ?? []) as unknown) as DashboardLancamento[]
-    const parcelasPeriodo = ((parcelasPendentes ?? []) as unknown) as DashboardParcela[]
+    const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
+    const vendasRecebidasPeriodoAnterior = (((vendasPeriodoAnterior ?? []) as unknown) as DashboardVenda[])
+      .filter((venda) => venda.forma_pagamento !== 'crediario')
+    const parcelasPagas = ((parcelasPagasPeriodo ?? []) as unknown) as DashboardParcelaPaga[]
+    const parcelasPagasAnterior = ((parcelasPagasPeriodoAnterior ?? []) as unknown) as DashboardParcelaPaga[]
+    const entradasCrediario = ((entradasCrediarioPeriodo ?? []) as unknown) as DashboardCrediarioEntrada[]
+    const entradasCrediarioAnterior = ((entradasCrediarioPeriodoAnterior ?? []) as unknown) as DashboardCrediarioEntrada[]
+    const recebimentosPeriodo: DashboardRecebimento[] = [
+      ...vendasRecebidas.map((venda) => ({ valor: venda.total ?? 0, data: venda.data_venda })),
+      ...parcelasPagas.map((parcela) => ({ valor: parcela.valor_pago ?? 0, data: parcela.data_pagamento ?? dataInicio })),
+      ...entradasCrediario.map((crediario) => ({ valor: crediario.entrada ?? 0, data: crediario.created_at })),
+    ]
+    const recebimentosPeriodoAnterior: DashboardRecebimento[] = [
+      ...vendasRecebidasPeriodoAnterior.map((venda) => ({ valor: venda.total ?? 0, data: venda.data_venda })),
+      ...parcelasPagasAnterior.map((parcela) => ({ valor: parcela.valor_pago ?? 0, data: parcela.data_pagamento ?? periodoAnteriorInicio })),
+      ...entradasCrediarioAnterior.map((crediario) => ({ valor: crediario.entrada ?? 0, data: crediario.created_at })),
+    ]
+    const lancamentosPeriodo = (((lancamentos ?? []) as unknown) as DashboardLancamento[])
+      .filter((lancamento) => !(
+        lancamento.referencia_tipo === 'venda' &&
+        lancamento.forma_pagamento === 'crediario' &&
+        (lancamento.descricao ?? '').startsWith('Venda #')
+      ))
     const servicosPeriodoRows = ((servicos ?? []) as unknown) as DashboardServico[]
-    const faturamentoPeriodo = vendas.reduce((sum, venda) => sum + (venda.total || 0), 0)
-    const faturamentoAnterior = (vendasPeriodoAnterior ?? []).reduce((sum, venda) => sum + (venda.total || 0), 0)
+    const faturamentoPeriodo = recebimentosPeriodo.reduce((sum, recebimento) => sum + recebimento.valor, 0)
+    const faturamentoAnterior = recebimentosPeriodoAnterior.reduce((sum, recebimento) => sum + recebimento.valor, 0)
     const entradasPeriodo = lancamentosPeriodo
       .filter((lancamento) => lancamento.tipo === 'entrada')
       .reduce((sum, lancamento) => sum + (lancamento.valor ?? 0), 0)
@@ -174,10 +233,7 @@ export default function DashboardPage() {
     const servicosRecebidos = servicosAtivos
       .filter((servico) => servico.pago)
       .reduce((sum, servico) => sum + (servico.valor ?? 0), 0)
-    const crediarioAbertoValor = parcelasPeriodo.reduce(
-      (sum, parcela) => sum + Math.max(0, (parcela.valor ?? 0) - (parcela.valor_pago ?? 0)),
-      0,
-    )
+    const crediarioAbertoValor = ((crediariosAbertos ?? []) as { saldo: number }[]).reduce((sum, c) => sum + (c.saldo ?? 0), 0)
     const estoqueCriticoRows = (estoqueCritico as VwEstoqueAtual[]) ?? []
 
     setState({
@@ -186,7 +242,7 @@ export default function DashboardPage() {
       entradasPeriodo,
       saidasPeriodo,
       saldoCaixa,
-      crediarioAberto: parcelasPeriodo.length,
+      crediarioAberto: (crediariosAbertos ?? []).length,
       crediarioAbertoValor,
       servicosRecebidos,
       servicosPeriodo: servicosAtivos.length,
@@ -194,7 +250,7 @@ export default function DashboardPage() {
       estoqueCriticoQtd: estoqueCriticoRows.length,
       vendasRecentes: (vendasRecentes as VendaComCliente[]) ?? [],
       estoqueCritico: estoqueCriticoRows,
-      faturamentoSeries: buildFaturamentoSeries(vendas, dataInicio, dataFim),
+      faturamentoSeries: buildFaturamentoSeries(recebimentosPeriodo, dataInicio, dataFim),
       loading: false,
     })
   }, [dataFim, dataInicio])
@@ -241,7 +297,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          label="Vendas"
+          label="Vendas Recebidas"
           value={formatMoney(state.faturamentoPeriodo)}
           change={variacao
             ? `${parseFloat(variacao) >= 0 ? '+' : ''}${variacao}% vs periodo anterior`
@@ -279,7 +335,7 @@ export default function DashboardPage() {
           <div className="rounded-lg border border-gold-100 bg-cream-50 p-4">
             <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Movimento Total</p>
             <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{formatMoney(movimentoTotal)}</p>
-            <p className="text-xs text-dark-300 mt-1">Vendas + servicos recebidos</p>
+            <p className="text-xs text-dark-300 mt-1">Vendas recebidas + servicos recebidos</p>
           </div>
           <div className="rounded-lg border border-gold-100 bg-white p-4">
             <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Caixa</p>

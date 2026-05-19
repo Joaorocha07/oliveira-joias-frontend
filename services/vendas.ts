@@ -39,6 +39,8 @@ export async function createVenda(
     ? Math.round(data.valor_livre * 100) / 100
     : data.itens.reduce((acc, item) => acc + itemSubtotal(item), 0)
   const total = Math.max(0, Math.round((subtotal - data.desconto) * 100) / 100)
+  const isCrediario = data.forma_pagamento === 'crediario'
+  const valorPagoInicial = isCrediario ? Math.min(data.entrada, total) : total
 
   // 1. Venda
   const { data: venda, error: vendaError } = await supabase
@@ -49,12 +51,12 @@ export async function createVenda(
       vendedor_id: data.vendedor_id || userId,
       origem_id: data.origem_id || null,
       origem_outro: data.origem_outro || null,
-      status: data.forma_pagamento === 'crediario' ? 'crediario' : 'pago',
+      status: isCrediario ? 'crediario' : 'pago',
       forma_pagamento: data.forma_pagamento,
       subtotal,
       desconto: data.desconto,
       total,
-      valor_pago: total,
+      valor_pago: valorPagoInicial,
       troco: 0,
       descricao_livre: isLivre ? data.descricao_livre : null,
       custo_livre: isLivre ? data.custo_livre : null,
@@ -86,7 +88,7 @@ export async function createVenda(
   }
 
   // 3. Crediário
-  if (data.forma_pagamento === 'crediario' && data.cliente_id) {
+  if (isCrediario && data.cliente_id) {
     const saldo = Math.max(0, total - data.entrada)
     const valorParcela = Math.round((saldo / data.num_parcelas) * 100) / 100
 
@@ -174,16 +176,18 @@ export async function createVenda(
   }
 
   // 5. Lançamento
-  await supabase.from('lancamentos').insert({
-    tipo: 'entrada',
-    descricao: `Venda #${venda.numero}`,
-    valor: total,
-    data_lancamento: data.data_venda,
-    forma_pagamento: data.forma_pagamento,
-    referencia_id: venda.id,
-    referencia_tipo: 'venda',
-    created_by: userId,
-  })
+  if (!isCrediario || valorPagoInicial > 0) {
+    await supabase.from('lancamentos').insert({
+      tipo: 'entrada',
+      descricao: isCrediario ? `Entrada crediario Venda #${venda.numero}` : `Venda #${venda.numero}`,
+      valor: valorPagoInicial,
+      data_lancamento: data.data_venda,
+      forma_pagamento: data.forma_pagamento,
+      referencia_id: venda.id,
+      referencia_tipo: 'venda',
+      created_by: userId,
+    })
+  }
 
   return { error: null }
 }
@@ -197,6 +201,7 @@ export async function updateVenda(
   const total = Math.max(0, Math.round((subtotal - data.desconto) * 100) / 100)
   const isCrediario = data.forma_pagamento === 'crediario'
   const status = isCrediario ? 'crediario' : data.status
+  const valorPago = isCrediario ? 0 : total
 
   const { error } = await supabase
     .from('vendas')
@@ -209,7 +214,7 @@ export async function updateVenda(
       forma_pagamento: data.forma_pagamento,
       desconto: data.desconto,
       total,
-      valor_pago: total,
+      valor_pago: valorPago,
       data_venda: data.data_venda,
       observacoes: data.observacoes || null,
     })
@@ -217,11 +222,20 @@ export async function updateVenda(
 
   if (error) return { error: error.message }
 
-  await supabase
-    .from('lancamentos')
-    .update({ valor: total, data_lancamento: data.data_venda, forma_pagamento: data.forma_pagamento })
-    .eq('referencia_id', id)
-    .eq('referencia_tipo', 'venda')
+  if (isCrediario) {
+    await supabase
+      .from('lancamentos')
+      .delete()
+      .eq('referencia_id', id)
+      .eq('referencia_tipo', 'venda')
+      .like('descricao', 'Venda #%')
+  } else {
+    await supabase
+      .from('lancamentos')
+      .update({ valor: total, data_lancamento: data.data_venda, forma_pagamento: data.forma_pagamento })
+      .eq('referencia_id', id)
+      .eq('referencia_tipo', 'venda')
+  }
 
   if (isCrediario && data.cliente_id) {
     const { data: existing } = await supabase
