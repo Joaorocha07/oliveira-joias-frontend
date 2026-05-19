@@ -17,10 +17,11 @@ import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoSta
 
 const CHART_COLORS = ['#B8962E', '#C49A35', '#D4AF5A', '#EBD9A4', '#9A7B22', '#7A5C10', '#5C4208', '#3D2B05']
 
-type ReportSection = 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario'
+type ReportSection = 'geral' | 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario'
 type CaixaChartMode = 'evolucao' | 'categorias' | 'lancamentos'
 
 const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[] = [
+  { key: 'geral', label: 'Visão Geral', subtitle: 'Saúde da empresa' },
   { key: 'vendas', label: 'Vendas', subtitle: 'Faturamento e lucro' },
   { key: 'caixa', label: 'Despesas e Caixa', subtitle: 'Entradas e saidas' },
   { key: 'servicos', label: 'Servicos', subtitle: 'Ordens e receita' },
@@ -77,8 +78,10 @@ interface MovimentoEstoqueRelatorio {
 
 interface CrediarioRow {
   venda_id: string
+  total: number
   entrada: number
   saldo: number
+  parcelas?: { valor_pago: number; status: string }[] | null
 }
 
 interface CrediarioParcelaPaga {
@@ -88,6 +91,12 @@ interface CrediarioParcelaPaga {
   } | {
     venda?: VendaRelatorio | VendaRelatorio[] | null
   }[] | null
+}
+
+function healthClass(good: boolean, warn: boolean) {
+  if (good) return { card: 'border-green-200 bg-green-50/60', badge: 'text-green-700 bg-green-100', label: 'Saudável' }
+  if (warn) return { card: 'border-amber-200 bg-amber-50/60', badge: 'text-amber-700 bg-amber-100', label: 'Atenção' }
+  return { card: 'border-red-200 bg-red-50/50', badge: 'text-red-700 bg-red-100', label: 'Crítico' }
 }
 
 function periodKey(dateValue: string, useDay: boolean) {
@@ -139,7 +148,7 @@ export default function RelatoriosPage() {
   const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
   const [dataFim, setDataFim] = useState(initialPeriod.fim)
   const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
-  const [activeSection, setActiveSection] = useState<ReportSection>('vendas')
+  const [activeSection, setActiveSection] = useState<ReportSection>('geral')
   const [caixaChartMode, setCaixaChartMode] = useState<CaixaChartMode>('evolucao')
   const [loading, setLoading] = useState(true)
 
@@ -181,7 +190,7 @@ export default function RelatoriosPage() {
         .lte('created_at', fimCompleto),
       supabase
         .from('crediario')
-        .select('venda_id, entrada, saldo')
+        .select('venda_id, total, entrada, saldo, parcelas:crediario_parcelas(valor_pago, status)')
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('crediario_parcelas')
@@ -278,8 +287,12 @@ export default function RelatoriosPage() {
     const crediarioEntradaNoPeriodo = crediariosNoPeriodo.reduce((sum, c) => sum + (c.entrada ?? 0), 0)
     const crediarioRecebido = crediarioEntradaNoPeriodo + crediarioParcPagas
 
-    // A RECEBER = saldo atual (mantido pela service ao pagar parcelas) dos crediários abertos no período
-    const crediarioAVencer = crediariosNoPeriodo.reduce((sum, c) => sum + (c.saldo ?? 0), 0)
+    // A RECEBER = saldo calculado das parcelas (fonte da verdade, ignora campo armazenado)
+    const crediarioAVencer = crediariosNoPeriodo.reduce((sum, c) => {
+      const pagas = Array.isArray(c.parcelas) ? c.parcelas : []
+      const totalPagoCrediario = pagas.filter((p) => p.status === 'pago').reduce((s, p) => s + (p.valor_pago ?? 0), 0)
+      return sum + Math.max(0, c.total - c.entrada - totalPagoCrediario)
+    }, 0)
 
     return {
       faturamento,
@@ -495,6 +508,25 @@ export default function RelatoriosPage() {
     return { produtos, totalInvestido, totalRetorno, totalVendido, totalPotencial, pctRealizado }
   }, [estoqueDetalhado, vendas])
 
+  const saudeFinanceira = useMemo(() => {
+    const margemBruta = metrics.faturamento > 0 ? (metrics.lucroBruto / metrics.faturamento) * 100 : 0
+    const margemLiquida = metrics.entradas > 0 ? ((metrics.entradas - metrics.despesas) / metrics.entradas) * 100 : 0
+    const totalFaturado = metrics.faturamento + metrics.servicoRecebido
+    const crediarioPct = totalFaturado > 0 ? (metrics.crediarioAVencer / totalFaturado) * 100 : 0
+    const servicosPct = metrics.servicoValorTotal > 0 ? (metrics.servicoRecebido / metrics.servicoValorTotal) * 100 : 100
+    return {
+      margemBruta,
+      margemLiquida,
+      crediarioPct,
+      servicosPct,
+      totalFaturado,
+      saudeMargemBruta: healthClass(margemBruta >= 40, margemBruta >= 20),
+      saudeMargemLiquida: healthClass(margemLiquida >= 20, margemLiquida >= 10),
+      saudeCrediario: healthClass(crediarioPct <= 20, crediarioPct <= 40),
+      saudeServicos: healthClass(servicosPct >= 80, servicosPct >= 50),
+    }
+  }, [metrics])
+
   return (
     <div className="space-y-6">
       <PageHeader title="Relatorios" subtitle="Analises separadas por vendas, servicos, estoque, despesas e crediario" />
@@ -514,7 +546,7 @@ export default function RelatoriosPage() {
           />
 
           <div className="border-t border-gold-100 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-6 gap-2">
               {REPORT_SECTIONS.map((section) => (
                 <button
                   key={section.key}
@@ -543,6 +575,225 @@ export default function RelatoriosPage() {
         <div className="flex items-center justify-center h-48"><Spinner size={28} /></div>
       ) : (
         <>
+          {activeSection === 'geral' && (
+            <ReportBlock>
+              <div className="overflow-hidden rounded-xl border border-gold-100 bg-white shadow-sm">
+                <div className="border-b border-gold-100 bg-cream-50/70 px-5 py-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-[1px] text-gold-700">Painel principal</span>
+                      <h2 className="mt-1 font-serif text-2xl text-dark-800">Visão Geral</h2>
+                      <p className="text-sm text-dark-400 mt-1">Saúde financeira e operacional no período selecionado</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[620px]">
+                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Faturamento</p>
+                        <p className="mt-1 text-sm font-semibold text-dark-800">{formatMoney(saudeFinanceira.totalFaturado)}</p>
+                      </div>
+                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Resultado</p>
+                        <p className={`mt-1 text-sm font-semibold ${metrics.entradas - metrics.despesas >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          {formatMoney(metrics.entradas - metrics.despesas)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Vendas</p>
+                        <p className="mt-1 text-sm font-semibold text-dark-800">{metrics.vendasQtd}</p>
+                      </div>
+                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Alertas</p>
+                        <p className={`mt-1 text-sm font-semibold ${estoqueAtual.alertas > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                          {estoqueAtual.alertas}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-5 py-5">
+                  <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-dark-700">Indicadores de saúde</h3>
+                      <p className="text-xs text-dark-300 mt-0.5">Metas e sinais principais para leitura rápida da operação</p>
+                    </div>
+                    <span className="text-xs text-dark-300">Quanto mais próximo da meta, melhor o cenário</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className={`rounded-xl border p-4 ${saudeFinanceira.saudeMargemBruta.card}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Margem Bruta</p>
+                          <p className="mt-3 font-display text-3xl font-bold text-dark-700">
+                            {metrics.faturamento > 0 ? `${saudeFinanceira.margemBruta.toFixed(1)}%` : '—'}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${saudeFinanceira.saudeMargemBruta.badge}`}>
+                          {saudeFinanceira.saudeMargemBruta.label}
+                        </span>
+                      </div>
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                        <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.margemBruta))}%` }} />
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <p className="text-xs text-dark-400">{formatMoney(metrics.lucroBruto)} de lucro bruto</p>
+                        <p className="text-[11px] font-medium text-dark-400">Meta 40%</p>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-xl border p-4 ${saudeFinanceira.saudeMargemLiquida.card}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Margem Líquida</p>
+                          <p className="mt-3 font-display text-3xl font-bold text-dark-700">
+                            {metrics.entradas > 0 ? `${saudeFinanceira.margemLiquida.toFixed(1)}%` : '—'}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${saudeFinanceira.saudeMargemLiquida.badge}`}>
+                          {saudeFinanceira.saudeMargemLiquida.label}
+                        </span>
+                      </div>
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                        <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.margemLiquida))}%` }} />
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <p className="text-xs text-dark-400">{formatMoney(metrics.entradas - metrics.despesas)} de resultado</p>
+                        <p className="text-[11px] font-medium text-dark-400">Meta 20%</p>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-xl border p-4 ${saudeFinanceira.saudeCrediario.card}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Crediário em Aberto</p>
+                          <p className="mt-3 font-display text-3xl font-bold text-dark-700">
+                            {saudeFinanceira.totalFaturado > 0 ? `${saudeFinanceira.crediarioPct.toFixed(1)}%` : '—'}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${saudeFinanceira.saudeCrediario.badge}`}>
+                          {saudeFinanceira.saudeCrediario.label}
+                        </span>
+                      </div>
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                        <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.crediarioPct))}%` }} />
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <p className="text-xs text-dark-400">{formatMoney(metrics.crediarioAVencer)} a receber</p>
+                        <p className="text-[11px] font-medium text-dark-400">Meta 20%</p>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-xl border p-4 ${saudeFinanceira.saudeServicos.card}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Serviços Recebidos</p>
+                          <p className="mt-3 font-display text-3xl font-bold text-dark-700">
+                            {metrics.servicoValorTotal > 0 ? `${saudeFinanceira.servicosPct.toFixed(0)}%` : '—'}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${saudeFinanceira.saudeServicos.badge}`}>
+                          {saudeFinanceira.saudeServicos.label}
+                        </span>
+                      </div>
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                        <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.servicosPct))}%` }} />
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <p className="text-xs text-dark-400">{formatMoney(metrics.servicoRecebido)} de {formatMoney(metrics.servicoValorTotal)}</p>
+                        <p className="text-[11px] font-medium text-dark-400">Meta 80%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader title="Resumo por Área" />
+                  <div className="divide-y divide-gold-50">
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Vendas</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {metrics.vendasQtd} venda(s) · ticket médio {formatMoney(metrics.ticketMedio)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-dark-700">{formatMoney(metrics.faturamento)}</p>
+                        <p className="text-xs text-green-700 mt-0.5">lucro bruto {formatMoney(metrics.lucroBruto)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Serviços</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {metrics.servicosPagosQtd}/{metrics.servicosQtd} ordem(ns) recebida(s)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-dark-700">{formatMoney(metrics.servicoRecebido)}</p>
+                        <p className="text-xs text-green-700 mt-0.5">lucro {formatMoney(metrics.servicoLucro)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Crediário</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {metrics.crediarioParcelas} contrato(s) no período
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-dark-700">{formatMoney(metrics.crediarioRecebido)}</p>
+                        <p className="text-xs text-dark-400 mt-0.5">{formatMoney(metrics.crediarioAVencer)} a receber</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Caixa</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {formatMoney(metrics.entradas)} entradas · {formatMoney(metrics.despesas)} saídas
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${metrics.entradas - metrics.despesas >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          {formatMoney(metrics.entradas - metrics.despesas)}
+                        </p>
+                        <p className="text-xs text-dark-400 mt-0.5">resultado</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Estoque</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {estoqueAtual.unidades} un · {estoqueAtual.alertas} alerta(s)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${estoqueAtual.alertas > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                          {estoqueAtual.alertas > 0 ? `${estoqueAtual.alertas} em alerta` : 'Normalizado'}
+                        </p>
+                        <p className="text-xs text-dark-400 mt-0.5">{estoqueAtual.produtosCriticos} produto(s)</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <CardHeader title="Comparativo de Resultados" />
+                  <BarCompareReport
+                    data={[
+                      { name: 'Faturamento', value: saudeFinanceira.totalFaturado },
+                      { name: 'Custo', value: saudeFinanceira.totalFaturado - metrics.lucroBruto - metrics.servicoLucro },
+                      { name: 'Lucro Bruto', value: metrics.lucroBruto + metrics.servicoLucro },
+                      { name: 'Despesas', value: metrics.despesas },
+                      { name: 'Resultado', value: metrics.entradas - metrics.despesas },
+                    ]}
+                  />
+                </Card>
+              </div>
+            </ReportBlock>
+          )}
+
           {activeSection === 'vendas' && (
             <ReportBlock>
               <SectionTitle title="Vendas" subtitle="Recebimentos de vendas fora do crediario; parcelas ficam na aba Crediario" />

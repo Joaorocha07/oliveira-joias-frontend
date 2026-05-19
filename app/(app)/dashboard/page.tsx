@@ -314,7 +314,7 @@ export default function DashboardPage() {
           changeType="neutral"
         />
         <MetricCard
-          label="Saldo em Caixa"
+          label="Resultado do Período"
           value={formatMoney(state.saldoCaixa)}
           changeType={state.saldoCaixa >= 0 ? 'up' : 'down'}
         />
@@ -328,31 +328,73 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader
-          title="Resumo Geral do Periodo"
-          subtitle="Vendas, servicos, caixa, crediario e estoque em uma visao unica"
+          title="Resumo Financeiro do Período"
+          subtitle="Entradas, despesas, resultado e indicadores operacionais consolidados"
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="rounded-lg border border-gold-100 bg-cream-50 p-4">
-            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Movimento Total</p>
-            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{formatMoney(movimentoTotal)}</p>
-            <p className="text-xs text-dark-300 mt-1">Vendas recebidas + servicos recebidos</p>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          <div className="rounded-xl border border-gold-200 bg-cream-50 p-4">
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Movimento Total</p>
+            <p className="font-display text-2xl font-semibold text-dark-700 mt-2">{formatMoney(movimentoTotal)}</p>
+            <p className="text-xs text-dark-300 mt-1">Vendas + serviços recebidos</p>
           </div>
-          <div className="rounded-lg border border-gold-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Caixa</p>
-            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{formatMoney(state.entradasPeriodo - state.saidasPeriodo)}</p>
+          <div className="rounded-xl border border-green-100 bg-green-50/50 p-4">
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Entradas</p>
+            <p className="font-display text-2xl font-semibold text-green-700 mt-2">{formatMoney(state.entradasPeriodo)}</p>
+            <p className="text-xs text-dark-300 mt-1">Lançamentos recebidos</p>
+          </div>
+          <div className="rounded-xl border border-red-100 bg-red-50/50 p-4">
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Despesas</p>
+            <p className="font-display text-2xl font-semibold text-red-600 mt-2">{formatMoney(state.saidasPeriodo)}</p>
+            <p className="text-xs text-dark-300 mt-1">Saídas do período</p>
+          </div>
+          <div className={`rounded-xl border p-4 ${state.saldoCaixa >= 0 ? 'border-green-200 bg-green-50/60' : 'border-red-200 bg-red-50/50'}`}>
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Resultado</p>
+            <p className={`font-display text-2xl font-semibold mt-2 ${state.saldoCaixa >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              {formatMoney(state.saldoCaixa)}
+            </p>
             <p className="text-xs text-dark-300 mt-1">
-              {formatMoney(state.entradasPeriodo)} entradas / {formatMoney(state.saidasPeriodo)} saidas
+              {movimentoTotal > 0 ? `Margem ${(state.saldoCaixa / movimentoTotal * 100).toFixed(1)}%` : 'Sem faturamento'}
             </p>
           </div>
-          <div className="rounded-lg border border-gold-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Operacao</p>
-            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{state.servicosAndamento}</p>
-            <p className="text-xs text-dark-300 mt-1">servico(s) em andamento</p>
+        </div>
+
+        {state.entradasPeriodo > 0 && (
+          <div className="mb-5">
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="font-medium text-green-700">{formatMoney(state.entradasPeriodo)} entradas</span>
+              <span className="font-medium text-red-600">{formatMoney(state.saidasPeriodo)} despesas</span>
+            </div>
+            <div className="h-2 bg-red-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full transition-all duration-700"
+                style={{ width: `${Math.min(100, (state.entradasPeriodo / (state.entradasPeriodo + state.saidasPeriodo)) * 100)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-dark-300 mt-1">
+              {((state.entradasPeriodo / (state.entradasPeriodo + state.saidasPeriodo)) * 100).toFixed(0)}% das movimentações são entradas
+            </p>
           </div>
-          <div className="rounded-lg border border-gold-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[1px] text-dark-400 font-semibold">Alertas</p>
-            <p className="font-display text-2xl font-semibold text-dark-600 mt-2">{state.estoqueCriticoQtd}</p>
-            <p className="text-xs text-dark-300 mt-1">item(ns) com estoque critico</p>
+        )}
+
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gold-100">
+          <div>
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Crediário Pendente</p>
+            <p className="text-base font-semibold text-dark-700 mt-1">{formatMoney(state.crediarioAbertoValor)}</p>
+            <p className="text-xs text-dark-300 mt-0.5">{state.crediarioAberto} crediário(s) em aberto</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Serviços Ativos</p>
+            <p className="text-base font-semibold text-dark-700 mt-1">{state.servicosAndamento}</p>
+            <p className="text-xs text-dark-300 mt-0.5">em andamento no período</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[1px] text-dark-400 font-semibold">Estoque Crítico</p>
+            <p className={`text-base font-semibold mt-1 ${state.estoqueCriticoQtd > 0 ? 'text-red-600' : 'text-green-700'}`}>
+              {state.estoqueCriticoQtd > 0 ? `${state.estoqueCriticoQtd} item(ns)` : 'Sem alertas'}
+            </p>
+            <p className="text-xs text-dark-300 mt-0.5">
+              {state.estoqueCriticoQtd > 0 ? 'necessita reposição' : 'estoque normalizado'}
+            </p>
           </div>
         </div>
       </Card>

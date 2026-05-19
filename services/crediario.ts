@@ -23,16 +23,25 @@ export async function pagarParcela(
 
   if (parcelaError) return { error: parcelaError.message }
 
-  // Update crediário saldo
+  // Recompute saldo from source of truth — parcela already updated above
   const { data: crediario, error: fetchError } = await supabase
     .from('crediario')
-    .select('saldo, status')
+    .select('total, entrada, status')
     .eq('id', crediarioId)
     .single()
 
   if (fetchError) return { error: fetchError.message }
 
-  const novoSaldo = Math.max(0, crediario.saldo - data.valor_pago)
+  const { data: parcelasPagas, error: parcelasError } = await supabase
+    .from('crediario_parcelas')
+    .select('valor_pago')
+    .eq('crediario_id', crediarioId)
+    .eq('status', 'pago')
+
+  if (parcelasError) return { error: parcelasError.message }
+
+  const totalPago = (parcelasPagas ?? []).reduce((sum, p) => sum + (p.valor_pago ?? 0), 0)
+  const novoSaldo = Math.max(0, crediario.total - crediario.entrada - totalPago)
   const novoStatus = novoSaldo <= 0 ? 'quitado' : crediario.status
 
   const { error: updateError } = await supabase
@@ -74,7 +83,7 @@ export async function updateCrediario(
 
   const { data: crediario, error: fetchError } = await supabase
     .from('crediario')
-    .select('total, cliente_id, created_at')
+    .select('total, cliente_id, created_at, venda:vendas(data_venda)')
     .eq('id', crediarioId)
     .single()
 
@@ -90,7 +99,14 @@ export async function updateCrediario(
 
   if (deleteError) return { error: deleteError.message }
 
-  const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, new Date(crediario.created_at))
+  const crediarioTyped = crediario as unknown as {
+    total: number; cliente_id: string; created_at: string
+    venda: { data_venda: string } | { data_venda: string }[] | null
+  }
+  const vendaRaw = crediarioTyped.venda
+  const dataVenda = (Array.isArray(vendaRaw) ? vendaRaw[0]?.data_venda : vendaRaw?.data_venda) ?? null
+  const dataReferencia = dataVenda ? new Date(dataVenda) : new Date(crediario.created_at)
+  const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, dataReferencia)
   const { error: insertError } = await supabase
     .from('crediario_parcelas')
     .insert(

@@ -19,13 +19,17 @@ import type { CrediarioParcela, CrediarioStatus } from '@/types'
 
 // ── Computed helpers ──────────────────────────────────────────────
 
-function computeStatus(c: CrediarioRow): CrediarioStatus {
-  if (c.status === 'cancelado') return 'cancelado'
+function computeSaldo(c: CrediarioRow): number {
   const parcelas = c.parcelas ?? []
   const totalPago = parcelas.filter((p) => p.status === 'pago').reduce((sum, p) => sum + p.valor_pago, 0)
-  const saldoAtual = Math.max(0, c.total - c.entrada - totalPago)
+  return Math.max(0, c.total - c.entrada - totalPago)
+}
+
+function computeStatus(c: CrediarioRow): CrediarioStatus {
+  if (c.status === 'cancelado') return 'cancelado'
+  const saldoAtual = computeSaldo(c)
   if (saldoAtual <= 0) return 'quitado'
-  const atrasada = parcelas.some(
+  const atrasada = (c.parcelas ?? []).some(
     (p) => p.status !== 'pago' && p.status !== 'cancelado' && parcelaVencida(p.data_vencimento),
   )
   return atrasada ? 'vencido' : 'em_dia'
@@ -214,7 +218,7 @@ export default function CrediarioPage() {
                     </div>
                     <div className="flex items-center justify-between mt-2 text-sm">
                       <span className="text-xs text-dark-400">Saldo</span>
-                      <span className="font-medium text-dark-700">{formatMoney(c.saldo)}</span>
+                      <span className="font-medium text-dark-700">{formatMoney(computeSaldo(c))}</span>
                     </div>
                     <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gold-50">
                       <ParcelasBadge c={c} />
@@ -257,7 +261,7 @@ export default function CrediarioPage() {
                         </td>
                         <td className="hidden lg:table-cell px-5 py-3 text-dark-400">{formatMoney(c.total)}</td>
                         <td className="hidden lg:table-cell px-5 py-3 text-dark-400">{formatMoney(c.entrada)}</td>
-                        <td className="px-5 py-3 font-medium text-dark-700">{formatMoney(c.saldo)}</td>
+                        <td className="px-5 py-3 font-medium text-dark-700">{formatMoney(computeSaldo(c))}</td>
                         <td className="px-5 py-3">
                           <ParcelasBadge c={c} />
                         </td>
