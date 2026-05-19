@@ -109,7 +109,7 @@ export async function createVenda(
 
     if (crediarioError) return { error: crediarioError.message }
 
-    const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, new Date(data.data_venda))
+    const datas = gerarDatasParcelas(data.num_parcelas, data.dia_vencimento, new Date(data.data_venda), data.primeira_parcela_proximo_mes)
     const { error: parcelasError } = await supabase
       .from('crediario_parcelas')
       .insert(

@@ -466,7 +466,7 @@ export default function RelatoriosPage() {
                   {charts.vendasProduto.length === 0 ? (
                     <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas no periodo" />
                   ) : (
-                    <PieReport data={charts.vendasProduto} />
+                    <ProductSalesReport data={charts.vendasProduto} />
                   )}
                 </Card>
                 <Card>
@@ -782,6 +782,102 @@ export default function RelatoriosPage() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+function ProductSalesReport({ data }: { data: CategoriaData[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+  const topProducts = data.slice(0, 7)
+  const visibleTotal = topProducts.reduce((sum, item) => sum + item.value, 0)
+  const chartData = visibleTotal < total
+    ? [...topProducts.slice(0, 5), { name: 'Outros', value: total - topProducts.slice(0, 5).reduce((sum, item) => sum + item.value, 0) }]
+    : topProducts.slice(0, 5)
+  const leadingProduct = topProducts[0]
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-lg border border-gold-100 bg-cream-50 px-4 py-3">
+          <p className="text-[11px] font-medium uppercase text-dark-300">Total vendido</p>
+          <p className="mt-1 text-lg font-bold text-dark-700">{formatMoney(total)}</p>
+        </div>
+        <div className="rounded-lg border border-gold-100 bg-white px-4 py-3">
+          <p className="text-[11px] font-medium uppercase text-dark-300">Produtos</p>
+          <p className="mt-1 text-lg font-bold text-dark-700">{data.length}</p>
+        </div>
+        <div className="rounded-lg border border-gold-100 bg-white px-4 py-3">
+          <p className="text-[11px] font-medium uppercase text-dark-300">Maior venda</p>
+          <p className="mt-1 truncate text-sm font-semibold text-dark-700" title={leadingProduct.name}>
+            {leadingProduct.name}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[160px_1fr] gap-5 items-center">
+        <div className="h-40">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={46}
+                outerRadius={70}
+                paddingAngle={2}
+                stroke="#FFFFFF"
+                strokeWidth={2}
+              >
+                {chartData.map((_, index) => (
+                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => formatMoney(Number(value))} contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="space-y-3">
+          {topProducts.map((item, index) => {
+            const percentage = total > 0 ? (item.value / total) * 100 : 0
+
+            return (
+              <div key={item.name} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                    />
+                    <span className="truncate text-xs font-medium text-dark-600" title={item.name}>{item.name}</span>
+                  </div>
+                  <div className="flex flex-shrink-0 items-baseline gap-2">
+                    <span className="text-xs font-semibold text-dark-700">{formatMoney(item.value)}</span>
+                    <span className="w-10 text-right text-[11px] text-dark-300">{percentage.toFixed(0)}%</span>
+                  </div>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-cream-200">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.max(3, percentage)}%`,
+                      backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+
+          {data.length > topProducts.length && (
+            <div className="rounded-lg bg-cream-50 px-3 py-2 text-xs text-dark-400">
+              +{data.length - topProducts.length} produto(s) no restante das vendas
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

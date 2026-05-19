@@ -18,7 +18,8 @@
       "Bash(dir *)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "mcp__plugin_context-mode_context-mode__ctx_search",
-      "mcp__plugin_context-mode_context-mode__ctx_execute_file"
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "Skill(vercel-plugin:nextjs)"
     ]
   }
 }

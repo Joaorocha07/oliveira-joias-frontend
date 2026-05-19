@@ -36,6 +36,7 @@ export const vendaSchema = z
     num_parcelas: z.number().int().min(1).max(60),
     entrada: z.number().min(0),
     dia_vencimento: z.number().int().min(1).max(28),
+    primeira_parcela_proximo_mes: z.boolean(),
   })
   .superRefine((data, ctx) => {
     if (data.forma_pagamento === 'crediario' && !data.cliente_id) {

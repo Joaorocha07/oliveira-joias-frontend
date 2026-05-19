@@ -80,9 +80,11 @@ Componente → Service (/services/*.ts) → Supabase Client (/lib/supabase.ts)
 
 Services retornam `{ data: T | null, error: string | null }`. Nunca retornam throw — erros são capturados e convertidos para string em português.
 
+Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`. Rotas como `clientes`, `fornecedores`, `caixa`, `vendedores` ainda não têm service — ao criar funcionalidades nessas áreas, criar o service correspondente em `/services/`.
+
 ### Autenticação
 
-`AuthContext` (`/context/AuthContext.tsx`) hidrata sessão Supabase + profile do usuário. O hook `useAuth()` expõe `user`, `profile`, `loading`, `signOut`. Roles: `admin`, `vendedor`, `caixa`, `visualizador`.
+`AuthContext` (`/context/auth-context.tsx`) hidrata sessão Supabase + profile do usuário. O hook `useAuth()` expõe `user`, `profile`, `loading`, `signOut`. Roles: `admin`, `vendedor`, `caixa`, `visualizador`.
 
 ### Estado global
 
@@ -135,6 +137,8 @@ Schemas Zod ficam em `/schemas/`. Types de domínio ficam em `/types/index.ts`. 
 
 **Status de venda:** `orcamento`, `pendente`, `pago`, `crediario`, `cancelado`
 
+O módulo de vendas inclui **venda livre** (venda sem cadastro de cliente vinculado).
+
 **Status de parcela (crediário):** `pendente`, `pago`, `vencido`, `cancelado`
 
 **Categorias de produto:** `anel`, `colar`, `brinco`, `pulseira`, `alianca`, `pingente`, `relogio`, `kit`, `outro`
@@ -153,6 +157,6 @@ Sempre usar esses valores exatos ao criar queries, filtros e selects — corresp
 
 **Services:** Toda integração com Supabase fica em `/services`. Nunca fazer queries Supabase dentro de componentes.
 
-**Tailwind CSS v4:** Usar PostCSS v4. Fonte padrão: DM Sans (`--font-dm-sans`). Cores da marca: verde `#5B8C5B` (sucesso) e vermelho `#C75B5B` (erro).
+**Tailwind CSS v4:** Usar PostCSS v4. Fonte padrão: DM Sans (`--font-dm-sans`). Cores da marca: verde `#5B8C5B` (sucesso) e vermelho `#C75B5B` (erro). Não existe `tailwind.config.ts` — configuração fica em `globals.css` (tokens CSS) e `postcss.config.mjs`.
 
 **Antes de criar algo novo:** Verificar se já existe componente ou hook reutilizável em `/components/ui`, `/hooks` ou `/services`.

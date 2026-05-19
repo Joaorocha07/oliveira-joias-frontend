@@ -193,12 +193,13 @@ export function crediarioStatusVariant(status: CrediarioStatus): BadgeVariant {
 export function gerarDatasParcelas(
   numParcelas: number,
   diaVencimento: number,
-  dataBase?: Date
+  dataBase?: Date,
+  forcarProximoMes = false
 ): string[] {
   const base = dataBase || new Date()
   const dates: string[] = []
-  // Start from current month if due day hasn't passed yet; otherwise next month
-  const startOffset = base.getDate() < diaVencimento ? 0 : 1
+  // Este mês se diaVencimento >= dia da base; próximo mês se já passou ou forçado
+  const startOffset = !forcarProximoMes && base.getDate() <= diaVencimento ? 0 : 1
   for (let i = 0; i < numParcelas; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() + startOffset + i, diaVencimento)
     dates.push(format(d, 'yyyy-MM-dd'))

@@ -14,7 +14,7 @@ import { vendaSchema, type VendaFormData } from '@/schemas/venda'
 import { createVenda } from '@/services/vendas'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
-import { today, formatMoney, FORMA_PAGAMENTO_LABEL } from '@/utils'
+import { today, formatMoney, FORMA_PAGAMENTO_LABEL, gerarDatasParcelas, formatDate } from '@/utils'
 import type { FormaPagamento, Produto, ProdutoVariacao, OrigemCliente } from '@/types'
 
 interface ModalNovaVendaProps {
@@ -76,6 +76,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       num_parcelas: 1,
       entrada: 0,
       dia_vencimento: 10,
+      primeira_parcela_proximo_mes: new Date().getDate() > 10,
     },
   })
 
@@ -86,6 +87,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   const watchedDesconto = watch('desconto')
   const watchedFormaPagamento = watch('forma_pagamento')
   const watchedValorLivre = watch('valor_livre')
+  const watchedDiaVencimento = watch('dia_vencimento')
+  const watchedDataVenda = watch('data_venda')
+  const watchedPrimProxMes = watch('primeira_parcela_proximo_mes')
   const isLivre = watchedTipo === 'livre'
   const isCrediario = watchedFormaPagamento === 'crediario'
 
@@ -115,6 +119,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         num_parcelas: 1,
         entrada: 0,
         dia_vencimento: 10,
+        primeira_parcela_proximo_mes: new Date().getDate() > 10,
       })
       setItemProdutos({})
       setClienteDisplayValue(undefined)
@@ -129,6 +134,12 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         })
     }
   }, [open, reset])
+
+  useEffect(() => {
+    if (!isCrediario) return
+    const base = watchedDataVenda ? new Date(watchedDataVenda + 'T00:00:00') : new Date()
+    setValue('primeira_parcela_proximo_mes', base.getDate() > (watchedDiaVencimento ?? 10))
+  }, [watchedDiaVencimento, watchedDataVenda, isCrediario, setValue])
 
   const watchedOrigemId = watch('origem_id')
   const origemSelecionada = origens.find((o) => o.id === watchedOrigemId)
@@ -651,14 +662,47 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
               {(() => {
                 const entrada = watch('entrada') ?? 0
                 const numParcelas = watch('num_parcelas') ?? 1
+                const diaVenc = watchedDiaVencimento ?? 10
+                const proxMes = watchedPrimProxMes ?? false
                 const saldo = Math.max(0, total - entrada)
                 const valorParcela = numParcelas > 0 ? round2(saldo / numParcelas) : 0
+                const dataBase = watchedDataVenda ? new Date(watchedDataVenda + 'T00:00:00') : new Date()
+                const datas = diaVenc >= 1 && diaVenc <= 28
+                  ? gerarDatasParcelas(numParcelas, diaVenc, dataBase, proxMes)
+                  : []
+                const proxVencDate = datas[0]
                 return (
-                  <div className="text-sm text-dark-500">
-                    Saldo a parcelar: <strong>{formatMoney(saldo)}</strong>
-                    {valorParcela > 0 && (
-                      <> · {numParcelas}x de <strong>{formatMoney(valorParcela)}</strong></>
-                    )}
+                  <div className="flex flex-col gap-2">
+                    <div className="text-sm text-dark-500">
+                      Saldo a parcelar: <strong>{formatMoney(saldo)}</strong>
+                      {valorParcela > 0 && (
+                        <> · {numParcelas}x de <strong>{formatMoney(valorParcela)}</strong></>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-xs text-dark-400">1ª parcela:</span>
+                      <div className="flex rounded-lg border border-gold-200 overflow-hidden text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setValue('primeira_parcela_proximo_mes', false)}
+                          className={`px-3 py-1 transition-colors ${!proxMes ? 'bg-gold-100 text-dark-700 font-medium' : 'text-dark-400 hover:bg-gold-50'}`}
+                        >
+                          Este mês
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setValue('primeira_parcela_proximo_mes', true)}
+                          className={`px-3 py-1 border-l border-gold-200 transition-colors ${proxMes ? 'bg-gold-100 text-dark-700 font-medium' : 'text-dark-400 hover:bg-gold-50'}`}
+                        >
+                          Próximo mês
+                        </button>
+                      </div>
+                      {proxVencDate && (
+                        <span className="text-xs text-dark-500">
+                          vence em <strong className="text-dark-700">{formatDate(proxVencDate)}</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })()}
