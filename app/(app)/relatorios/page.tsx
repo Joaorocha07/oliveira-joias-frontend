@@ -711,7 +711,7 @@ export default function RelatoriosPage() {
           />
 
           <div className="border-t border-gold-100 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2">
               {REPORT_SECTIONS.map((section) => (
                 <button
                   key={section.key}
@@ -744,13 +744,13 @@ export default function RelatoriosPage() {
             <ReportBlock>
               <div className="overflow-hidden rounded-xl border border-gold-100 bg-white shadow-sm">
                 <div className="border-b border-gold-100 bg-cream-50/70 px-5 py-4">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="space-y-4">
                     <div>
                       <span className="text-[11px] font-bold uppercase tracking-[1px] text-gold-700">Painel principal</span>
                       <h2 className="mt-1 font-serif text-2xl text-dark-800">Visão Geral</h2>
                       <p className="text-sm text-dark-400 mt-1">Saúde financeira e operacional no período selecionado</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[620px]">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Faturamento</p>
                         <p className="mt-1 text-sm font-semibold text-dark-800">{formatMoney(saudeFinanceira.totalFaturado)}</p>
