@@ -5,20 +5,22 @@ import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
   PeriodFilter, getPeriodRange, Button, type PeriodPreset,
 } from '@/components/ui'
-import { formatMoney, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL } from '@/utils'
-import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus } from '@/types'
+import { formatMoney, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
+import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
+import { listarContasPagar } from '@/services/contas-pagar'
 
 const CHART_COLORS = ['#B8962E', '#C49A35', '#D4AF5A', '#EBD9A4', '#9A7B22', '#7A5C10', '#5C4208', '#3D2B05']
 
-type ReportSection = 'geral' | 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario'
+type ReportSection = 'geral' | 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario' | 'leads' | 'contas'
 type CaixaChartMode = 'evolucao' | 'categorias' | 'lancamentos'
+type VendasSubTab = 'todas' | 'normal' | 'livre'
 
 const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[] = [
   { key: 'geral', label: 'Visão Geral', subtitle: 'Saúde da empresa' },
@@ -27,10 +29,18 @@ const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[]
   { key: 'servicos', label: 'Servicos', subtitle: 'Ordens e receita' },
   { key: 'estoque', label: 'Estoque', subtitle: 'Movimentacoes e alertas' },
   { key: 'crediario', label: 'Crediario', subtitle: 'Parcelas e recebimentos' },
+  { key: 'leads', label: 'Leads', subtitle: 'Origem de clientes' },
+  { key: 'contas', label: 'Contas a Pagar', subtitle: 'Vencimentos e pagamentos' },
 ]
 
 interface CategoriaData { name: string; value: number }
 interface SerieData { periodo: string; entradas: number; despesas: number }
+
+interface OrigemCliente {
+  id: string
+  nome: string
+  ativo: boolean
+}
 
 interface VendaRelatorio {
   id: string
@@ -40,6 +50,8 @@ interface VendaRelatorio {
   forma_pagamento: string
   descricao_livre: string | null
   custo_livre: number | null
+  origem_id: string | null
+  origem_outro: string | null
   itens?: {
     produto_id: string | null
     subtotal: number
@@ -67,6 +79,8 @@ interface ServicoRelatorio {
   custo_estimado: number | null
   pago: boolean
   data_entrada: string
+  origem_id: string | null
+  origem_outro: string | null
 }
 
 interface MovimentoEstoqueRelatorio {
@@ -144,6 +158,8 @@ export default function RelatoriosPage() {
   const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
   const [activeSection, setActiveSection] = useState<ReportSection>('geral')
   const [caixaChartMode, setCaixaChartMode] = useState<CaixaChartMode>('evolucao')
+  const [vendasSubTab, setVendasSubTab] = useState<VendasSubTab>('todas')
+  const [combinarTipos, setCombinarTipos] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [vendas, setVendas] = useState<VendaRelatorio[]>([])
@@ -154,16 +170,18 @@ export default function RelatoriosPage() {
   const [crediarioParcelasPagas, setCrediarioParcelasPagas] = useState<CrediarioParcelaPaga[]>([])
   const [estoqueAtual, setEstoqueAtual] = useState({ unidades: 0, alertas: 0, produtosCriticos: 0 })
   const [estoqueDetalhado, setEstoqueDetalhado] = useState<VwEstoqueAtual[]>([])
+  const [origensCliente, setOrigensCliente] = useState<OrigemCliente[]>([])
+  const [contasPagar, setContasPagar] = useState<ContaPagar[]>([])
 
   const loadRelatorios = useCallback(async () => {
     setLoading(true)
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult] = await Promise.all([
+    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult] = await Promise.all([
       supabase
         .from('vendas')
-        .select('id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+        .select('id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, origem_id, origem_outro, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim)
         .not('status', 'eq', 'cancelado'),
@@ -174,7 +192,7 @@ export default function RelatoriosPage() {
         .lte('data_lancamento', dataFim),
       supabase
         .from('servicos')
-        .select('status, tipo, valor, custo_estimado, pago, data_entrada')
+        .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro')
         .gte('data_entrada', dataInicio)
         .lte('data_entrada', dataFim),
       supabase
@@ -195,6 +213,10 @@ export default function RelatoriosPage() {
       supabase
         .from('vw_estoque_atual')
         .select('produto_id, produto_nome, categoria, custo, preco_venda, estoque_atual, status_estoque'),
+      supabase
+        .from('origens_cliente')
+        .select('id, nome, ativo')
+        .eq('ativo', true),
     ])
 
     setVendas(((vendasResult.data ?? []) as unknown) as VendaRelatorio[])
@@ -203,6 +225,10 @@ export default function RelatoriosPage() {
     setMovimentosEstoque(((movimentosResult.data ?? []) as unknown) as MovimentoEstoqueRelatorio[])
     setCrediariosData(((crediariosResult.data ?? []) as unknown) as CrediarioRow[])
     setCrediarioParcelasPagas(((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[])
+    setOrigensCliente((origensResult.data ?? []) as OrigemCliente[])
+
+    const { data: contasData } = await listarContasPagar()
+    setContasPagar(contasData)
 
     const estoqueRows = (estoqueResult.data ?? []) as VwEstoqueAtual[]
     const produtosEmAlerta = new Set(estoqueRows.filter((row) => row.status_estoque !== 'normal').map((row) => row.produto_id))
@@ -224,7 +250,6 @@ export default function RelatoriosPage() {
   const metrics = useMemo(() => {
     const vendasRecebidas = vendas.filter((venda) => venda.forma_pagamento !== 'crediario')
     const lancamentosFinanceiros = lancamentos
-    // Crediários cujas vendas caem no período (vendas já filtradas por período)
     const vendaIdsNoPeriodo = new Set(vendas.map((v) => v.id))
     const crediariosNoPeriodo = crediariosData.filter((c) => vendaIdsNoPeriodo.has(c.venda_id))
     const crediarioParcPagas = crediarioParcelasPagas.reduce((s, p) => s + (p.valor_pago ?? 0), 0)
@@ -260,11 +285,8 @@ export default function RelatoriosPage() {
 
     const servicosAtivos = servicos.filter((s) => s.status !== 'cancelado')
     const servicoValorTotal = servicosAtivos.reduce((sum, s) => sum + (s.valor ?? 0), 0)
-    const servicoRecebido = servicosAtivos
-      .filter((s) => s.pago)
-      .reduce((sum, s) => sum + (s.valor ?? 0), 0)
-    const servicoSaidas = servicosAtivos
-      .reduce((sum, s) => sum + (s.custo_estimado ?? 0), 0)
+    const servicoRecebido = servicosAtivos.filter((s) => s.pago).reduce((sum, s) => sum + (s.valor ?? 0), 0)
+    const servicoSaidas = servicosAtivos.reduce((sum, s) => sum + (s.custo_estimado ?? 0), 0)
     const servicoLucro = servicoRecebido - servicoSaidas
     const servicosQtd = servicos.length
     const servicosPagos = servicosAtivos.filter((s) => s.pago)
@@ -277,11 +299,9 @@ export default function RelatoriosPage() {
     const estoqueEntradas = movimentosEstoque.filter((item) => item.tipo === 'entrada' || item.tipo === 'devolucao').reduce((sum, item) => sum + item.quantidade, 0)
     const estoqueSaidas = movimentosEstoque.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.quantidade, 0)
 
-    // RECEBIDO = entradas do período + parcelas pagas no período (pré-computado em state)
     const crediarioEntradaNoPeriodo = crediariosNoPeriodo.reduce((sum, c) => sum + (c.entrada ?? 0), 0)
     const crediarioRecebido = crediarioEntradaNoPeriodo + crediarioParcPagas
 
-    // A RECEBER = saldo calculado das parcelas (fonte da verdade, ignora campo armazenado)
     const crediarioAVencer = crediariosNoPeriodo.reduce((sum, c) => {
       const pagas = Array.isArray(c.parcelas) ? c.parcelas : []
       const totalPagoCrediario = pagas.filter((p) => p.status === 'pago').reduce((s, p) => s + (p.valor_pago ?? 0), 0)
@@ -316,6 +336,48 @@ export default function RelatoriosPage() {
       crediarioParcelas: crediariosNoPeriodo.length,
     }
   }, [lancamentos, movimentosEstoque, crediariosData, crediarioParcelasPagas, servicos, vendas])
+
+  const contasMetrics = useMemo(() => {
+    const todayStr = today()
+    const mesAtual = todayStr.slice(0, 7)
+
+    const pendentes = contasPagar.filter(c => c.status === 'pendente')
+    const vencidas = pendentes.filter(c => c.data_vencimento < todayStr)
+    const pagas = contasPagar.filter(c => c.status === 'pago')
+    const pagasNoPeriodo = pagas.filter(c => c.data_pagamento && c.data_pagamento >= dataInicio && c.data_pagamento <= dataFim)
+    const fixas = contasPagar.filter(c => c.fixa && c.status !== 'cancelado')
+    const variaveis = contasPagar.filter(c => !c.fixa && c.status !== 'cancelado')
+
+    const byMes: Record<string, { pendente: number; pago: number }> = {}
+    contasPagar.filter(c => c.status !== 'cancelado').forEach(c => {
+      const mes = c.data_vencimento.slice(0, 7)
+      byMes[mes] ??= { pendente: 0, pago: 0 }
+      if (c.status === 'pago') byMes[mes].pago += c.valor
+      else byMes[mes].pendente += c.valor
+    })
+    const evolucao = Object.entries(byMes)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mes, vals]) => {
+        const [y, m] = mes.split('-')
+        return { periodo: `${m}/${y.slice(2)}`, ...vals }
+      })
+
+    return {
+      totalPendente: pendentes.reduce((s, c) => s + c.valor, 0),
+      qtdVencidas: vencidas.length,
+      valorVencido: vencidas.reduce((s, c) => s + c.valor, 0),
+      totalPagasNoPeriodo: pagasNoPeriodo.reduce((s, c) => s + c.valor, 0),
+      qtdPagasNoPeriodo: pagasNoPeriodo.length,
+      totalFixas: fixas.reduce((s, c) => s + c.valor, 0),
+      totalVariaveis: variaveis.reduce((s, c) => s + c.valor, 0),
+      qtdFixas: fixas.length,
+      qtdVariaveis: variaveis.length,
+      vencidas,
+      pendentes,
+      pagasNoPeriodo,
+      evolucao,
+    }
+  }, [contasPagar, dataInicio, dataFim])
 
   const charts = useMemo(() => {
     const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
@@ -521,6 +583,115 @@ export default function RelatoriosPage() {
     }
   }, [metrics])
 
+  const vendasPorTipo = useMemo(() => {
+    const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
+
+    const vendasNormal = vendas.filter((v) => v.tipo === 'normal')
+    const vendasLivre = vendas.filter((v) => v.tipo === 'livre')
+
+    const normalRecebidas = vendasNormal.filter((v) => v.forma_pagamento !== 'crediario')
+    const livreRecebidas = vendasLivre.filter((v) => v.forma_pagamento !== 'crediario')
+
+    const faturamentoNormal = normalRecebidas.reduce((sum, v) => sum + (v.total ?? 0), 0)
+    const faturamentoLivre = livreRecebidas.reduce((sum, v) => sum + (v.total ?? 0), 0)
+
+    const livreCrediaridas = vendasLivre.filter((v) => v.forma_pagamento === 'crediario')
+    const livreAVista = vendasLivre.filter((v) => v.forma_pagamento !== 'crediario')
+    const livreCrediariadoValor = livreCrediaridas.reduce((sum, v) => sum + (v.total ?? 0), 0)
+    const livreAVistaValor = livreAVista.reduce((sum, v) => sum + (v.total ?? 0), 0)
+
+    // Side-by-side por período
+    const tipoSerieMap: Record<string, { periodo: string; normal: number; livre: number }> = {}
+    ;[...vendasNormal, ...vendasLivre].forEach((v) => {
+      const key = periodKey(v.data_venda, useDay)
+      tipoSerieMap[key] ??= { periodo: key, normal: 0, livre: 0 }
+    })
+    vendasNormal.forEach((v) => { tipoSerieMap[periodKey(v.data_venda, useDay)].normal += v.total ?? 0 })
+    vendasLivre.forEach((v) => { tipoSerieMap[periodKey(v.data_venda, useDay)].livre += v.total ?? 0 })
+
+    const livreByDescricao: Record<string, number> = {}
+    vendasLivre.forEach((v) => {
+      const label = v.descricao_livre || 'Venda Livre'
+      livreByDescricao[label] = (livreByDescricao[label] ?? 0) + (v.total ?? 0)
+    })
+
+    const custoNormal = vendasNormal.reduce((sum, v) => sum + getVendaCusto(v), 0)
+    const custoLivre = vendasLivre.reduce((sum, v) => sum + getVendaCusto(v), 0)
+
+    return {
+      faturamentoNormal,
+      faturamentoLivre,
+      qtdNormal: vendasNormal.length,
+      qtdLivre: vendasLivre.length,
+      livreCrediariadoValor,
+      livreAVistaValor,
+      livreCrediariadasQtd: livreCrediaridas.length,
+      livreAVistaQtd: livreAVista.length,
+      tipoSerie: Object.values(tipoSerieMap),
+      tickMedioNormal: normalRecebidas.length > 0 ? faturamentoNormal / normalRecebidas.length : 0,
+      tickMedioLivre: livreRecebidas.length > 0 ? faturamentoLivre / livreRecebidas.length : 0,
+      lucroNormal: faturamentoNormal - custoNormal,
+      lucroLivre: faturamentoLivre - custoLivre,
+      livreByDescricao,
+    }
+  }, [vendas, dataFim, dataInicio])
+
+  const analiseLeads = useMemo(() => {
+    const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
+    const origemById = new Map(origensCliente.map((o) => [o.id, o.nome]))
+
+    const origemCount: Record<string, { nome: string; count: number; valor: number }> = {}
+
+    const processOrigem = (origemId: string | null, origemOutro: string | null, valor: number) => {
+      let nome: string | null = null
+      if (origemId) nome = origemById.get(origemId) ?? 'Desconhecida'
+      else if (origemOutro) nome = origemOutro
+      if (!nome) return
+      origemCount[nome] ??= { nome, count: 0, valor: 0 }
+      origemCount[nome].count += 1
+      origemCount[nome].valor += valor
+    }
+
+    vendas.forEach((v) => processOrigem(v.origem_id, v.origem_outro, v.total ?? 0))
+    servicos.forEach((s) => processOrigem(s.origem_id, s.origem_outro, s.valor ?? 0))
+
+    const total = Object.values(origemCount).reduce((sum, o) => sum + o.count, 0)
+    const ranking = Object.values(origemCount)
+      .sort((a, b) => b.count - a.count)
+      .map((o, i) => ({ ...o, posicao: i + 1, pct: total > 0 ? (o.count / total) * 100 : 0 }))
+
+    // Timeline por período
+    const timelineMap: Record<string, Record<string, number>> = {}
+    const allOrigens = new Set<string>()
+
+    const addToTimeline = (origemId: string | null, origemOutro: string | null, data: string) => {
+      let nome: string | null = null
+      if (origemId) nome = origemById.get(origemId) ?? null
+      else if (origemOutro) nome = origemOutro
+      if (!nome) return
+      const period = periodKey(data, useDay)
+      timelineMap[period] ??= {}
+      timelineMap[period][nome] = (timelineMap[period][nome] ?? 0) + 1
+      allOrigens.add(nome)
+    }
+
+    vendas.forEach((v) => addToTimeline(v.origem_id, v.origem_outro, v.data_venda))
+    servicos.forEach((s) => addToTimeline(s.origem_id, s.origem_outro, s.data_entrada))
+
+    const timeline = Object.entries(timelineMap).map(([periodo, origens]) => ({ periodo, ...origens }))
+
+    return {
+      ranking,
+      pieData: ranking.map((o) => ({ name: o.nome, value: o.count })),
+      timeline,
+      allOrigens: ranking.map((o) => o.nome),
+      total,
+      semOrigem:
+        vendas.filter((v) => !v.origem_id && !v.origem_outro).length +
+        servicos.filter((s) => !s.origem_id && !s.origem_outro).length,
+    }
+  }, [vendas, servicos, origensCliente, dataFim, dataInicio])
+
   return (
     <div className="space-y-6">
       <PageHeader title="Relatorios" subtitle="Analises separadas por vendas, servicos, estoque, despesas e crediario" />
@@ -540,7 +711,7 @@ export default function RelatoriosPage() {
           />
 
           <div className="border-t border-gold-100 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
               {REPORT_SECTIONS.map((section) => (
                 <button
                   key={section.key}
@@ -769,6 +940,26 @@ export default function RelatoriosPage() {
                         <p className="text-xs text-dark-400 mt-0.5">{estoqueAtual.produtosCriticos} produto(s)</p>
                       </div>
                     </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Contas a Pagar</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {contasMetrics.qtdVencidas > 0
+                            ? `${contasMetrics.qtdVencidas} vencida(s)`
+                            : `${contasMetrics.pendentes.length} pendente(s)`}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${contasMetrics.qtdVencidas > 0 ? 'text-red-600' : 'text-dark-700'}`}>
+                          {formatMoney(contasMetrics.totalPendente)}
+                        </p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {contasMetrics.qtdVencidas > 0
+                            ? `${formatMoney(contasMetrics.valorVencido)} vencido`
+                            : 'Em dia'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </Card>
 
@@ -791,33 +982,146 @@ export default function RelatoriosPage() {
           {activeSection === 'vendas' && (
             <ReportBlock>
               <SectionTitle title="Vendas" subtitle="Recebimentos de vendas fora do crediario; parcelas ficam na aba Crediario" />
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard label="Vendas Recebidas" value={formatMoney(metrics.faturamento)} changeType="up" accent />
-                <MetricCard label="Lucro Bruto" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
-                <MetricCard label="Ticket Medio" value={metrics.vendasQtd > 0 ? formatMoney(metrics.ticketMedio) : '-'} changeType="neutral" />
-                <MetricCard label="Vendas" value={String(metrics.vendasQtd)} changeType="neutral" />
+
+              {/* Sub-navegação Normal / Livre */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex gap-2">
+                  {(['todas', 'normal', 'livre'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setVendasSubTab(tab)}
+                      className={[
+                        'rounded-lg border px-4 py-2 text-sm font-medium transition-all',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50',
+                        vendasSubTab === tab
+                          ? 'border-gold-500 bg-gold-500 text-dark-800 shadow-sm'
+                          : 'border-gold-100 bg-white text-dark-500 hover:bg-cream-50 hover:border-gold-200',
+                      ].join(' ')}
+                    >
+                      {tab === 'todas' ? 'Todas' : tab === 'normal' ? 'Venda Normal' : 'Venda Livre'}
+                    </button>
+                  ))}
+                </div>
+                {vendasSubTab === 'livre' && (
+                  <label className="flex cursor-pointer select-none items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={combinarTipos}
+                      onChange={(e) => setCombinarTipos(e.target.checked)}
+                      className="h-4 w-4 rounded border-gold-300 accent-gold-600"
+                    />
+                    <span className="text-sm text-dark-600">Incluir venda normal no faturamento</span>
+                  </label>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Métricas — Todas */}
+              {vendasSubTab === 'todas' && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <MetricCard label="Vendas Recebidas" value={formatMoney(metrics.faturamento)} changeType="up" accent />
+                  <MetricCard label="Lucro Bruto" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
+                  <MetricCard label="Ticket Medio" value={metrics.vendasQtd > 0 ? formatMoney(metrics.ticketMedio) : '-'} changeType="neutral" />
+                  <MetricCard label="Vendas" value={String(metrics.vendasQtd)} changeType="neutral" />
+                </div>
+              )}
+
+              {/* Métricas — Venda Normal */}
+              {vendasSubTab === 'normal' && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <MetricCard label="Faturamento Normal" value={formatMoney(vendasPorTipo.faturamentoNormal)} changeType="up" accent />
+                  <MetricCard label="Lucro Bruto" value={formatMoney(vendasPorTipo.lucroNormal)} changeType={vendasPorTipo.lucroNormal >= 0 ? 'up' : 'down'} />
+                  <MetricCard label="Ticket Medio" value={vendasPorTipo.qtdNormal > 0 ? formatMoney(vendasPorTipo.tickMedioNormal) : '-'} changeType="neutral" />
+                  <MetricCard label="Quantidade" value={String(vendasPorTipo.qtdNormal)} changeType="neutral" />
+                </div>
+              )}
+
+              {/* Métricas — Venda Livre */}
+              {vendasSubTab === 'livre' && (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <MetricCard
+                      label={combinarTipos ? 'Faturamento Total' : 'Faturamento Livre'}
+                      value={formatMoney(combinarTipos
+                        ? vendasPorTipo.faturamentoLivre + vendasPorTipo.faturamentoNormal
+                        : vendasPorTipo.faturamentoLivre)}
+                      changeType="up"
+                      accent
+                    />
+                    <MetricCard label="À Vista (Livre)" value={formatMoney(vendasPorTipo.livreAVistaValor)} change={`${vendasPorTipo.livreAVistaQtd} venda(s)`} changeType="up" />
+                    <MetricCard label="Crediário (Livre)" value={formatMoney(vendasPorTipo.livreCrediariadoValor)} change={`${vendasPorTipo.livreCrediariadasQtd} venda(s)`} changeType="neutral" />
+                    <MetricCard label="Qtd Vendas Livres" value={String(vendasPorTipo.qtdLivre)} changeType="neutral" />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader title="Vendas Livre por Descrição" />
+                      {Object.keys(vendasPorTipo.livreByDescricao).length === 0 ? (
+                        <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas livres no período" />
+                      ) : (
+                        <ProductSalesReport
+                          data={Object.entries(vendasPorTipo.livreByDescricao)
+                            .map(([name, value]) => ({ name, value }))
+                            .sort((a, b) => b.value - a.value)}
+                        />
+                      )}
+                    </Card>
+                    <Card>
+                      <CardHeader title="Crediário vs À Vista (Livre)" />
+                      <BarCompareReport
+                        data={[
+                          { name: 'À Vista', value: vendasPorTipo.livreAVistaValor },
+                          { name: 'Crediário', value: vendasPorTipo.livreCrediariadoValor },
+                        ]}
+                      />
+                    </Card>
+                  </div>
+                </>
+              )}
+
+              {/* Gráficos de produto e resultado — Todas e Normal */}
+              {vendasSubTab !== 'livre' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader title="Vendas por Produto" />
+                    {charts.vendasProduto.length === 0 ? (
+                      <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas no periodo" />
+                    ) : (
+                      <ProductSalesReport data={charts.vendasProduto} />
+                    )}
+                  </Card>
+                  <Card>
+                    <CardHeader title="Comparativo de Resultado" />
+                    <BarCompareReport
+                      data={vendasSubTab === 'normal'
+                        ? [
+                            { name: 'Faturamento', value: vendasPorTipo.faturamentoNormal },
+                            { name: 'Lucro bruto', value: vendasPorTipo.lucroNormal },
+                            { name: 'Lucro liquido', value: vendasPorTipo.lucroNormal - metrics.despesas },
+                          ]
+                        : [
+                            { name: 'Faturamento', value: metrics.faturamento },
+                            { name: 'Lucro bruto', value: metrics.lucroBruto },
+                            { name: 'Lucro liquido', value: metrics.lucroLiquido },
+                          ]}
+                    />
+                  </Card>
+                </div>
+              )}
+
+              {/* Vendas por Tipo — Normal vs Livre lado a lado */}
+              {vendasPorTipo.tipoSerie.length > 0 && (
                 <Card>
-                  <CardHeader title="Vendas por Produto" />
-                  {charts.vendasProduto.length === 0 ? (
-                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas no periodo" />
-                  ) : (
-                    <ProductSalesReport data={charts.vendasProduto} />
-                  )}
-                </Card>
-                <Card>
-                  <CardHeader title="Comparativo de Resultado" />
-                  <BarCompareReport
-                    data={[
-                      { name: 'Faturamento', value: metrics.faturamento },
-                      { name: 'Lucro bruto', value: metrics.lucroBruto },
-                      { name: 'Lucro liquido', value: metrics.lucroLiquido },
-                    ]}
+                  <CardHeader
+                    title={
+                      vendasSubTab === 'normal' ? 'Vendas por Período — Venda Normal'
+                      : vendasSubTab === 'livre' ? 'Vendas por Período — Venda Livre'
+                      : 'Vendas por Tipo — Normal vs Livre'
+                    }
                   />
+                  <VendasTipoChart data={vendasPorTipo.tipoSerie} mode={vendasSubTab} />
                 </Card>
-              </div>
+              )}
             </ReportBlock>
           )}
 
@@ -1118,11 +1422,215 @@ export default function RelatoriosPage() {
               </div>
             </ReportBlock>
           )}
+
+          {activeSection === 'leads' && (
+            <ReportBlock>
+              <SectionTitle title="Análise de Leads" subtitle="Origem dos clientes registrada em vendas e serviços do período" />
+
+              {analiseLeads.total === 0 ? (
+                <Card>
+                  <EmptyState
+                    imageSrc="/images/Analytics-rafiki.svg"
+                    title="Sem dados de origem no período"
+                  />
+                </Card>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <MetricCard label="Total com origem" value={String(analiseLeads.total)} changeType="up" accent />
+                    <MetricCard label="Canais distintos" value={String(analiseLeads.allOrigens.length)} changeType="neutral" />
+                    <MetricCard label="Principal canal" value={analiseLeads.ranking[0]?.nome ?? '—'} changeType="neutral" />
+                    <MetricCard
+                      label="Sem origem"
+                      value={String(analiseLeads.semOrigem)}
+                      changeType={analiseLeads.semOrigem > 0 ? 'down' : 'neutral'}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader title="Distribuição por Canal" />
+                      <LeadsDonutReport data={analiseLeads.pieData} />
+                    </Card>
+                    <Card>
+                      <CardHeader title="Ranking de Canais" />
+                      <div className="space-y-3 pt-2">
+                        {analiseLeads.ranking.map((item, i) => (
+                          <div key={item.nome} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="w-5 flex-shrink-0 text-[11px] font-bold text-dark-300">#{i + 1}</span>
+                                <span
+                                  className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                                  style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
+                                />
+                                <span className="truncate text-sm font-medium text-dark-700">{item.nome}</span>
+                              </div>
+                              <div className="flex flex-shrink-0 items-baseline gap-3">
+                                <span className="text-xs text-dark-400">{formatMoney(item.valor)}</span>
+                                <span className="text-sm font-semibold text-dark-700">
+                                  {item.count} lead{item.count !== 1 ? 's' : ''}
+                                </span>
+                                <span className="w-9 text-right text-[11px] text-dark-300">
+                                  {item.pct.toFixed(0)}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-cream-200">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${Math.max(3, item.pct)}%`,
+                                  backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+
+                  {analiseLeads.timeline.length > 1 && (
+                    <Card>
+                      <CardHeader title="Evolução das Origens no Período" />
+                      <LeadsTimeline data={analiseLeads.timeline} origens={analiseLeads.allOrigens} />
+                    </Card>
+                  )}
+                </>
+              )}
+            </ReportBlock>
+          )}
+
+          {activeSection === 'contas' && (
+            <ReportBlock>
+              <SectionTitle title="Contas a Pagar" subtitle="Visão consolidada das contas fixas e variáveis cadastradas" />
+
+              {/* Métricas */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard label="Total Pendente" value={formatMoney(contasMetrics.totalPendente)} changeType="neutral" />
+                <MetricCard
+                  label="Vencidas"
+                  value={formatMoney(contasMetrics.valorVencido)}
+                  changeType={contasMetrics.qtdVencidas > 0 ? 'down' : 'neutral'}
+                  change={contasMetrics.qtdVencidas > 0 ? `${contasMetrics.qtdVencidas} conta(s)` : 'Nenhuma vencida'}
+                />
+                <MetricCard
+                  label="Pagas no Período"
+                  value={formatMoney(contasMetrics.totalPagasNoPeriodo)}
+                  changeType="up"
+                  change={`${contasMetrics.qtdPagasNoPeriodo} conta(s) quitada(s)`}
+                />
+                <MetricCard label="Fixas / Variáveis" value={`${contasMetrics.qtdFixas} / ${contasMetrics.qtdVariaveis}`} changeType="neutral" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Fixas vs Variáveis */}
+                <Card>
+                  <CardHeader title="Fixas vs Variáveis" />
+                  {contasMetrics.qtdFixas + contasMetrics.qtdVariaveis === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem contas cadastradas" />
+                  ) : (
+                    <BarCompareReport
+                      data={[
+                        { name: 'Fixas', value: contasMetrics.totalFixas },
+                        { name: 'Variáveis', value: contasMetrics.totalVariaveis },
+                      ]}
+                    />
+                  )}
+                </Card>
+
+                {/* Evolução mensal */}
+                <Card>
+                  <CardHeader title="Evolução Mensal" />
+                  {contasMetrics.evolucao.length === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem dados no período" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={contasMetrics.evolucao} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#EBD9A4" vertical={false} />
+                        <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} tickFormatter={numberFormat} />
+                        <Tooltip
+                          formatter={(value, name) => [formatMoney(Number(value)), name === 'pago' ? 'Pago' : 'Pendente']}
+                          contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }}
+                        />
+                        <Legend formatter={(value) => <span style={{ fontSize: 11, color: '#6B5B45' }}>{value === 'pago' ? 'Pago' : 'Pendente'}</span>} />
+                        <Bar dataKey="pago" name="pago" fill="#5B8C5B" radius={[3, 3, 0, 0]} stackId="a" />
+                        <Bar dataKey="pendente" name="pendente" fill="#EBD9A4" radius={[3, 3, 0, 0]} stackId="a" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </Card>
+              </div>
+
+              {/* Lista de vencidas */}
+              {contasMetrics.vencidas.length > 0 && (
+                <Card>
+                  <CardHeader title="Contas Vencidas" subtitle="Requerem atenção imediata" />
+                  <div className="divide-y divide-gold-50">
+                    {contasMetrics.vencidas.map((conta) => (
+                      <div key={conta.id} className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-dark-800 truncate">{conta.nome}</p>
+                            {conta.fixa && (
+                              <span className="flex-shrink-0 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700">Fixa</span>
+                            )}
+                          </div>
+                          {conta.descricao && <p className="text-xs text-dark-400 mt-0.5 truncate">{conta.descricao}</p>}
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-sm font-bold text-red-600">{formatMoney(conta.valor)}</p>
+                          <p className="text-xs text-red-500 mt-0.5">
+                            Venceu {conta.data_vencimento.split('-').reverse().join('/')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Lista de pagas no período */}
+              {contasMetrics.pagasNoPeriodo.length > 0 && (
+                <Card>
+                  <CardHeader title="Pagas no Período" />
+                  <div className="divide-y divide-gold-50">
+                    {contasMetrics.pagasNoPeriodo.map((conta) => (
+                      <div key={conta.id} className="flex items-center justify-between gap-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-dark-800 truncate">{conta.nome}</p>
+                            {conta.fixa && (
+                              <span className="flex-shrink-0 rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-700">Fixa</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-dark-400 mt-0.5">
+                            Paga em {conta.data_pagamento?.split('-').reverse().join('/')} · {conta.forma_pagamento}
+                          </p>
+                        </div>
+                        <p className="flex-shrink-0 text-sm font-bold text-green-700">{formatMoney(conta.valor)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {contasMetrics.vencidas.length === 0 && contasMetrics.pagasNoPeriodo.length === 0 && contasMetrics.pendentes.length === 0 && (
+                <Card>
+                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma conta cadastrada" subtitle="Acesse Contas a Pagar para registrar contas fixas e variáveis." />
+                </Card>
+              )}
+            </ReportBlock>
+          )}
         </>
       )}
     </div>
   )
 }
+
+// ─── Sub-componentes ─────────────────────────────────────────────────────────
 
 function ProductSalesReport({ data }: { data: CategoriaData[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0)
@@ -1250,6 +1758,118 @@ function BarCompareReport({ data, unit = '' }: { data: { name: string; value: nu
         <Tooltip formatter={(value) => unit ? [`${Number(value)}${unit}`, 'Total'] : [formatMoney(Number(value)), 'Total']} contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }} />
         <Bar dataKey="value" fill="#B8962E" radius={[3, 3, 0, 0]} />
       </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function VendasTipoChart({ data, mode }: {
+  data: { periodo: string; normal: number; livre: number }[]
+  mode: VendasSubTab
+}) {
+  const hasData = mode === 'normal'
+    ? data.some((d) => d.normal > 0)
+    : mode === 'livre'
+      ? data.some((d) => d.livre > 0)
+      : data.some((d) => d.normal > 0 || d.livre > 0)
+
+  if (!hasData) return <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem dados no período" />
+
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={data} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#EBD9A4" vertical={false} />
+        <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} tickFormatter={numberFormat} />
+        <Tooltip
+          formatter={(value, name) => [formatMoney(Number(value)), name === 'normal' ? 'Venda Normal' : 'Venda Livre']}
+          contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }}
+        />
+        {mode === 'todas' && (
+          <Legend
+            formatter={(value) => (
+              <span style={{ fontSize: 11, color: '#6B5B45' }}>
+                {value === 'normal' ? 'Venda Normal' : 'Venda Livre'}
+              </span>
+            )}
+          />
+        )}
+        {(mode === 'todas' || mode === 'normal') && (
+          <Bar dataKey="normal" name="normal" fill="#B8962E" radius={[3, 3, 0, 0]} />
+        )}
+        {(mode === 'todas' || mode === 'livre') && (
+          <Bar dataKey="livre" name="livre" fill="#EBD9A4" radius={[3, 3, 0, 0]} />
+        )}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function LeadsDonutReport({ data }: { data: CategoriaData[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          innerRadius={58}
+          outerRadius={88}
+          paddingAngle={2}
+          stroke="#FFFFFF"
+          strokeWidth={2}
+        >
+          {data.map((_, index) => (
+            <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip
+          formatter={(value) => [
+            `${value} lead${Number(value) !== 1 ? 's' : ''} (${total > 0 ? ((Number(value) / total) * 100).toFixed(0) : 0}%)`,
+            'Leads',
+          ]}
+          contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }}
+        />
+        <Legend formatter={(value) => <span style={{ fontSize: 11, color: '#6B5B45' }}>{value}</span>} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
+function LeadsTimeline({ data, origens }: { data: Record<string, number | string>[]; origens: string[] }) {
+  const topOrigens = origens.slice(0, 5)
+
+  if (topOrigens.length === 0 || data.length === 0) {
+    return <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem dados de evolução" />
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <LineChart data={data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#EBD9A4" vertical={false} />
+        <XAxis dataKey="periodo" tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#9C8B72' }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <Tooltip
+          formatter={(value, name) => [`${value} lead${Number(value) !== 1 ? 's' : ''}`, String(name)]}
+          contentStyle={{ borderRadius: 8, border: '1px solid #EBD9A4', fontSize: 12 }}
+        />
+        <Legend formatter={(value) => <span style={{ fontSize: 11, color: '#6B5B45' }}>{value}</span>} />
+        {topOrigens.map((origem, i) => (
+          <Line
+            key={origem}
+            type="monotone"
+            dataKey={origem}
+            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            strokeWidth={2}
+            dot={{ r: 3, fill: CHART_COLORS[i % CHART_COLORS.length] }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+        ))}
+      </LineChart>
     </ResponsiveContainer>
   )
 }

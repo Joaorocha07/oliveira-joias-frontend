@@ -27,6 +27,12 @@ Copiar `.env.example` para `.env.local` e preencher:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
+## Acesso ao banco de dados
+
+O schema completo (tabelas e colunas reais) está em `.claude/rules/schema.md` — carregado automaticamente em toda sessão. **Antes de escrever qualquer query ou service, consulte esse arquivo para confirmar nomes de colunas.**
+
+Para consultar dados reais diretamente, use o skill `/db`. Ele lê as credenciais do `.env` e executa queries via Supabase REST API sem precisar rodar o servidor.
+
 ---
 
 ## Stack real
@@ -91,6 +97,7 @@ Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`
 - **Auth**: Context API (`AuthContext`)
 - **Server state**: React Query (queries por feature, ex: `useQuery(['vendas', filtros], ...)`)
 - **Forms**: React Hook Form isolado por modal/página
+- **Hooks utilitários**: `useAlert()` (`/hooks/use-alert.tsx`) para notificações toast; `usePagination()` (`/hooks/use-pagination.ts`) para estado de paginação — verificar antes de recriar.
 
 ---
 
@@ -129,6 +136,10 @@ Schemas Zod ficam em `/schemas/`. Types de domínio ficam em `/types/index.ts`. 
 @/utils       @/types  @/lib       @/schemas
 ```
 
+### Convenção de modais
+
+Modais ficam em `/components/modals/` com nome `modal-{ação}-{entidade}.tsx` (ex: `modal-nova-venda.tsx`, `modal-editar-produto.tsx`).
+
 ---
 
 ## Vocabulário de domínio
@@ -137,7 +148,7 @@ Schemas Zod ficam em `/schemas/`. Types de domínio ficam em `/types/index.ts`. 
 
 **Status de venda:** `orcamento`, `pendente`, `pago`, `crediario`, `cancelado`
 
-O módulo de vendas inclui **venda livre** (venda sem cadastro de cliente vinculado).
+O módulo de vendas inclui **venda livre** (venda sem cadastro de cliente vinculado). Campos específicos: `tipo` (distingue `'livre'` de `'normal'`), `descricao_livre`, `custo_livre`. O valor total ainda fica em `total`/`subtotal`.
 
 **Status de parcela (crediário):** `pendente`, `pago`, `vencido`, `cancelado`
 
@@ -149,7 +160,7 @@ Sempre usar esses valores exatos ao criar queries, filtros e selects — corresp
 
 ## Regras de desenvolvimento
 
-**Componentização:** Criar componentes reutilizáveis desacoplados. Separar regra de negócio da UI. Evitar componentes gigantes.
+**Componentização:** Criar componentes reutilizáveis desacoplados. Separar regra de negócio da UI. Evitar componentes gigantes. Primitivos reutilizáveis ficam em `/components/ui/`; componentes de lógica de negócio de uma feature ficam em `/components/{feature}/` (ex: `/components/vendas/`, `/components/crediario/`).
 
 **TypeScript:** Nunca usar `any`. Centralizar tipos compartilhados em `/types/index.ts`. Usar sufixos `Insert`, `Update`, `Status` para variações de domínio.
 

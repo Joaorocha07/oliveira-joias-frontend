@@ -326,6 +326,29 @@ export interface Lancamento {
 export type LancamentoInsert = Omit<Lancamento, 'id' | 'editado' | 'created_at' | 'updated_at' | 'categoria' | 'historico'>
 export type LancamentoUpdate = Partial<LancamentoInsert> & { updated_by?: string }
 
+// ── CONTAS A PAGAR ─────────────────────────────────────────────
+export type ContaPagarStatus = 'pendente' | 'pago' | 'vencido' | 'cancelado'
+
+export interface ContaPagar {
+  id: string
+  nome: string
+  descricao: string | null
+  valor: number
+  fixa: boolean
+  data_vencimento: string
+  status: ContaPagarStatus
+  data_pagamento: string | null
+  forma_pagamento: string | null
+  lancamento_id: string | null
+  observacoes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ContaPagarInsert = Omit<ContaPagar, 'id' | 'created_at' | 'updated_at'>
+export type ContaPagarUpdate = Partial<ContaPagarInsert>
+
 // ── DASHBOARD / RELATÓRIOS ─────────────────────────────────────
 export interface DashboardData {
   faturamento_mes: number

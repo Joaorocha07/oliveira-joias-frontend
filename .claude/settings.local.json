@@ -19,7 +19,13 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "mcp__plugin_context-mode_context-mode__ctx_search",
       "mcp__plugin_context-mode_context-mode__ctx_execute_file",
-      "Skill(vercel-plugin:nextjs)"
+      "Skill(vercel-plugin:nextjs)",
+      "Bash(curl -s \"https://ifpcohlidgadciluzvhw.supabase.co/rest/v1/\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcGNvaGxpZGdhZGNpbHV6dmh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTI5MDYsImV4cCI6MjA5MzY2ODkwNn0.Uc-axCGuUM6a9FcvvOKc5XJVyZSplqOK0o_-vIe_FGU\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmcGNvaGxpZGdhZGNpbHV6dmh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwOTI5MDYsImV4cCI6MjA5MzY2ODkwNn0.Uc-axCGuUM6a9FcvvOKc5XJVyZSplqOK0o_-vIe_FGU\")",
+      "Bash(curl *)",
+      "Bash(mkdir -p \"D:\\\\projetos\\\\oliveira-joias-frontend\\\\.claude\\\\rules\")",
+      "Bash(mkdir -p \"D:\\\\projetos\\\\oliveira-joias-frontend\\\\.claude\\\\skills\\\\db\")",
+      "Bash(xargs grep -l \"relatorio\\\\|vendas\\\\|origem\")",
+      "Bash(Select-String \"relatorios\")"
     ]
   }
 }
