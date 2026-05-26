@@ -1619,7 +1619,7 @@ export default function RelatoriosPage() {
 
               {contasMetrics.vencidas.length === 0 && contasMetrics.pagasNoPeriodo.length === 0 && contasMetrics.pendentes.length === 0 && (
                 <Card>
-                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma conta cadastrada" subtitle="Acesse Contas a Pagar para registrar contas fixas e variáveis." />
+                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma conta cadastrada" description="Acesse Contas a Pagar para registrar contas fixas e variáveis." />
                 </Card>
               )}
             </ReportBlock>

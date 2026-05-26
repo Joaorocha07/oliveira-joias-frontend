@@ -261,7 +261,7 @@ export default function ContasPagarPage() {
           <EmptyState
             imageSrc="/images/Analytics-rafiki.svg"
             title="Nenhuma conta encontrada"
-            subtitle="Ajuste os filtros ou crie uma nova conta."
+            description="Ajuste os filtros ou crie uma nova conta."
           />
         ) : (
           <div className="divide-y divide-gold-50">
