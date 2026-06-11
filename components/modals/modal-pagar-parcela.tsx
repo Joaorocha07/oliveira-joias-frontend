@@ -7,7 +7,7 @@ import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { pagarParcelaSchema, type PagarParcelaFormData } from '@/schemas/crediario'
-import { pagarParcela } from '@/services/crediario'
+import { editarPagamentoParcela, pagarParcela } from '@/services/crediario'
 import { useAuth } from '@/context/auth-context'
 import { today, formatMoney, FORMA_PAGAMENTO_LABEL } from '@/utils'
 import type { CrediarioParcela } from '@/types'
@@ -23,9 +23,16 @@ const FORMAS = [
   'dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'transferencia', 'cheque',
 ] as const
 
+type FormaPagamentoParcela = PagarParcelaFormData['forma_pagamento']
+
+function getFormaPagamentoParcela(forma: CrediarioParcela['forma_pagamento']): FormaPagamentoParcela | undefined {
+  return FORMAS.find((f) => f === forma)
+}
+
 export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPagarParcelaProps) {
   const { user } = useAuth()
   const alert = useAlert()
+  const isEditandoPagamento = parcela?.status === 'pago'
 
   const {
     register,
@@ -46,21 +53,27 @@ export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPa
   useEffect(() => {
     if (open && parcela) {
       reset({
-        valor_pago: parcela.valor,
-        data_pagamento: today(),
-        forma_pagamento: undefined,
-        observacoes: '',
+        valor_pago: isEditandoPagamento ? parcela.valor_pago : parcela.valor,
+        data_pagamento: isEditandoPagamento ? parcela.data_pagamento ?? today() : today(),
+        forma_pagamento: isEditandoPagamento ? getFormaPagamentoParcela(parcela.forma_pagamento) : undefined,
+        observacoes: parcela.observacoes ?? '',
       })
     }
-  }, [open, parcela, reset])
+  }, [isEditandoPagamento, open, parcela, reset])
 
   async function onSave(data: PagarParcelaFormData) {
     if (!parcela || !user) return
-    const { error } = await pagarParcela(parcela.id, parcela.crediario_id, data, user.id)
+    const { error } = isEditandoPagamento
+      ? await editarPagamentoParcela(parcela.id, parcela.crediario_id, data, user.id)
+      : await pagarParcela(parcela.id, parcela.crediario_id, data, user.id)
     if (error) {
-      alert.error('Erro ao Pagar', error)
+      alert.error(isEditandoPagamento ? 'Erro ao Editar' : 'Erro ao Pagar', error)
     } else {
-      alert.success('Parcela Paga!', 'Parcela registrada com sucesso.', { onConfirm: () => { onSuccess(); onClose() } })
+      alert.success(
+        isEditandoPagamento ? 'Pagamento Atualizado!' : 'Parcela Paga!',
+        isEditandoPagamento ? 'Valor recebido atualizado com sucesso.' : 'Parcela registrada com sucesso.',
+        { onConfirm: () => { onSuccess(); onClose() } },
+      )
     }
   }
 
@@ -70,7 +83,7 @@ export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPa
     <Modal
       open={open}
       onClose={onClose}
-      title={`Pagar Parcela ${parcela.numero}`}
+      title={`${isEditandoPagamento ? 'Editar Pagamento' : 'Pagar Parcela'} ${parcela.numero}`}
       size="sm"
       footer={
         <>
@@ -83,7 +96,7 @@ export function ModalPagarParcela({ open, onClose, onSuccess, parcela }: ModalPa
             form="form-pagar-parcela"
             loading={isSubmitting}
           >
-            Confirmar Pagamento
+            {isEditandoPagamento ? 'Salvar Alteracoes' : 'Confirmar Pagamento'}
           </Button>
         </>
       }

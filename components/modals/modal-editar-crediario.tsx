@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button } from '@/components/ui'
@@ -24,18 +24,17 @@ export function ModalEditarCrediario({ open, onClose, onSuccess, crediario }: Mo
     register,
     handleSubmit,
     control,
-    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<EditarCrediarioFormData>({
     resolver: zodResolver(editarCrediarioSchema) as never,
-    defaultValues: { entrada: 0, num_parcelas: 1, dia_vencimento: 10 },
+    defaultValues: { total: 0, entrada: 0, num_parcelas: 1, dia_vencimento: 10 },
   })
 
-  const watchedEntrada = watch('entrada') ?? 0
-  const watchedParcelas = watch('num_parcelas') ?? 1
-  const total = crediario?.total ?? 0
-  const saldo = Math.max(0, total - watchedEntrada)
+  const watchedTotal = useWatch({ control, name: 'total' }) ?? 0
+  const watchedEntrada = useWatch({ control, name: 'entrada' }) ?? 0
+  const watchedParcelas = useWatch({ control, name: 'num_parcelas' }) ?? 1
+  const saldo = Math.max(0, watchedTotal - watchedEntrada)
   const valorParcela = watchedParcelas > 0 ? Math.round((saldo / watchedParcelas) * 100) / 100 : 0
 
   const parcelasPagas = (crediario?.parcelas ?? []).filter((p) => p.status === 'pago')
@@ -44,6 +43,7 @@ export function ModalEditarCrediario({ open, onClose, onSuccess, crediario }: Mo
   useEffect(() => {
     if (open && crediario) {
       reset({
+        total: crediario.total,
         entrada: crediario.entrada,
         num_parcelas: crediario.num_parcelas,
         dia_vencimento: crediario.dia_vencimento,
@@ -95,12 +95,21 @@ export function ModalEditarCrediario({ open, onClose, onSuccess, crediario }: Mo
         </div>
       )}
 
-      <div className="mb-4 p-3 bg-gold-50 rounded-lg border border-gold-100">
-        <p className="text-xs text-dark-400">Total da venda</p>
-        <p className="text-lg font-display font-medium text-dark-700">{formatMoney(total)}</p>
-      </div>
-
       <form id="form-editar-crediario" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-4">
+        <Controller
+          name="total"
+          control={control}
+          render={({ field }) => (
+            <CurrencyInput
+              label="Total da venda"
+              value={field.value}
+              onChange={field.onChange}
+              error={errors.total?.message}
+              disabled={hasPayments}
+            />
+          )}
+        />
+
         <Controller
           name="entrada"
           control={control}

@@ -24,6 +24,19 @@ export interface UpdateVendaData {
   desconto: number
   data_venda: string
   observacoes: string
+  itens?: {
+    id: string
+    produto_id: string
+    variacao_id: string | null
+    nome_produto: string
+    quantidade: number
+    preco_unitario: number
+    custo_unitario: number
+    desconto: number
+  }[]
+  descricao_livre?: string
+  valor_livre?: number
+  custo_livre?: number
 }
 
 function itemSubtotal(item: VendaItemFormData) {
@@ -203,6 +216,29 @@ export async function updateVenda(
   const status = isCrediario ? 'crediario' : data.status
   const valorPago = isCrediario ? 0 : total
 
+  if (isCrediario) {
+    const { data: existingCrediario, error: existingCrediarioError } = await supabase
+      .from('crediario')
+      .select('id, total')
+      .eq('venda_id', id)
+      .maybeSingle()
+
+    if (existingCrediarioError) return { error: existingCrediarioError.message }
+
+    if (existingCrediario && existingCrediario.total !== total) {
+      const { data: parcelasPagas, error: parcelasPagasError } = await supabase
+        .from('crediario_parcelas')
+        .select('id')
+        .eq('crediario_id', existingCrediario.id)
+        .eq('status', 'pago')
+
+      if (parcelasPagasError) return { error: parcelasPagasError.message }
+      if ((parcelasPagas ?? []).length > 0) {
+        return { error: 'Nao e possivel alterar o valor de uma venda no crediario com parcelas pagas.' }
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('vendas')
     .update({
@@ -213,14 +249,160 @@ export async function updateVenda(
       status,
       forma_pagamento: data.forma_pagamento,
       desconto: data.desconto,
+      subtotal,
       total,
       valor_pago: valorPago,
+      descricao_livre: data.descricao_livre || null,
+      custo_livre: data.custo_livre ?? null,
       data_venda: data.data_venda,
       observacoes: data.observacoes || null,
     })
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  if (data.itens && data.itens.length > 0) {
+    const itemIds = data.itens.map((item) => item.id)
+    const { data: itensAtuais, error: itensAtuaisError } = await supabase
+      .from('venda_itens')
+      .select('id, produto_id, variacao_id, quantidade')
+      .in('id', itemIds)
+
+    if (itensAtuaisError) return { error: itensAtuaisError.message }
+
+    const itensAtuaisMap = new Map((itensAtuais ?? []).map((item) => [item.id as string, item]))
+
+    for (const item of data.itens) {
+      const subtotalItem = Math.max(0, Math.round((item.quantidade * item.preco_unitario - item.desconto) * 100) / 100)
+      const itemAtual = itensAtuaisMap.get(item.id)
+
+      if (itemAtual?.variacao_id === item.variacao_id) {
+        if (itemAtual?.variacao_id) {
+          const delta = item.quantidade - (itemAtual.quantidade as number)
+          if (delta !== 0) {
+            const { data: variacao, error: variacaoError } = await supabase
+              .from('produto_variacoes')
+              .select('estoque_atual')
+              .eq('id', itemAtual.variacao_id)
+              .single()
+
+            if (variacaoError) return { error: variacaoError.message }
+
+            const estoqueAntes = variacao.estoque_atual as number
+            const estoqueDepois = estoqueAntes - delta
+
+            if (estoqueDepois < 0) {
+              return { error: `Estoque insuficiente para ${item.nome_produto}. Disponivel: ${estoqueAntes}.` }
+            }
+
+            const { error: estoqueError } = await supabase
+              .from('produto_variacoes')
+              .update({ estoque_atual: estoqueDepois })
+              .eq('id', itemAtual.variacao_id)
+
+            if (estoqueError) return { error: estoqueError.message }
+
+            await supabase.from('estoque_movimentacoes').insert({
+              variacao_id: itemAtual.variacao_id,
+              produto_id: itemAtual.produto_id,
+              tipo: delta > 0 ? 'saida' : 'devolucao',
+              quantidade: Math.abs(delta),
+              quantidade_antes: estoqueAntes,
+              quantidade_depois: estoqueDepois,
+              motivo: 'Ajuste de venda',
+              referencia_id: id,
+              referencia_tipo: 'venda',
+              created_by: userId,
+            })
+          }
+        }
+      } else {
+        if (itemAtual?.variacao_id) {
+          const { data: variacaoAntiga, error: variacaoAntigaError } = await supabase
+            .from('produto_variacoes')
+            .select('estoque_atual')
+            .eq('id', itemAtual.variacao_id)
+            .single()
+
+          if (variacaoAntigaError) return { error: variacaoAntigaError.message }
+
+          const estoqueAntes = variacaoAntiga.estoque_atual as number
+          const estoqueDepois = estoqueAntes + (itemAtual.quantidade as number)
+          const { error: devolucaoError } = await supabase
+            .from('produto_variacoes')
+            .update({ estoque_atual: estoqueDepois })
+            .eq('id', itemAtual.variacao_id)
+
+          if (devolucaoError) return { error: devolucaoError.message }
+
+          await supabase.from('estoque_movimentacoes').insert({
+            variacao_id: itemAtual.variacao_id,
+            produto_id: itemAtual.produto_id,
+            tipo: 'devolucao',
+            quantidade: itemAtual.quantidade,
+            quantidade_antes: estoqueAntes,
+            quantidade_depois: estoqueDepois,
+            motivo: 'Troca de produto na venda',
+            referencia_id: id,
+            referencia_tipo: 'venda',
+            created_by: userId,
+          })
+        }
+
+        if (item.variacao_id) {
+          const { data: variacaoNova, error: variacaoNovaError } = await supabase
+            .from('produto_variacoes')
+            .select('estoque_atual')
+            .eq('id', item.variacao_id)
+            .single()
+
+          if (variacaoNovaError) return { error: variacaoNovaError.message }
+
+          const estoqueAntes = variacaoNova.estoque_atual as number
+          const estoqueDepois = estoqueAntes - item.quantidade
+          if (estoqueDepois < 0) {
+            return { error: `Estoque insuficiente para ${item.nome_produto}. Disponivel: ${estoqueAntes}.` }
+          }
+
+          const { error: saidaError } = await supabase
+            .from('produto_variacoes')
+            .update({ estoque_atual: estoqueDepois })
+            .eq('id', item.variacao_id)
+
+          if (saidaError) return { error: saidaError.message }
+
+          await supabase.from('estoque_movimentacoes').insert({
+            variacao_id: item.variacao_id,
+            produto_id: item.produto_id,
+            tipo: 'saida',
+            quantidade: item.quantidade,
+            quantidade_antes: estoqueAntes,
+            quantidade_depois: estoqueDepois,
+            motivo: 'Troca de produto na venda',
+            referencia_id: id,
+            referencia_tipo: 'venda',
+            created_by: userId,
+          })
+        }
+      }
+
+      const { error: itemError } = await supabase
+        .from('venda_itens')
+        .update({
+          produto_id: item.produto_id,
+          variacao_id: item.variacao_id,
+          nome_produto: item.nome_produto,
+          quantidade: item.quantidade,
+          preco_unitario: item.preco_unitario,
+          custo_unitario: item.custo_unitario,
+          desconto: item.desconto,
+          subtotal: subtotalItem,
+        })
+        .eq('id', item.id)
+
+      if (itemError) return { error: itemError.message }
+    }
+  }
 
   if (isCrediario) {
     await supabase
@@ -240,11 +422,69 @@ export async function updateVenda(
   if (isCrediario && data.cliente_id) {
     const { data: existing } = await supabase
       .from('crediario')
-      .select('id')
+      .select('id, total, entrada, num_parcelas, dia_vencimento')
       .eq('venda_id', id)
       .maybeSingle()
 
-    if (!existing) {
+    if (existing) {
+      const { data: parcelasPagas, error: parcelasPagasError } = await supabase
+        .from('crediario_parcelas')
+        .select('id')
+        .eq('crediario_id', existing.id)
+        .eq('status', 'pago')
+
+      if (parcelasPagasError) return { error: parcelasPagasError.message }
+      if ((parcelasPagas ?? []).length > 0 && existing.total !== total) {
+        return { error: 'Nao e possivel alterar o valor de uma venda no crediario com parcelas pagas.' }
+      }
+
+      if ((parcelasPagas ?? []).length === 0) {
+        const entrada = Math.min((existing.entrada as number) ?? 0, total)
+        const numParcelas = (existing.num_parcelas as number) || 1
+        const diaVencimento = (existing.dia_vencimento as number) || 10
+        const saldo = Math.max(0, total - entrada)
+        const valorParcela = Math.round((saldo / numParcelas) * 100) / 100
+
+        const { error: parcelasDeleteError } = await supabase
+          .from('crediario_parcelas')
+          .delete()
+          .eq('crediario_id', existing.id)
+
+        if (parcelasDeleteError) return { error: parcelasDeleteError.message }
+
+        const datas = gerarDatasParcelas(numParcelas, diaVencimento, new Date(data.data_venda))
+        const { error: parcelasInsertError } = await supabase
+          .from('crediario_parcelas')
+          .insert(
+            datas.map((dataVenc, i) => ({
+              crediario_id: existing.id,
+              cliente_id: data.cliente_id,
+              numero: i + 1,
+              valor: valorParcela,
+              valor_pago: 0,
+              data_vencimento: dataVenc,
+              data_pagamento: null,
+              forma_pagamento: null,
+              status: 'pendente',
+            })),
+          )
+
+        if (parcelasInsertError) return { error: parcelasInsertError.message }
+
+        const { error: crediarioUpdateError } = await supabase
+          .from('crediario')
+          .update({
+            cliente_id: data.cliente_id,
+            total,
+            entrada,
+            saldo,
+            valor_parcela: valorParcela,
+          })
+          .eq('id', existing.id)
+
+        if (crediarioUpdateError) return { error: crediarioUpdateError.message }
+      }
+    } else {
       // Create crediário with defaults — user can adjust via Editar Crediário
       const num_parcelas = 1
       const entrada = 0

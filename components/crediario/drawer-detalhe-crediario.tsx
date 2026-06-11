@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Pencil, CheckCircle2, Clock, AlertCircle, ChevronRight } from 'lucide-react'
-import { Badge, Button } from '@/components/ui'
+import { X, Pencil, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Badge } from '@/components/ui'
 import {
   formatMoney, formatDate,
   FORMA_PAGAMENTO_LABEL, CREDIARIO_STATUS_LABEL, PARCELA_STATUS_LABEL,
@@ -87,6 +87,17 @@ function ParcelaRow({
           </div>
         )}
       </div>
+
+      {isPaga && (
+        <button
+          type="button"
+          onClick={onReceber}
+          className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dark-600 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+        >
+          <Pencil size={12} />
+          Editar
+        </button>
+      )}
 
       {!isPaga && parcela.status !== 'cancelado' && (
         <button

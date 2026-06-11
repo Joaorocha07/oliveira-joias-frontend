@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { CreditCard } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
@@ -108,7 +107,7 @@ export default function CrediarioPage() {
     setCrediarios(rows)
     setLoading(false)
     return rows
-  }, [dataFim, dataInicio])
+  }, [alert, dataFim, dataInicio])
 
   useEffect(() => {
     const id = window.setTimeout(() => void loadCrediarios(), 0)

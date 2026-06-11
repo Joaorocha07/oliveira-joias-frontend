@@ -12,7 +12,8 @@ import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
   PeriodFilter, getPeriodRange, Button, type PeriodPreset,
 } from '@/components/ui'
-import { formatMoney, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
+import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
+import { formatMoney, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
 import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
 import { listarContasPagar } from '@/services/contas-pagar'
 
@@ -48,6 +49,7 @@ interface VendaRelatorio {
   total: number
   data_venda: string
   forma_pagamento: string
+  vendedor_id: string | null
   descricao_livre: string | null
   custo_livre: number | null
   origem_id: string | null
@@ -60,6 +62,7 @@ interface VendaRelatorio {
     nome_produto: string
     produto?: { categoria: ProdutoCategoria } | { categoria: ProdutoCategoria }[] | null
   }[] | null
+  vendedor?: { nome: string } | { nome: string }[] | null
 }
 
 interface LancamentoRelatorio {
@@ -133,6 +136,15 @@ function getParcelaVenda(parcela: CrediarioParcelaPaga) {
   return Array.isArray(venda) ? venda[0] : venda
 }
 
+function getVendaVendedorNome(venda: VendaRelatorio) {
+  const vendedor = Array.isArray(venda.vendedor) ? venda.vendedor[0] : venda.vendedor
+  return vendedor?.nome ?? 'Sem vendedor'
+}
+
+function getFormaPagamentoLabel(forma: string) {
+  return FORMA_PAGAMENTO_LABEL[forma as keyof typeof FORMA_PAGAMENTO_LABEL] ?? forma
+}
+
 function getVendaCusto(venda: VendaRelatorio) {
   if (venda.tipo === 'livre') return venda.custo_livre ?? 0
   return (venda.itens ?? []).reduce((sum, item) => sum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
@@ -159,6 +171,7 @@ export default function RelatoriosPage() {
   const [activeSection, setActiveSection] = useState<ReportSection>('geral')
   const [caixaChartMode, setCaixaChartMode] = useState<CaixaChartMode>('evolucao')
   const [vendasSubTab, setVendasSubTab] = useState<VendasSubTab>('todas')
+  const [vendedorFiltro, setVendedorFiltro] = useState('todos')
   const [combinarTipos, setCombinarTipos] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -181,7 +194,7 @@ export default function RelatoriosPage() {
     const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult] = await Promise.all([
       supabase
         .from('vendas')
-        .select('id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, origem_id, origem_outro, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+        .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim)
         .not('status', 'eq', 'cancelado'),
@@ -206,7 +219,7 @@ export default function RelatoriosPage() {
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('crediario_parcelas')
-        .select('valor_pago, crediario:crediario(venda:vendas(id, tipo, total, data_venda, forma_pagamento, descricao_livre, custo_livre, itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))))')
+        .select('valor_pago, crediario:crediario(venda:vendas(id, tipo, total, data_venda, forma_pagamento, vendedor_id, descricao_livre, custo_livre, vendedor:profiles(nome), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))))')
         .eq('status', 'pago')
         .gte('data_pagamento', dataInicio)
         .lte('data_pagamento', dataFim),
@@ -339,7 +352,6 @@ export default function RelatoriosPage() {
 
   const contasMetrics = useMemo(() => {
     const todayStr = today()
-    const mesAtual = todayStr.slice(0, 7)
 
     const pendentes = contasPagar.filter(c => c.status === 'pendente')
     const vencidas = pendentes.filter(c => c.data_vencimento < todayStr)
@@ -635,6 +647,90 @@ export default function RelatoriosPage() {
       livreByDescricao,
     }
   }, [vendas, dataFim, dataInicio])
+
+  const vendasEquipe = useMemo(() => {
+    const vendasBase = vendasSubTab === 'normal'
+      ? vendas.filter((venda) => venda.tipo === 'normal')
+      : vendasSubTab === 'livre'
+        ? vendas.filter((venda) => venda.tipo === 'livre')
+        : vendas
+    const vendedorOptionsMap = new Map<string, string>()
+    vendasBase.forEach((venda) => {
+      vendedorOptionsMap.set(venda.vendedor_id ?? 'sem-vendedor', getVendaVendedorNome(venda))
+    })
+
+    const vendasFiltradas = vendedorFiltro === 'todos'
+      ? vendasBase
+      : vendasBase.filter((venda) => (venda.vendedor_id ?? 'sem-vendedor') === vendedorFiltro)
+
+    const rankingMap = new Map<string, {
+      id: string
+      nome: string
+      total: number
+      quantidade: number
+      ticketMedio: number
+    }>()
+
+    vendasFiltradas.forEach((venda) => {
+      const id = venda.vendedor_id ?? 'sem-vendedor'
+      const current = rankingMap.get(id) ?? {
+        id,
+        nome: getVendaVendedorNome(venda),
+        total: 0,
+        quantidade: 0,
+        ticketMedio: 0,
+      }
+      current.total += venda.total ?? 0
+      current.quantidade += 1
+      current.ticketMedio = current.quantidade > 0 ? current.total / current.quantidade : 0
+      rankingMap.set(id, current)
+    })
+
+    const totalFiltrado = vendasFiltradas.reduce((sum, venda) => sum + (venda.total ?? 0), 0)
+    const formasMap = new Map<string, { forma: string; label: string; total: number; quantidade: number; pct: number }>()
+
+    vendasFiltradas.forEach((venda) => {
+      const forma = venda.forma_pagamento || 'nao_informado'
+      const current = formasMap.get(forma) ?? {
+        forma,
+        label: getFormaPagamentoLabel(forma),
+        total: 0,
+        quantidade: 0,
+        pct: 0,
+      }
+      current.total += venda.total ?? 0
+      current.quantidade += 1
+      current.pct = totalFiltrado > 0 ? (current.total / totalFiltrado) * 100 : 0
+      formasMap.set(forma, current)
+    })
+
+    return {
+      vendedores: Array.from(vendedorOptionsMap.entries())
+        .map(([id, nome]) => ({ id, nome }))
+        .sort((a, b) => a.nome.localeCompare(b.nome)),
+      ranking: Array.from(rankingMap.values()).sort((a, b) => b.total - a.total),
+      formasPagamento: Array.from(formasMap.values()).sort((a, b) => b.total - a.total),
+      total: totalFiltrado,
+      quantidade: vendasFiltradas.length,
+    }
+  }, [vendasSubTab, vendedorFiltro, vendas])
+
+  const vendedorRankingSelecionado = vendedorFiltro === 'todos'
+    ? 'Todos os vendedores'
+    : vendasEquipe.vendedores.find((vendedor) => vendedor.id === vendedorFiltro)?.nome ?? 'Todos os vendedores'
+
+  const searchVendedoresRanking = useCallback(async (q: string): Promise<SelectOption[]> => {
+    const term = q.trim().toLowerCase()
+    const options = [
+      { id: 'todos', label: 'Todos os vendedores', sublabel: 'Ranking geral' },
+      ...vendasEquipe.vendedores.map((vendedor) => ({
+        id: vendedor.id,
+        label: vendedor.nome,
+        sublabel: vendedor.id === 'sem-vendedor' ? 'Sem vendedor' : 'Vendedor',
+      })),
+    ]
+    return options.filter((option) => !term || option.label.toLowerCase().includes(term))
+  }, [vendasEquipe.vendedores])
 
   const analiseLeads = useMemo(() => {
     const useDay = differenceInCalendarDays(parseISO(dataFim), parseISO(dataInicio)) <= 45
@@ -1080,6 +1176,79 @@ export default function RelatoriosPage() {
               )}
 
               {/* Gráficos de produto e resultado — Todas e Normal */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader
+                    title="Ranking de Vendedores"
+                    subtitle={`${vendasEquipe.quantidade} venda(s) no filtro`}
+                    actions={
+                      <SearchableSelect
+                        value={vendedorFiltro === 'todos' ? null : vendedorFiltro}
+                        displayValue={vendedorRankingSelecionado}
+                        onChange={(id) => {
+                          setVendedorFiltro(id ?? 'todos')
+                          return true
+                        }}
+                        onSearch={searchVendedoresRanking}
+                        placeholder="Buscar vendedor..."
+                        className="w-56"
+                      />
+                    }
+                  />
+                  {vendasEquipe.ranking.length === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem vendas no periodo" />
+                  ) : (
+                    <div className="space-y-3">
+                      {vendasEquipe.ranking.map((vendedor, index) => {
+                        const pct = vendasEquipe.total > 0 ? (vendedor.total / vendasEquipe.total) * 100 : 0
+                        return (
+                          <div key={vendedor.id} className="rounded-lg border border-gold-100 bg-cream-50/40 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-dark-700 truncate">
+                                  #{index + 1} {vendedor.nome}
+                                </p>
+                                <p className="text-xs text-dark-400 mt-0.5">
+                                  {vendedor.quantidade} venda(s) - ticket medio {formatMoney(vendedor.ticketMedio)}
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold text-dark-800">{formatMoney(vendedor.total)}</p>
+                            </div>
+                            <div className="mt-2 h-2 rounded-full bg-gold-100 overflow-hidden">
+                              <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, pct)}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </Card>
+
+                <Card>
+                  <CardHeader title="Formas de Pagamento" subtitle="Valor vendido por forma" />
+                  {vendasEquipe.formasPagamento.length === 0 ? (
+                    <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Sem pagamentos no periodo" />
+                  ) : (
+                    <div className="space-y-3">
+                      {vendasEquipe.formasPagamento.map((forma) => (
+                        <div key={forma.forma}>
+                          <div className="flex items-center justify-between gap-3 text-sm">
+                            <div>
+                              <p className="font-semibold text-dark-700">{forma.label}</p>
+                              <p className="text-xs text-dark-400">{forma.quantidade} venda(s) - {forma.pct.toFixed(1)}%</p>
+                            </div>
+                            <p className="font-semibold text-dark-800">{formatMoney(forma.total)}</p>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-gold-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, forma.pct)}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </div>
+
               {vendasSubTab !== 'livre' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <Card>
