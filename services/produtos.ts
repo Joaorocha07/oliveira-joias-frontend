@@ -94,6 +94,7 @@ export async function createProduto(
 export async function updateProduto(
   id: string,
   data: ProdutoFormData,
+  userId?: string,
 ): Promise<{ error: string | null }> {
   const { variacoes, ...produtoData } = data
 
@@ -115,6 +116,19 @@ export async function updateProduto(
   const existing = variacoes.filter((v: VariacaoFormData) => v.id)
   const novas = variacoes.filter((v: VariacaoFormData) => !v.id)
 
+  // Fetch current stocks in batch to detect changes and create movement records
+  let estoqueAtualMap: Record<string, number> = {}
+  if (userId && existing.length > 0) {
+    const ids = existing.map((v: VariacaoFormData) => v.id!)
+    const { data: rows } = await supabase
+      .from('produto_variacoes')
+      .select('id, estoque_atual')
+      .in('id', ids)
+    estoqueAtualMap = Object.fromEntries(
+      (rows ?? []).map((r) => [r.id, r.estoque_atual ?? 0]),
+    )
+  }
+
   for (const v of existing) {
     const { error } = await supabase
       .from('produto_variacoes')
@@ -128,6 +142,25 @@ export async function updateProduto(
       })
       .eq('id', v.id!)
     if (error) return { error: error.message }
+
+    if (userId && v.id && v.id in estoqueAtualMap) {
+      const estoqueAntes = estoqueAtualMap[v.id]
+      const delta = v.estoque_atual - estoqueAntes
+      if (delta !== 0) {
+        const tipo = delta > 0 ? 'entrada' : 'saida'
+        const { error: movError } = await supabase.from('estoque_movimentacoes').insert({
+          variacao_id: v.id,
+          produto_id: id,
+          tipo,
+          quantidade: Math.abs(delta),
+          quantidade_antes: estoqueAntes,
+          quantidade_depois: v.estoque_atual,
+          motivo: 'Ajuste via edição de produto',
+          created_by: userId,
+        })
+        if (movError) return { error: movError.message }
+      }
+    }
   }
 
   if (novas.length > 0) {

@@ -133,7 +133,7 @@ export function ModalProduto({ open, onClose, onSuccess, produto }: ModalProduto
   async function onSave(data: ProdutoFormData) {
     if (!user) return
     const { error } = isEditing
-      ? await updateProduto(produto.id, data)
+      ? await updateProduto(produto.id, data, user.id)
       : await createProduto(data, user.id)
 
     if (error) {
