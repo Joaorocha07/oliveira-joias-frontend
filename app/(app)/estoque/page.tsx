@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Diamond, Pencil, Trash2, ArrowUpDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, ArrowUpDown } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, MetricCard, Button, SearchInput, Select,
-  Spinner, EmptyState, ActionMenu, AlertDialog, PeriodFilter, getPeriodRange, type PeriodPreset,
+  Spinner, EmptyState, ActionMenu, AlertDialog, PeriodFilter, Modal, getPeriodRange, type PeriodPreset,
 } from '@/components/ui'
 import { ModalProduto } from '@/components/modals/modal-produto'
 import { ModalMovimentacaoEstoque } from '@/components/modals/modal-movimentacao-estoque'
@@ -37,6 +37,7 @@ export default function EstoquePage() {
   const [deleteTarget, setDeleteTarget] = useState<ProdutoComEstoque | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const [produtoDetalhe, setProdutoDetalhe] = useState<ProdutoComEstoque | null>(null)
 
   const loadProdutos = useCallback(async () => {
     const { data, error } = await supabase
@@ -152,6 +153,83 @@ export default function EstoquePage() {
     return { variant: 'success' as const, label: 'Normal' }
   }
 
+  function renderVariacoes(p: ProdutoComEstoque) {
+    const variacoes = p.variacoes ?? []
+    const resumo = stockBadge(p.total_estoque, minEstoque(p))
+    const resumoCards = (
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-gold-100 bg-cream-50/40 px-3 py-2.5">
+          <span className="block text-xs text-dark-300">Código</span>
+          <strong className="font-mono text-sm font-medium text-dark-700">{p.codigo}</strong>
+        </div>
+        <div className="rounded-lg border border-gold-100 bg-cream-50/40 px-3 py-2.5">
+          <span className="block text-xs text-dark-300">Estoque</span>
+          <strong className="text-sm font-medium text-dark-700">{p.total_estoque} un</strong>
+        </div>
+        <div className="rounded-lg border border-gold-100 bg-cream-50/40 px-3 py-2.5">
+          <span className="block text-xs text-dark-300">Variações</span>
+          <strong className="text-sm font-medium text-dark-700">{p.variacoes_ativas} ativas</strong>
+        </div>
+        <div className="rounded-lg border border-gold-100 bg-cream-50/40 px-3 py-2.5">
+          <span className="block text-xs text-dark-300">Status</span>
+          <Badge variant={resumo.variant} className="mt-1 px-2 py-0.5">{resumo.label}</Badge>
+        </div>
+      </div>
+    )
+
+    if (variacoes.length === 0) {
+      return (
+        <>
+          {resumoCards}
+          <div className="rounded-lg border border-gold-100 bg-cream-50/40 px-3 py-3 text-sm text-dark-400">
+            Nenhuma variação cadastrada para este produto.
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        {resumoCards}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {variacoes.map((variacao) => {
+            const { variant, label } = stockBadge(variacao.estoque_atual ?? 0, variacao.estoque_minimo ?? 0)
+
+            return (
+              <div key={variacao.id} className="rounded-lg border border-gold-100 bg-white px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-dark-700 truncate">{variacao.nome}</p>
+                  <p className="text-xs text-dark-400 truncate">{variacao.valor}</p>
+                </div>
+                <Badge variant={variacao.ativo ? variant : 'gray'} className="px-2 py-0.5 flex-shrink-0">
+                  {variacao.ativo ? label : 'Inativa'}
+                </Badge>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <span className="block text-dark-300">Estoque</span>
+                  <strong className="font-medium text-dark-700">{variacao.estoque_atual ?? 0} un</strong>
+                </div>
+                <div>
+                  <span className="block text-dark-300">Mínimo</span>
+                  <strong className="font-medium text-dark-700">{variacao.estoque_minimo ?? 0} un</strong>
+                </div>
+                <div>
+                  <span className="block text-dark-300">Adicional</span>
+                  <strong className="font-medium text-dark-700">
+                    {(variacao.custo_adicional ?? 0) > 0 ? formatMoney(variacao.custo_adicional) : 'R$ 0,00'}
+                  </strong>
+                </div>
+              </div>
+              </div>
+            )
+          })}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div>
       <PageHeader
@@ -238,7 +316,19 @@ export default function EstoquePage() {
               {filtered.map((p) => {
                 const { variant, label } = stockBadge(p.total_estoque, minEstoque(p))
                 return (
-                  <div key={p.id} className="p-4 hover:bg-cream-50/30 transition-colors">
+                  <div
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setProdutoDetalhe(p)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setProdutoDetalhe(p)
+                      }
+                    }}
+                    className="p-4 hover:bg-cream-50/30 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500/40"
+                  >
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
@@ -253,13 +343,15 @@ export default function EstoquePage() {
                           {p.material && <> · {p.material}</>}
                         </p>
                       </div>
-                      <ActionMenu
-                        items={[
-                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
-                          { label: 'Movimentar Estoque', icon: <ArrowUpDown size={14} />, onClick: () => openMovimentacao(p) },
-                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setDeleteTarget(p), variant: 'danger' },
-                        ]}
-                      />
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <ActionMenu
+                          items={[
+                            { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
+                            { label: 'Movimentar Estoque', icon: <ArrowUpDown size={14} />, onClick: () => openMovimentacao(p) },
+                            { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setDeleteTarget(p), variant: 'danger' },
+                          ]}
+                        />
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gold-50">
                       <div className="flex items-center gap-2">
@@ -292,7 +384,19 @@ export default function EstoquePage() {
                   {filtered.map((p) => {
                     const { variant, label } = stockBadge(p.total_estoque, minEstoque(p))
                     return (
-                      <tr key={p.id} className="hover:bg-cream-50/40 transition-colors">
+                      <tr
+                        key={p.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setProdutoDetalhe(p)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setProdutoDetalhe(p)
+                          }
+                        }}
+                        className="hover:bg-cream-50/40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500/40"
+                      >
                         <td className="px-5 py-3 text-dark-400 font-mono text-xs">{p.codigo}</td>
                         <td className="px-5 py-3 font-medium text-dark-700 max-w-[200px]">
                           <span className="block truncate">{p.nome}</span>
@@ -320,7 +424,7 @@ export default function EstoquePage() {
                           <div className="flex items-center gap-1 justify-end">
                             <button
                               type="button"
-                              onClick={() => openMovimentacao(p)}
+                              onClick={(e) => { e.stopPropagation(); openMovimentacao(p) }}
                               className="p-1.5 rounded-lg text-dark-300 hover:text-dark-600 hover:bg-cream-100 transition-colors"
                               title="Movimentar estoque"
                             >
@@ -328,7 +432,7 @@ export default function EstoquePage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => openEdit(p)}
+                              onClick={(e) => { e.stopPropagation(); openEdit(p) }}
                               className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                               title="Editar produto"
                             >
@@ -336,7 +440,7 @@ export default function EstoquePage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteTarget(p)}
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(p) }}
                               className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                               title="Excluir produto"
                             >
@@ -353,6 +457,45 @@ export default function EstoquePage() {
           </>
         )}
       </Card>
+
+      <Modal
+        open={!!produtoDetalhe}
+        onClose={() => setProdutoDetalhe(null)}
+        title={produtoDetalhe ? `Variações - ${produtoDetalhe.codigo}` : 'Variações'}
+        size="xl"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setProdutoDetalhe(null)}>
+              Fechar
+            </Button>
+            {produtoDetalhe && (
+              <Button
+                variant="primary"
+                leftIcon={<ArrowUpDown size={14} />}
+                onClick={() => {
+                  openMovimentacao(produtoDetalhe)
+                  setProdutoDetalhe(null)
+                }}
+              >
+                Movimentar Estoque
+              </Button>
+            )}
+          </>
+        }
+      >
+        {produtoDetalhe && (
+          <div>
+            <div className="mb-4">
+              <p className="font-medium text-dark-700">{produtoDetalhe.nome}</p>
+              <p className="text-sm text-dark-400">
+                {PRODUTO_CATEGORIA_LABEL[produtoDetalhe.categoria]}
+                {produtoDetalhe.material && <> · {produtoDetalhe.material}</>}
+              </p>
+            </div>
+            {renderVariacoes(produtoDetalhe)}
+          </div>
+        )}
+      </Modal>
 
       <ModalProduto
         open={modalProduto}
