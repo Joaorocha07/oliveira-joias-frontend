@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Wrench, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
@@ -11,9 +11,10 @@ import {
 import { usePagination } from '@/hooks/use-pagination'
 import { ModalNovoServico } from '@/components/modals/modal-novo-servico'
 import {
-  formatMoney, formatDate, today, servicoStatusVariant, SERVICO_STATUS_LABEL,
+  formatMoney, formatDate, formatDateTime, today, servicoStatusVariant, SERVICO_STATUS_LABEL,
 } from '@/utils'
 import { updateServicoStatus, deleteServico } from '@/services/servicos'
+import { DrawerDetalheServico } from '@/components/servicos/drawer-detalhe-servico'
 import type { ServicoComCliente, ServicoStatus } from '@/types'
 
 const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'cancelado']
@@ -53,6 +54,7 @@ export default function ServicosPage() {
   const [confirmDelete, setConfirmDelete] = useState<ServicoComCliente | null>(null)
   const [deletando, setDeletando] = useState(false)
   const [activePeriodo, setActivePeriodo] = useState<PeriodoAtalho | null>('hoje')
+  const [drawerServico, setDrawerServico] = useState<ServicoComCliente | null>(null)
 
   const loadServicos = useCallback(async () => {
     setLoading(true)
@@ -201,7 +203,11 @@ export default function ServicosPage() {
             {/* Mobile: cards */}
             <div className="sm:hidden divide-y divide-gold-50">
               {paginated.map((s) => (
-                <div key={s.id} className="p-4 hover:bg-cream-50/30 transition-colors">
+                <div
+                  key={s.id}
+                  className="p-4 hover:bg-cream-50/30 transition-colors cursor-pointer active:bg-cream-100"
+                  onClick={() => setDrawerServico(s)}
+                >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -217,13 +223,18 @@ export default function ServicosPage() {
                         Entrada: {formatDate(s.data_entrada)}
                         {s.data_previsao && <> · Previsão: {formatDate(s.data_previsao)}</>}
                       </p>
+                      <p className="text-[11px] text-dark-300 mt-0.5">
+                        Registrado {formatDateTime(s.created_at)}
+                      </p>
                     </div>
-                    <ActionMenu
-                      items={[
-                        { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(s) },
-                        { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(s), variant: 'danger' },
-                      ]}
-                    />
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ActionMenu
+                        items={[
+                          { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(s) },
+                          { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(s), variant: 'danger' },
+                        ]}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gold-50 gap-2">
                     <select
@@ -258,7 +269,11 @@ export default function ServicosPage() {
                 </thead>
                 <tbody className="divide-y divide-gold-50">
                   {paginated.map((s) => (
-                    <tr key={s.id} className="hover:bg-cream-50/40 transition-colors">
+                    <tr
+                      key={s.id}
+                      className="hover:bg-cream-50/40 transition-colors cursor-pointer"
+                      onClick={() => setDrawerServico(s)}
+                    >
                       <td className="px-5 py-3 text-dark-400 font-mono text-xs">#{displayNumMap.get(s.id)}</td>
                       <td className="px-5 py-3 font-medium text-dark-700 max-w-[160px]">
                         <span className="block truncate">
@@ -268,10 +283,13 @@ export default function ServicosPage() {
                       <td className="px-5 py-3 text-dark-600 max-w-[160px]">
                         <span className="block truncate">{s.tipo}</span>
                       </td>
-                      <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(s.data_entrada)}</td>
+                      <td className="hidden md:table-cell px-5 py-3 text-dark-400">
+                        <span className="block">{formatDate(s.data_entrada)}</span>
+                        <span className="text-[11px] text-dark-300">{formatDateTime(s.created_at).split(' às ')[1]}</span>
+                      </td>
                       <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(s.data_previsao)}</td>
                       <td className="px-5 py-3 text-right font-medium text-dark-700">{formatMoney(s.valor)}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={s.status}
                           onChange={(e) => void handleStatusChange(s.id, e.target.value as ServicoStatus)}
@@ -286,7 +304,7 @@ export default function ServicosPage() {
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             type="button"
-                            onClick={() => openEdit(s)}
+                            onClick={(e) => { e.stopPropagation(); openEdit(s) }}
                             className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                             title="Editar serviço"
                           >
@@ -294,7 +312,7 @@ export default function ServicosPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfirmDelete(s)}
+                            onClick={(e) => { e.stopPropagation(); setConfirmDelete(s) }}
                             className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                             title="Excluir serviço"
                           >
@@ -328,6 +346,15 @@ export default function ServicosPage() {
         description={`Deseja excluir o serviço #${confirmDelete ? displayNumMap.get(confirmDelete.id) : ''}? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         loading={deletando}
+      />
+
+      <DrawerDetalheServico
+        open={!!drawerServico}
+        onClose={() => setDrawerServico(null)}
+        servico={drawerServico}
+        displayNum={drawerServico ? displayNumMap.get(drawerServico.id) : undefined}
+        onEditar={() => { if (!drawerServico) return; openEdit(drawerServico); setDrawerServico(null) }}
+        onExcluir={() => { if (!drawerServico) return; setConfirmDelete(drawerServico); setDrawerServico(null) }}
       />
     </div>
   )

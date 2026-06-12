@@ -17,7 +17,7 @@ import { DrawerDetalheVenda } from '@/components/vendas/drawer-detalhe-venda'
 import { deleteVenda, previewDeleteVenda } from '@/services/vendas'
 import type { DeleteVendaPreview } from '@/services/vendas'
 import {
-  formatMoney, formatDate, vendaStatusVariant,
+  formatMoney, formatDate, formatDateTime, vendaStatusVariant,
   VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
 import type { Venda, VendaTipo, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
@@ -235,7 +235,7 @@ export default function VendasPage() {
                             <span className="text-dark-300"> · {totalUnidades} {totalUnidades === 1 ? 'unidade' : 'unidades'}</span>
                           )}
                         </p>
-                        <p className="text-xs text-dark-300 mt-0.5">{formatDate(venda.data_venda)}</p>
+                        <p className="text-xs text-dark-300 mt-0.5">{formatDateTime(venda.created_at)}</p>
                         {venda.tipo === 'livre' && venda.descricao_livre && (
                           <p className="mt-1.5 text-[11px] text-dark-400 truncate italic">{venda.descricao_livre}</p>
                         )}
@@ -361,7 +361,10 @@ export default function VendasPage() {
                             </div>
                           )}
                         </td>
-                        <td className="hidden md:table-cell px-5 py-3 text-dark-400">{formatDate(venda.data_venda)}</td>
+                        <td className="hidden md:table-cell px-5 py-3 text-dark-400">
+                          <span className="block">{formatDate(venda.data_venda)}</span>
+                          <span className="text-[11px] text-dark-300">{formatDateTime(venda.created_at).split(' às ')[1]}</span>
+                        </td>
                         <td className="hidden lg:table-cell px-5 py-3 text-dark-400">
                           {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
                         </td>

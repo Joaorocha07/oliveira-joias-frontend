@@ -2,7 +2,7 @@
 
 import { X, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui'
-import { formatMoney, formatDate, vendaStatusVariant, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL } from '@/utils'
+import { formatMoney, formatDate, formatDateTime, vendaStatusVariant, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL } from '@/utils'
 import type { VendaRow } from '@/app/(app)/vendas/page'
 
 interface DrawerDetalheVendaProps {
@@ -48,6 +48,9 @@ export function DrawerDetalheVenda({
             </p>
             <p className="text-xs text-dark-400 mt-0.5">
               {formatDate(venda.data_venda)} · {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
+            </p>
+            <p className="text-[11px] text-dark-300 mt-0.5">
+              Registrado em {formatDateTime(venda.created_at)}
             </p>
           </div>
 
