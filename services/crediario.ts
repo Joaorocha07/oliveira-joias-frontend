@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { gerarDatasParcelas } from '@/utils'
-import type { PagarParcelaFormData, EditarCrediarioFormData } from '@/schemas/crediario'
+import type { PagarParcelaFormData, EditarCrediarioFormData, EditarValorParcelaFormData } from '@/schemas/crediario'
 
 async function recalcularSaldoCrediario(crediarioId: string): Promise<{ error: string | null }> {
   const { data: crediario, error: fetchError } = await supabase
@@ -138,6 +138,93 @@ export async function editarPagamentoParcela(
   })
 
   return { error: insertLancamentoError?.message ?? null }
+}
+
+export async function editarValorParcela(
+  parcelaId: string,
+  crediarioId: string,
+  data: EditarValorParcelaFormData,
+): Promise<{ error: string | null }> {
+  const { data: parcelaAtual, error: parcelaFetchError } = await supabase
+    .from('crediario_parcelas')
+    .select('valor_pago, status')
+    .eq('id', parcelaId)
+    .eq('crediario_id', crediarioId)
+    .single()
+
+  if (parcelaFetchError) return { error: parcelaFetchError.message }
+
+  if (parcelaAtual.status === 'pago' && data.valor < (parcelaAtual.valor_pago ?? 0)) {
+    return { error: 'Valor da parcela nao pode ser menor que o valor ja recebido.' }
+  }
+
+  const { error: parcelaError } = await supabase
+    .from('crediario_parcelas')
+    .update({ valor: data.valor })
+    .eq('id', parcelaId)
+    .eq('crediario_id', crediarioId)
+
+  if (parcelaError) return { error: parcelaError.message }
+
+  const { data: crediario, error: crediarioFetchError } = await supabase
+    .from('crediario')
+    .select('entrada, num_parcelas, venda_id, venda:vendas(id, desconto)')
+    .eq('id', crediarioId)
+    .single()
+
+  if (crediarioFetchError) return { error: crediarioFetchError.message }
+
+  const { data: parcelas, error: parcelasError } = await supabase
+    .from('crediario_parcelas')
+    .select('valor, valor_pago, status')
+    .eq('crediario_id', crediarioId)
+
+  if (parcelasError) return { error: parcelasError.message }
+
+  const totalParcelas = (parcelas ?? []).reduce((sum, p) => sum + (p.valor ?? 0), 0)
+  const totalPago = (parcelas ?? [])
+    .filter((p) => p.status === 'pago')
+    .reduce((sum, p) => sum + (p.valor_pago ?? 0), 0)
+  const novoTotal = Math.round(((crediario.entrada ?? 0) + totalParcelas) * 100) / 100
+  const novoSaldo = Math.max(0, Math.round((novoTotal - (crediario.entrada ?? 0) - totalPago) * 100) / 100)
+  const novoStatus = novoSaldo <= 0 ? 'quitado' : 'em_dia'
+  const valorParcela = Math.round((totalParcelas / Math.max(1, crediario.num_parcelas ?? 1)) * 100) / 100
+
+  const { error: crediarioUpdateError } = await supabase
+    .from('crediario')
+    .update({
+      total: novoTotal,
+      saldo: novoSaldo,
+      valor_parcela: valorParcela,
+      status: novoStatus,
+    })
+    .eq('id', crediarioId)
+
+  if (crediarioUpdateError) return { error: crediarioUpdateError.message }
+
+  const crediarioTyped = crediario as unknown as {
+    entrada: number
+    venda_id: string | null
+    venda: { id: string; desconto: number } | { id: string; desconto: number }[] | null
+  }
+  const vendaRaw = crediarioTyped.venda
+  const venda = (Array.isArray(vendaRaw) ? vendaRaw[0] : vendaRaw) ?? null
+
+  if (crediarioTyped.venda_id) {
+    const desconto = venda?.desconto ?? 0
+    const { error: vendaError } = await supabase
+      .from('vendas')
+      .update({
+        subtotal: Math.round((novoTotal + desconto) * 100) / 100,
+        total: novoTotal,
+        valor_pago: Math.min(crediarioTyped.entrada ?? 0, novoTotal),
+      })
+      .eq('id', crediarioTyped.venda_id)
+
+    if (vendaError) return { error: vendaError.message }
+  }
+
+  return { error: null }
 }
 
 export async function updateCrediario(

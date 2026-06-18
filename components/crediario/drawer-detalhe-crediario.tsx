@@ -20,6 +20,7 @@ interface DrawerDetalheCrediarioProps {
   crediario: CrediarioRow | null
   onEditarCrediario: () => void
   onReceberParcela: (parcela: CrediarioParcela) => void
+  onEditarValorParcela: (parcela: CrediarioParcela) => void
 }
 
 type Tab = 'parcelas' | 'venda'
@@ -39,9 +40,11 @@ function computeStatus(c: CrediarioRow): CrediarioStatus {
 function ParcelaRow({
   parcela,
   onReceber,
+  onEditarValor,
 }: {
   parcela: CrediarioParcela
   onReceber: () => void
+  onEditarValor: () => void
 }) {
   const todayStr = today()
   const dvStr = parcela.data_vencimento.slice(0, 10)
@@ -89,24 +92,42 @@ function ParcelaRow({
       </div>
 
       {isPaga && (
-        <button
-          type="button"
-          onClick={onReceber}
-          className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dark-600 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
-        >
-          <Pencil size={12} />
-          Editar
-        </button>
+        <div className="flex-shrink-0 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onEditarValor}
+            className="px-3 py-1.5 text-xs font-medium bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+          >
+            Editar valor
+          </button>
+          <button
+            type="button"
+            onClick={onReceber}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-dark-600 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+          >
+            <Pencil size={12} />
+            Pagamento
+          </button>
+        </div>
       )}
 
       {!isPaga && parcela.status !== 'cancelado' && (
-        <button
-          type="button"
-          onClick={onReceber}
-          className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
-        >
-          Receber
-        </button>
+        <div className="flex-shrink-0 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onEditarValor}
+            className="px-3 py-1.5 text-xs font-medium text-dark-600 border border-gold-200 rounded-lg hover:bg-cream-50 transition-colors"
+          >
+            Editar valor
+          </button>
+          <button
+            type="button"
+            onClick={onReceber}
+            className="px-3 py-1.5 text-xs font-medium bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+          >
+            Receber
+          </button>
+        </div>
       )}
     </div>
   )
@@ -118,6 +139,7 @@ export function DrawerDetalheCrediario({
   crediario,
   onEditarCrediario,
   onReceberParcela,
+  onEditarValorParcela,
 }: DrawerDetalheCrediarioProps) {
   const [tab, setTab] = useState<Tab>('parcelas')
 
@@ -133,8 +155,6 @@ export function DrawerDetalheCrediario({
   const parcelasAtrasadas = parcelas.filter(
     (p) => p.status !== 'pago' && p.status !== 'cancelado' && parcelaVencida(p.data_vencimento),
   )
-  const pendentes = parcelas.filter((p) => p.status !== 'pago' && p.status !== 'cancelado')
-  const totalPendente = pendentes.reduce((sum, p) => sum + p.valor, 0)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -235,8 +255,8 @@ export function DrawerDetalheCrediario({
                   <p className="font-medium text-green-700 text-sm mt-0.5">{formatMoney(totalPago)}</p>
                 </div>
                 <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-100">
-                  <p className="text-[10px] text-amber-600 uppercase tracking-wide">Total pendente</p>
-                  <p className="font-medium text-amber-700 text-sm mt-0.5">{formatMoney(totalPendente)}</p>
+                  <p className="text-[10px] text-amber-600 uppercase tracking-wide">Saldo pendente</p>
+                  <p className="font-medium text-amber-700 text-sm mt-0.5">{formatMoney(saldoAtual)}</p>
                 </div>
               </div>
 
@@ -247,6 +267,7 @@ export function DrawerDetalheCrediario({
                     key={p.id}
                     parcela={p}
                     onReceber={() => onReceberParcela(p)}
+                    onEditarValor={() => onEditarValorParcela(p)}
                   />
                 ))}
                 {parcelas.length === 0 && (

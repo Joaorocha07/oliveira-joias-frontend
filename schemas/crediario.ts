@@ -14,6 +14,12 @@ export const pagarParcelaSchema = z.object({
 
 export type PagarParcelaFormData = z.infer<typeof pagarParcelaSchema>
 
+export const editarValorParcelaSchema = z.object({
+  valor: z.number().min(0.01, 'Valor invalido'),
+})
+
+export type EditarValorParcelaFormData = z.infer<typeof editarValorParcelaSchema>
+
 export const editarCrediarioSchema = z.object({
   total: z.number().min(0.01, 'Total invalido'),
   entrada: z.number().min(0),

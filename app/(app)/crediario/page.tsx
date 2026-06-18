@@ -9,6 +9,7 @@ import {
 } from '@/components/ui'
 import { usePagination } from '@/hooks/use-pagination'
 import { ModalPagarParcela } from '@/components/modals/modal-pagar-parcela'
+import { ModalEditarValorParcela } from '@/components/modals/modal-editar-valor-parcela'
 import { ModalEditarCrediario } from '@/components/modals/modal-editar-crediario'
 import { DrawerDetalheCrediario, type CrediarioRow } from '@/components/crediario/drawer-detalhe-crediario'
 import {
@@ -88,7 +89,9 @@ export default function CrediarioPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editandoCrediario, setEditandoCrediario] = useState<CrediarioRow | null>(null)
   const [parcelaSelecionada, setParcelaSelecionada] = useState<CrediarioParcela | null>(null)
+  const [parcelaValorSelecionada, setParcelaValorSelecionada] = useState<CrediarioParcela | null>(null)
   const [modalPagarOpen, setModalPagarOpen] = useState(false)
+  const [modalEditarValorOpen, setModalEditarValorOpen] = useState(false)
 
   const loadCrediarios = useCallback(async () => {
     const { data, error } = await supabase
@@ -140,6 +143,11 @@ export default function CrediarioPage() {
   function handleReceberParcela(parcela: CrediarioParcela) {
     setParcelaSelecionada(parcela)
     setModalPagarOpen(true)
+  }
+
+  function handleEditarValorParcela(parcela: CrediarioParcela) {
+    setParcelaValorSelecionada(parcela)
+    setModalEditarValorOpen(true)
   }
 
   function handleEditarCrediario() {
@@ -294,6 +302,7 @@ export default function CrediarioPage() {
         crediario={selectedCrediario}
         onEditarCrediario={handleEditarCrediario}
         onReceberParcela={handleReceberParcela}
+        onEditarValorParcela={handleEditarValorParcela}
       />
 
       <ModalEditarCrediario
@@ -308,6 +317,13 @@ export default function CrediarioPage() {
         onClose={() => { setModalPagarOpen(false); setParcelaSelecionada(null) }}
         onSuccess={refreshAndSync}
         parcela={parcelaSelecionada}
+      />
+
+      <ModalEditarValorParcela
+        open={modalEditarValorOpen}
+        onClose={() => { setModalEditarValorOpen(false); setParcelaValorSelecionada(null) }}
+        onSuccess={refreshAndSync}
+        parcela={parcelaValorSelecionada}
       />
     </div>
   )
