@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
@@ -63,9 +64,11 @@ export default function LoginPage() {
 
         {/* Ilustração */}
         <div className="relative z-10 w-full max-w-md">
-          <img
+          <Image
             src="/images/Tablet login-amico.svg"
             alt="Login illustration"
+            width={420}
+            height={420}
             className="w-full h-auto object-contain select-none pointer-events-none"
             draggable={false}
           />
@@ -144,9 +147,11 @@ export default function LoginPage() {
 
           {/* Imagem mobile abaixo do card */}
           <div className="lg:hidden mt-8">
-            <img
+            <Image
               src="/images/Jewelry shop-pana.svg"
               alt=""
+              width={260}
+              height={260}
               className="w-full max-w-[260px] mx-auto h-auto object-contain opacity-80 select-none pointer-events-none"
               draggable={false}
             />

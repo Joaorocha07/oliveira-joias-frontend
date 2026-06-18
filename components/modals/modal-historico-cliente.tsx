@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
-import { X, ShoppingBag, Wrench, BarChart3, Star, Phone, Mail, CreditCard } from 'lucide-react'
+import { X, ShoppingBag, Wrench, BarChart3, Star, Phone, Mail, CreditCard, UserRound } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Badge, Spinner, Pagination } from '@/components/ui'
 import { usePagination } from '@/hooks/use-pagination'
@@ -11,10 +11,13 @@ import {
   vendaStatusVariant, servicoStatusVariant,
   VENDA_STATUS_LABEL, SERVICO_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
-import type { Cliente, Venda, VendaItem, Servico } from '@/types'
+import type { Cliente, Venda, VendaItem, Servico, ProfileResumo } from '@/types'
 
 type Tab = 'compras' | 'servicos' | 'resumo'
-type VendaComItens = Venda & { itens?: VendaItem[] }
+type VendaComItens = Omit<Venda, 'itens' | 'vendedor'> & {
+  itens?: VendaItem[]
+  vendedor?: ProfileResumo | ProfileResumo[] | null
+}
 
 interface Props {
   open: boolean
@@ -49,7 +52,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
       const [vendasRes, servicosRes] = await Promise.all([
         supabase
           .from('vendas')
-          .select('*, itens:venda_itens(*)')
+          .select('*, vendedor:profiles(nome), itens:venda_itens(*)')
           .eq('cliente_id', clienteId)
           .order('data_venda', { ascending: false }),
         supabase
@@ -216,6 +219,11 @@ function groupByDate(vendas: VendaComItens[]) {
   return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a))
 }
 
+function getVendedorNome(venda: VendaComItens) {
+  const vendedor = Array.isArray(venda.vendedor) ? venda.vendedor[0] : venda.vendedor
+  return vendedor?.nome ?? 'Sem vendedor'
+}
+
 function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(vendas)
 
@@ -257,6 +265,10 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
                     <span className="text-xs font-mono text-[#9E9484]">#{venda.numero}</span>
                     <span className="text-xs text-[#6B5E4E] truncate">
                       {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
+                    </span>
+                    <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-xs text-[#6B5E4E]">
+                      <UserRound size={12} className="text-[#A68B3C] flex-shrink-0" />
+                      <span className="truncate">{getVendedorNome(venda)}</span>
                     </span>
                     <Badge variant={vendaStatusVariant(venda.status)}>
                       {VENDA_STATUS_LABEL[venda.status]}
