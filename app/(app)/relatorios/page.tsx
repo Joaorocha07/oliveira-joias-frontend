@@ -10,16 +10,18 @@ import {
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
-  PeriodFilter, getPeriodRange, Button, type PeriodPreset,
+  PeriodFilter, getPeriodRange, Button, Pagination, SearchInput, type PeriodPreset,
 } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { formatMoney, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
+import { Search } from 'lucide-react'
 import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
 import { listarContasPagar } from '@/services/contas-pagar'
 
 const CHART_COLORS = ['#B8962E', '#C49A35', '#D4AF5A', '#EBD9A4', '#9A7B22', '#7A5C10', '#5C4208', '#3D2B05']
 
-type ReportSection = 'geral' | 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario' | 'leads' | 'contas'
+type ReportSection = 'geral' | 'vendas' | 'caixa' | 'servicos' | 'estoque' | 'crediario' | 'leads' | 'contas' | 'clientes'
 type CaixaChartMode = 'evolucao' | 'categorias' | 'lancamentos'
 type VendasSubTab = 'todas' | 'normal' | 'livre'
 
@@ -32,6 +34,7 @@ const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[]
   { key: 'crediario', label: 'Crediario', subtitle: 'Parcelas e recebimentos' },
   { key: 'leads', label: 'Leads', subtitle: 'Origem de clientes' },
   { key: 'contas', label: 'Contas a Pagar', subtitle: 'Vencimentos e pagamentos' },
+  { key: 'clientes', label: 'Clientes', subtitle: 'LTV e top compradores' },
 ]
 
 interface CategoriaData { name: string; value: number }
@@ -50,6 +53,7 @@ interface VendaRelatorio {
   data_venda: string
   forma_pagamento: string
   vendedor_id: string | null
+  cliente_id: string | null
   descricao_livre: string | null
   custo_livre: number | null
   origem_id: string | null
@@ -63,6 +67,12 @@ interface VendaRelatorio {
     produto?: { categoria: ProdutoCategoria } | { categoria: ProdutoCategoria }[] | null
   }[] | null
   vendedor?: { nome: string } | { nome: string }[] | null
+  cliente?: { nome: string; telefone: string | null } | { nome: string; telefone: string | null }[] | null
+}
+
+interface VendaLtvRow {
+  cliente_id: string | null
+  total: number
 }
 
 interface LancamentoRelatorio {
@@ -185,16 +195,18 @@ export default function RelatoriosPage() {
   const [estoqueDetalhado, setEstoqueDetalhado] = useState<VwEstoqueAtual[]>([])
   const [origensCliente, setOrigensCliente] = useState<OrigemCliente[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([])
+  const [clienteLtvData, setClienteLtvData] = useState<VendaLtvRow[]>([])
+  const [clienteSearch, setClienteSearch] = useState('')
 
   const loadRelatorios = useCallback(async () => {
     setLoading(true)
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult] = await Promise.all([
+    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult] = await Promise.all([
       supabase
         .from('vendas')
-        .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+        .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim)
         .not('status', 'eq', 'cancelado'),
@@ -230,6 +242,11 @@ export default function RelatoriosPage() {
         .from('origens_cliente')
         .select('id, nome, ativo')
         .eq('ativo', true),
+      supabase
+        .from('vendas')
+        .select('cliente_id, total')
+        .not('status', 'eq', 'cancelado')
+        .not('cliente_id', 'is', null),
     ])
 
     setVendas(((vendasResult.data ?? []) as unknown) as VendaRelatorio[])
@@ -239,6 +256,7 @@ export default function RelatoriosPage() {
     setCrediariosData(((crediariosResult.data ?? []) as unknown) as CrediarioRow[])
     setCrediarioParcelasPagas(((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[])
     setOrigensCliente((origensResult.data ?? []) as OrigemCliente[])
+    setClienteLtvData(((ltvResult.data ?? []) as unknown) as VendaLtvRow[])
 
     const { data: contasData } = await listarContasPagar()
     setContasPagar(contasData)
@@ -787,6 +805,109 @@ export default function RelatoriosPage() {
         servicos.filter((s) => !s.origem_id && !s.origem_outro).length,
     }
   }, [vendas, servicos, origensCliente, dataFim, dataInicio])
+
+  const analiseClientes = useMemo(() => {
+    const vendasComCliente = vendas.filter((v) => v.cliente_id != null)
+
+    interface ClienteStats {
+      id: string
+      nome: string
+      telefone: string | null
+      compras: number
+      totalPeriodo: number
+      ltvTotal: number
+      produtos: Map<string, number>
+      vendedores: Map<string, { nome: string; total: number; compras: number }>
+    }
+
+    const clienteMap = new Map<string, ClienteStats>()
+
+    vendasComCliente.forEach((venda) => {
+      const clienteId = venda.cliente_id!
+      const clienteData = Array.isArray(venda.cliente) ? venda.cliente[0] : venda.cliente
+      const vendedorData = Array.isArray(venda.vendedor) ? venda.vendedor[0] : venda.vendedor
+      const vendedorNome = vendedorData?.nome ?? 'Sem vendedor'
+      const vId = venda.vendedor_id ?? 'sem-vendedor'
+
+      let stats = clienteMap.get(clienteId)
+      if (!stats) {
+        stats = {
+          id: clienteId,
+          nome: clienteData?.nome ?? 'Cliente',
+          telefone: clienteData?.telefone ?? null,
+          compras: 0,
+          totalPeriodo: 0,
+          ltvTotal: 0,
+          produtos: new Map(),
+          vendedores: new Map(),
+        }
+        clienteMap.set(clienteId, stats)
+      }
+
+      stats.compras += 1
+      stats.totalPeriodo += venda.total ?? 0
+
+      if (venda.tipo === 'livre') {
+        const label = venda.descricao_livre ?? 'Venda Livre'
+        stats.produtos.set(label, (stats.produtos.get(label) ?? 0) + (venda.total ?? 0))
+      } else {
+        ;(venda.itens ?? []).forEach((item) => {
+          const label = item.nome_produto ?? 'Produto'
+          stats!.produtos.set(label, (stats!.produtos.get(label) ?? 0) + (item.subtotal ?? 0))
+        })
+      }
+
+      const vStats = stats.vendedores.get(vId) ?? { nome: vendedorNome, total: 0, compras: 0 }
+      vStats.total += venda.total ?? 0
+      vStats.compras += 1
+      stats.vendedores.set(vId, vStats)
+    })
+
+    // LTV all-time: somar todas as vendas históricas por cliente
+    clienteLtvData.forEach((row) => {
+      if (!row.cliente_id) return
+      const stats = clienteMap.get(row.cliente_id)
+      if (stats) stats.ltvTotal += row.total ?? 0
+    })
+
+    const clientes = Array.from(clienteMap.values()).map((stats) => {
+      const vendedoresList = Array.from(stats.vendedores.values()).sort((a, b) => b.total - a.total)
+      const produtosList = Array.from(stats.produtos.entries())
+        .map(([nome, valor]) => ({ nome, valor }))
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 3)
+      return { ...stats, vendedoresList, produtosList, topVendedor: vendedoresList[0] ?? null }
+    }).sort((a, b) => b.totalPeriodo - a.totalPeriodo)
+
+    // Ranking de vendedores: LTV acumulado dos clientes que cada vendedor atendeu
+    const vendedorLtvMap = new Map<string, { nome: string; ltvTotal: number; qtdClientes: number }>()
+    clientes.forEach((cliente) => {
+      cliente.vendedoresList.forEach((v) => {
+        const entry = vendedorLtvMap.get(v.nome) ?? { nome: v.nome, ltvTotal: 0, qtdClientes: 0 }
+        entry.ltvTotal += cliente.ltvTotal
+        entry.qtdClientes += 1
+        vendedorLtvMap.set(v.nome, entry)
+      })
+    })
+    const rankingVendedores = Array.from(vendedorLtvMap.values()).sort((a, b) => b.ltvTotal - a.ltvTotal)
+
+    const ltvMedio = clientes.length > 0 ? clientes.reduce((s, c) => s + c.ltvTotal, 0) / clientes.length : 0
+    const melhorCliente = clientes[0] ?? null
+
+    return { clientes, rankingVendedores, ltvMedio, melhorCliente }
+  }, [vendas, clienteLtvData])
+
+  const clientesFiltrados = useMemo(() => {
+    const term = clienteSearch.trim().toLowerCase()
+    if (!term) return analiseClientes.clientes
+    return analiseClientes.clientes.filter(
+      (c) =>
+        c.nome.toLowerCase().includes(term) ||
+        (c.telefone ?? '').toLowerCase().includes(term),
+    )
+  }, [analiseClientes.clientes, clienteSearch])
+
+  const clientesPagination = usePagination(clientesFiltrados, 10)
 
   return (
     <div className="space-y-6">
@@ -1789,6 +1910,184 @@ export default function RelatoriosPage() {
               {contasMetrics.vencidas.length === 0 && contasMetrics.pagasNoPeriodo.length === 0 && contasMetrics.pendentes.length === 0 && (
                 <Card>
                   <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma conta cadastrada" description="Acesse Contas a Pagar para registrar contas fixas e variáveis." />
+                </Card>
+              )}
+            </ReportBlock>
+          )}
+
+          {activeSection === 'clientes' && (
+            <ReportBlock>
+              <SectionTitle title="Clientes" subtitle="Top compradores, LTV e desempenho por vendedor no período selecionado" />
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard
+                  label="Clientes com compra"
+                  value={String(analiseClientes.clientes.length)}
+                  changeType="neutral"
+                />
+                <MetricCard
+                  label="Ticket médio / cliente"
+                  value={analiseClientes.clientes.length > 0
+                    ? formatMoney(analiseClientes.clientes.reduce((s, c) => s + c.totalPeriodo, 0) / analiseClientes.clientes.length)
+                    : formatMoney(0)}
+                  changeType="neutral"
+                />
+                <MetricCard
+                  label="Melhor cliente (período)"
+                  value={analiseClientes.melhorCliente ? formatMoney(analiseClientes.melhorCliente.totalPeriodo) : '—'}
+                  change={analiseClientes.melhorCliente?.nome}
+                  changeType="up"
+                />
+                <MetricCard
+                  label="LTV médio"
+                  value={formatMoney(analiseClientes.ltvMedio)}
+                  changeType="neutral"
+                />
+              </div>
+
+              {analiseClientes.clientes.length === 0 ? (
+                <Card>
+                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma venda com cliente no período" description="Vendas vinculadas a clientes aparecem aqui." />
+                </Card>
+              ) : (
+                <Card>
+                  {/* Cabeçalho */}
+                  <div className="border-b border-gold-100 bg-cream-50/60 px-5 py-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-[1px] text-gold-700">Análise de clientes</span>
+                        <h2 className="mt-1 font-serif text-xl text-dark-800">Top Compradores</h2>
+                        <p className="mt-0.5 text-xs text-dark-400">
+                          {analiseClientes.clientes.length} cliente{analiseClientes.clientes.length !== 1 ? 's' : ''} com compra no período · ordenado por valor
+                        </p>
+                      </div>
+
+                      {/* Barra de busca */}
+                      <SearchInput
+                        value={clienteSearch}
+                        onChange={setClienteSearch}
+                        placeholder="Buscar por nome ou telefone..."
+                        className="w-full sm:w-72"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Lista */}
+                  {clientesFiltrados.length === 0 ? (
+                    <div className="flex flex-col items-center gap-1 px-5 py-10 text-center">
+                      <Search size={22} className="text-dark-200 mb-1" />
+                      <p className="text-sm font-medium text-dark-600">Nenhum resultado</p>
+                      <p className="text-xs text-dark-400">Nenhum cliente encontrado para &ldquo;{clienteSearch}&rdquo;</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gold-50">
+                      {clientesPagination.paginated.map((cliente, idx) => {
+                        const pos = (clientesPagination.page - 1) * 10 + idx + 1
+                        return (
+                          <div key={cliente.id} className="px-5 py-4 space-y-3">
+                            {/* Linha principal: posição + nome + valor */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gold-100 flex items-center justify-center text-[11px] font-bold text-gold-700 ring-1 ring-gold-200">
+                                  {pos}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-dark-800 truncate">{cliente.nome}</p>
+                                  {cliente.telefone && (
+                                    <p className="text-xs text-dark-400 mt-0.5">{cliente.telefone}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 text-right">
+                                <p className="text-sm font-bold text-dark-800">{formatMoney(cliente.totalPeriodo)}</p>
+                                <p className="text-xs text-dark-400 mt-0.5">
+                                  {cliente.compras} compra{cliente.compras !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Sub-cards: LTV · vendedor · produtos */}
+                            <div className="grid grid-cols-1 xs:grid-cols-3 sm:grid-cols-3 gap-2 pl-10">
+                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">LTV histórico</p>
+                                <p className="mt-1 text-sm font-bold text-gold-700">{formatMoney(cliente.ltvTotal)}</p>
+                              </div>
+                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">Vendedor principal</p>
+                                <p className="mt-1 text-sm font-semibold text-dark-700 truncate">
+                                  {cliente.topVendedor?.nome ?? '—'}
+                                </p>
+                                {cliente.topVendedor && (
+                                  <p className="text-[11px] text-dark-400 mt-0.5">{formatMoney(cliente.topVendedor.total)}</p>
+                                )}
+                              </div>
+                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">Principais produtos</p>
+                                {cliente.produtosList.length === 0 ? (
+                                  <p className="mt-1 text-xs text-dark-400">—</p>
+                                ) : (
+                                  <ul className="mt-1 space-y-0.5">
+                                    {cliente.produtosList.map((p, i) => (
+                                      <li key={i} className="text-xs text-dark-700 truncate">
+                                        <span className="text-gold-600 font-semibold">{formatMoney(p.valor)}</span>
+                                        {' '}{p.nome}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <Pagination
+                    page={clientesPagination.page}
+                    totalPages={clientesPagination.totalPages}
+                    onPageChange={clientesPagination.setPage}
+                    from={clientesPagination.from}
+                    to={clientesPagination.to}
+                    total={clientesPagination.total}
+                  />
+                </Card>
+              )}
+
+              {analiseClientes.rankingVendedores.length > 0 && (
+                <Card>
+                  <CardHeader
+                    title="Ranking de Vendedores por LTV"
+                    subtitle="LTV acumulado dos clientes atendidos por cada vendedor no período"
+                  />
+                  <div className="divide-y divide-gold-50">
+                    {analiseClientes.rankingVendedores.map((v, idx) => {
+                      const maxLtv = analiseClientes.rankingVendedores[0]?.ltvTotal ?? 1
+                      const pct = maxLtv > 0 ? (v.ltvTotal / maxLtv) * 100 : 0
+                      return (
+                        <div key={v.nome} className="flex items-center gap-4 py-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold-100 flex items-center justify-center text-[11px] font-bold text-gold-700">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-sm font-semibold text-dark-800 truncate">{v.nome}</p>
+                              <div className="flex-shrink-0 text-right">
+                                <p className="text-sm font-bold text-dark-800">{formatMoney(v.ltvTotal)}</p>
+                                <p className="text-xs text-dark-400">{v.qtdClientes} cliente{v.qtdClientes !== 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-gold-100">
+                              <div
+                                className="h-full rounded-full bg-gold-500 transition-all"
+                                style={{ width: `${Math.max(3, pct)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </Card>
               )}
             </ReportBlock>
