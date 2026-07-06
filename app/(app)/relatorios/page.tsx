@@ -72,8 +72,10 @@ interface VendaRelatorio {
 
 interface VendaLtvRow {
   cliente_id: string | null
+  vendedor_id: string | null
   total: number
   data_venda: string
+  vendedor?: { nome: string } | { nome: string }[] | null
 }
 
 interface ClienteCadastro {
@@ -281,9 +283,8 @@ export default function RelatoriosPage() {
         .eq('ativo', true),
       supabase
         .from('vendas')
-        .select('cliente_id, total, data_venda')
-        .not('status', 'eq', 'cancelado')
-        .not('cliente_id', 'is', null),
+        .select('cliente_id, vendedor_id, total, data_venda, vendedor:profiles(nome)')
+        .not('status', 'eq', 'cancelado'),
       supabase
         .from('clientes')
         .select('id, nome, telefone, ativo'),
@@ -920,17 +921,23 @@ export default function RelatoriosPage() {
       return { ...stats, vendedoresList, produtosList, topVendedor: vendedoresList[0] ?? null }
     }).sort((a, b) => b.totalPeriodo - a.totalPeriodo)
 
-    // Ranking de vendedores: LTV acumulado dos clientes que cada vendedor atendeu
-    const vendedorLtvMap = new Map<string, { nome: string; ltvTotal: number; qtdClientes: number }>()
-    clientes.forEach((cliente) => {
-      cliente.vendedoresList.forEach((v) => {
-        const entry = vendedorLtvMap.get(v.nome) ?? { nome: v.nome, ltvTotal: 0, qtdClientes: 0 }
-        entry.ltvTotal += cliente.ltvTotal
-        entry.qtdClientes += 1
-        vendedorLtvMap.set(v.nome, entry)
-      })
+    // Ranking de vendedores: cada venda é atribuída ao seu próprio vendedor_id (SUM(total) GROUP BY vendedor_id),
+    // considerando todo o histórico (inclusive vendas sem cliente vinculado). Evita contar o LTV inteiro do
+    // cliente para todos os vendedores que já o atenderam, o que duplicava valores em clientes compartilhados.
+    const vendedorRankingMap = new Map<string, { nome: string; totalVendas: number; qtdVendas: number; clientesAtendidos: Set<string> }>()
+    clienteLtvData.forEach((row) => {
+      const vId = row.vendedor_id ?? 'sem-vendedor'
+      const vendedorData = Array.isArray(row.vendedor) ? row.vendedor[0] : row.vendedor
+      const nome = vendedorData?.nome ?? 'Sem vendedor'
+      const entry = vendedorRankingMap.get(vId) ?? { nome, totalVendas: 0, qtdVendas: 0, clientesAtendidos: new Set<string>() }
+      entry.totalVendas += row.total ?? 0
+      entry.qtdVendas += 1
+      if (row.cliente_id) entry.clientesAtendidos.add(row.cliente_id)
+      vendedorRankingMap.set(vId, entry)
     })
-    const rankingVendedores = Array.from(vendedorLtvMap.values()).sort((a, b) => b.ltvTotal - a.ltvTotal)
+    const rankingVendedores = Array.from(vendedorRankingMap.values())
+      .map((v) => ({ nome: v.nome, totalVendas: v.totalVendas, qtdVendas: v.qtdVendas, qtdClientes: v.clientesAtendidos.size }))
+      .sort((a, b) => b.totalVendas - a.totalVendas)
 
     const ltvMedio = clientes.length > 0 ? clientes.reduce((s, c) => s + c.ltvTotal, 0) / clientes.length : 0
     const melhorCliente = clientes[0] ?? null
@@ -1009,6 +1016,7 @@ export default function RelatoriosPage() {
     return {
       total: clientesLtv.length,
       ativos,
+      clientesComCompra: comCompra.length,
       ltvMedioGeral: comCompra.length > 0 ? somaLtv / comCompra.length : 0,
       ticketMedioGeral: somaCompras > 0 ? somaLtv / somaCompras : 0,
       melhorCliente,
@@ -1318,6 +1326,32 @@ export default function RelatoriosPage() {
                             ? `${formatMoney(contasMetrics.valorVencido)} vencido`
                             : 'Em dia'}
                         </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Leads</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {analiseLeads.total} lead(s) · {analiseLeads.allOrigens.length} canal(is)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-dark-700">{analiseLeads.ranking[0]?.nome ?? '—'}</p>
+                        <p className={`text-xs mt-0.5 ${analiseLeads.semOrigem > 0 ? 'text-red-600' : 'text-dark-400'}`}>
+                          {analiseLeads.semOrigem} sem origem
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-700">Clientes</p>
+                        <p className="text-xs text-dark-400 mt-0.5">
+                          {clientesLtvResumo.total} cadastrado(s) · {clientesLtvResumo.ativos} ativo(s)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-dark-700">{formatMoney(clientesLtvResumo.ltvMedioGeral)}</p>
+                        <p className="text-xs text-dark-400 mt-0.5">LTV médio</p>
                       </div>
                     </div>
                   </div>
@@ -2079,6 +2113,7 @@ export default function RelatoriosPage() {
                 <MetricCard
                   label="LTV médio"
                   value={formatMoney(clientesLtvResumo.ltvMedioGeral)}
+                  change={`Média por cliente que já comprou (${clientesLtvResumo.total > 0 ? Math.round((clientesLtvResumo.clientesComCompra / clientesLtvResumo.total) * 100) : 0}% dos cadastrados)`}
                   changeType="neutral"
                 />
                 <MetricCard
@@ -2215,13 +2250,13 @@ export default function RelatoriosPage() {
               {analiseClientes.rankingVendedores.length > 0 && (
                 <Card>
                   <CardHeader
-                    title="Ranking de Vendedores por LTV"
-                    subtitle="LTV acumulado dos clientes atendidos por cada vendedor no período"
+                    title="Ranking de Vendedores"
+                    subtitle="Faturamento histórico gerado por vendedor (cada venda conta uma única vez, para quem a realizou)"
                   />
                   <div className="divide-y divide-gold-50">
                     {analiseClientes.rankingVendedores.map((v, idx) => {
-                      const maxLtv = analiseClientes.rankingVendedores[0]?.ltvTotal ?? 1
-                      const pct = maxLtv > 0 ? (v.ltvTotal / maxLtv) * 100 : 0
+                      const maxTotal = analiseClientes.rankingVendedores[0]?.totalVendas ?? 1
+                      const pct = maxTotal > 0 ? (v.totalVendas / maxTotal) * 100 : 0
                       return (
                         <div key={v.nome} className="flex items-center gap-4 py-3">
                           <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold-100 flex items-center justify-center text-[11px] font-bold text-gold-700">
@@ -2231,8 +2266,10 @@ export default function RelatoriosPage() {
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <p className="text-sm font-semibold text-dark-800 truncate">{v.nome}</p>
                               <div className="flex-shrink-0 text-right">
-                                <p className="text-sm font-bold text-dark-800">{formatMoney(v.ltvTotal)}</p>
-                                <p className="text-xs text-dark-400">{v.qtdClientes} cliente{v.qtdClientes !== 1 ? 's' : ''}</p>
+                                <p className="text-sm font-bold text-dark-800">{formatMoney(v.totalVendas)}</p>
+                                <p className="text-xs text-dark-400">
+                                  {v.qtdVendas} venda{v.qtdVendas !== 1 ? 's' : ''} · {v.qtdClientes} cliente{v.qtdClientes !== 1 ? 's' : ''}
+                                </p>
                               </div>
                             </div>
                             <div className="h-1.5 overflow-hidden rounded-full bg-gold-100">

@@ -12,9 +12,10 @@ import {
   PeriodFilter, getPeriodRange, type PeriodPreset,
 } from '@/components/ui'
 import {
-  formatMoney, formatDate, vendaStatusVariant, VENDA_STATUS_LABEL,
+  formatMoney, formatDate, vendaStatusVariant, VENDA_STATUS_LABEL, today,
 } from '@/utils'
-import type { VendaComCliente, VwEstoqueAtual } from '@/types'
+import { listarContasPagar } from '@/services/contas-pagar'
+import type { VendaComCliente, VwEstoqueAtual, ContaPagar } from '@/types'
 
 interface PeriodStat {
   periodo: string
@@ -25,6 +26,9 @@ interface DashboardVenda {
   total: number
   data_venda: string
   forma_pagamento: string
+  cliente_id: string | null
+  origem_id: string | null
+  origem_outro: string | null
 }
 
 interface DashboardRecebimento {
@@ -55,7 +59,22 @@ interface DashboardServico {
   id: string
   status: string
   valor: number
+  custo_estimado: number | null
   pago: boolean
+  origem_id: string | null
+  origem_outro: string | null
+}
+
+interface DashboardOrigem {
+  id: string
+  nome: string
+  ativo: boolean
+}
+
+interface DashboardCliente {
+  id: string
+  ativo: boolean
+  created_at: string
 }
 
 interface DashboardState {
@@ -66,10 +85,26 @@ interface DashboardState {
   saldoCaixa: number
   crediarioAberto: number
   crediarioAbertoValor: number
+  crediarioRecebidoPeriodo: number
   servicosRecebidos: number
+  servicosCustoPeriodo: number
   servicosPeriodo: number
   servicosAndamento: number
+  estoqueUnidadesTotal: number
   estoqueCriticoQtd: number
+  vendasQtdPeriodo: number
+  leadsTotal: number
+  leadsCanaisDistintos: number
+  leadsCanalPrincipal: string | null
+  leadsSemOrigem: number
+  contasPendentesQtd: number
+  contasVencidasQtd: number
+  contasTotalPendente: number
+  contasValorVencido: number
+  clientesCadastrados: number
+  clientesAtivos: number
+  clientesNovosPeriodo: number
+  clientesAtendidosPeriodo: number
   vendasRecentes: VendaComCliente[]
   estoqueCritico: VwEstoqueAtual[]
   faturamentoSeries: PeriodStat[]
@@ -84,10 +119,26 @@ const INITIAL: DashboardState = {
   saldoCaixa: 0,
   crediarioAberto: 0,
   crediarioAbertoValor: 0,
+  crediarioRecebidoPeriodo: 0,
   servicosRecebidos: 0,
+  servicosCustoPeriodo: 0,
   servicosPeriodo: 0,
   servicosAndamento: 0,
+  estoqueUnidadesTotal: 0,
   estoqueCriticoQtd: 0,
+  vendasQtdPeriodo: 0,
+  leadsTotal: 0,
+  leadsCanaisDistintos: 0,
+  leadsCanalPrincipal: null,
+  leadsSemOrigem: 0,
+  contasPendentesQtd: 0,
+  contasVencidasQtd: 0,
+  contasTotalPendente: 0,
+  contasValorVencido: 0,
+  clientesCadastrados: 0,
+  clientesAtivos: 0,
+  clientesNovosPeriodo: 0,
+  clientesAtendidosPeriodo: 0,
   vendasRecentes: [],
   estoqueCritico: [],
   faturamentoSeries: [],
@@ -134,15 +185,18 @@ export default function DashboardPage() {
       { data: crediariosAbertos },
       { data: servicos },
       { data: vendasRecentes },
-      { data: estoqueCritico },
+      { data: estoqueTodos },
+      { data: origensCliente },
+      { data: clientes },
+      { data: contasPagar },
     ] = await Promise.all([
       supabase.from('vendas')
-        .select('total, data_venda, forma_pagamento')
+        .select('total, data_venda, forma_pagamento, cliente_id, origem_id, origem_outro')
         .neq('status', 'cancelado')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim),
       supabase.from('vendas')
-        .select('total, data_venda, forma_pagamento')
+        .select('total, data_venda, forma_pagamento, cliente_id, origem_id, origem_outro')
         .neq('status', 'cancelado')
         .gte('data_venda', periodoAnteriorInicio)
         .lte('data_venda', periodoAnteriorFim),
@@ -176,7 +230,7 @@ export default function DashboardPage() {
         .select('saldo')
         .in('status', ['em_dia', 'vencido']),
       supabase.from('servicos')
-        .select('id, status, valor, pago')
+        .select('id, status, valor, custo_estimado, pago, origem_id, origem_outro')
         .gte('data_entrada', dataInicio)
         .lte('data_entrada', dataFim),
       supabase.from('vendas')
@@ -187,9 +241,13 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('vw_estoque_atual')
-        .select('*')
-        .in('status_estoque', ['critico', 'esgotado'])
-        .limit(5),
+        .select('*'),
+      supabase.from('origens_cliente')
+        .select('id, nome, ativo')
+        .eq('ativo', true),
+      supabase.from('clientes')
+        .select('id, ativo, created_at'),
+      listarContasPagar().then((result) => ({ data: result.data })),
     ])
 
     const vendas = ((vendasPeriodo ?? []) as unknown) as DashboardVenda[]
@@ -228,8 +286,42 @@ export default function DashboardPage() {
     const servicosRecebidos = servicosAtivos
       .filter((servico) => servico.pago)
       .reduce((sum, servico) => sum + (servico.valor ?? 0), 0)
+    const servicosCustoPeriodo = servicosAtivos.reduce((sum, servico) => sum + (servico.custo_estimado ?? 0), 0)
     const crediarioAbertoValor = ((crediariosAbertos ?? []) as { saldo: number }[]).reduce((sum, c) => sum + (c.saldo ?? 0), 0)
-    const estoqueCriticoRows = (estoqueCritico as VwEstoqueAtual[]) ?? []
+    const crediarioRecebidoPeriodo = entradasCrediario.reduce((sum, c) => sum + (c.entrada ?? 0), 0)
+      + parcelasPagas.reduce((sum, p) => sum + (p.valor_pago ?? 0), 0)
+    const estoqueRows = (estoqueTodos as VwEstoqueAtual[]) ?? []
+    const estoqueAlertaRows = estoqueRows.filter((item) => item.status_estoque !== 'normal')
+    const estoqueCriticoRows = estoqueAlertaRows.slice(0, 5)
+    const estoqueUnidadesTotal = estoqueRows.reduce((sum, item) => sum + (item.estoque_atual ?? 0), 0)
+
+    // Leads: origem registrada em vendas e serviços do período
+    const origensRows = ((origensCliente ?? []) as unknown) as DashboardOrigem[]
+    const origemById = new Map(origensRows.map((o) => [o.id, o.nome]))
+    const leadsCount = new Map<string, number>()
+    const registrarLead = (origemId: string | null, origemOutro: string | null) => {
+      let nome: string | null = null
+      if (origemId) nome = origemById.get(origemId) ?? 'Desconhecida'
+      else if (origemOutro) nome = origemOutro
+      if (!nome) return
+      leadsCount.set(nome, (leadsCount.get(nome) ?? 0) + 1)
+    }
+    vendas.forEach((v) => registrarLead(v.origem_id, v.origem_outro))
+    servicosPeriodoRows.forEach((s) => registrarLead(s.origem_id, s.origem_outro))
+    const leadsRanking = Array.from(leadsCount.entries()).sort((a, b) => b[1] - a[1])
+    const leadsSemOrigem = vendas.filter((v) => !v.origem_id && !v.origem_outro).length
+      + servicosPeriodoRows.filter((s) => !s.origem_id && !s.origem_outro).length
+
+    // Contas a pagar
+    const contasPagarRows = (contasPagar ?? []) as ContaPagar[]
+    const todayStr = today()
+    const contasPendentes = contasPagarRows.filter((c) => c.status === 'pendente')
+    const contasVencidas = contasPendentes.filter((c) => c.data_vencimento < todayStr)
+
+    // Clientes
+    const clientesRows = ((clientes ?? []) as unknown) as DashboardCliente[]
+    const clientesAtendidosPeriodo = new Set(vendas.filter((v) => v.cliente_id).map((v) => v.cliente_id)).size
+    const clientesNovosPeriodo = clientesRows.filter((c) => c.created_at >= dataInicio && c.created_at <= `${dataFim}T23:59:59`).length
 
     setState({
       faturamentoPeriodo,
@@ -239,10 +331,26 @@ export default function DashboardPage() {
       saldoCaixa,
       crediarioAberto: (crediariosAbertos ?? []).length,
       crediarioAbertoValor,
+      crediarioRecebidoPeriodo,
       servicosRecebidos,
+      servicosCustoPeriodo,
       servicosPeriodo: servicosAtivos.length,
       servicosAndamento: servicosPeriodoRows.filter((servico) => ['aguardando', 'em_andamento'].includes(servico.status)).length,
-      estoqueCriticoQtd: estoqueCriticoRows.length,
+      estoqueUnidadesTotal,
+      estoqueCriticoQtd: estoqueAlertaRows.length,
+      vendasQtdPeriodo: vendas.length,
+      leadsTotal: leadsRanking.reduce((sum, [, count]) => sum + count, 0),
+      leadsCanaisDistintos: leadsRanking.length,
+      leadsCanalPrincipal: leadsRanking[0]?.[0] ?? null,
+      leadsSemOrigem,
+      contasPendentesQtd: contasPendentes.length,
+      contasVencidasQtd: contasVencidas.length,
+      contasTotalPendente: contasPendentes.reduce((sum, c) => sum + c.valor, 0),
+      contasValorVencido: contasVencidas.reduce((sum, c) => sum + c.valor, 0),
+      clientesCadastrados: clientesRows.length,
+      clientesAtivos: clientesRows.filter((c) => c.ativo).length,
+      clientesNovosPeriodo,
+      clientesAtendidosPeriodo,
       vendasRecentes: (vendasRecentes as VendaComCliente[]) ?? [],
       estoqueCritico: estoqueCriticoRows,
       faturamentoSeries: buildFaturamentoSeries(recebimentosPeriodo, dataInicio, dataFim),
@@ -390,6 +498,128 @@ export default function DashboardPage() {
             <p className="text-xs text-dark-300 mt-0.5">
               {state.estoqueCriticoQtd > 0 ? 'necessita reposição' : 'estoque normalizado'}
             </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Resumo por Área"
+          subtitle="Panorama de cada módulo do sistema no período selecionado"
+        />
+        <div className="divide-y divide-gold-50">
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Vendas</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.vendasQtdPeriodo} venda(s) · ticket médio {formatMoney(state.vendasQtdPeriodo > 0 ? state.faturamentoPeriodo / state.vendasQtdPeriodo : 0)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-dark-700">{formatMoney(state.faturamentoPeriodo)}</p>
+              <p className="text-xs text-dark-400 mt-0.5">recebido no período</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Despesas e Caixa</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {formatMoney(state.entradasPeriodo)} entradas · {formatMoney(state.saidasPeriodo)} saídas
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`text-sm font-semibold ${state.saldoCaixa >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                {formatMoney(state.saldoCaixa)}
+              </p>
+              <p className="text-xs text-dark-400 mt-0.5">resultado</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Serviços</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.servicosPeriodo} ordem(ns) · {state.servicosAndamento} em andamento
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-dark-700">{formatMoney(state.servicosRecebidos)}</p>
+              <p className="text-xs text-green-700 mt-0.5">lucro {formatMoney(state.servicosRecebidos - state.servicosCustoPeriodo)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Estoque</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.estoqueUnidadesTotal} un · {state.estoqueCriticoQtd} alerta(s)
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`text-sm font-semibold ${state.estoqueCriticoQtd > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                {state.estoqueCriticoQtd > 0 ? `${state.estoqueCriticoQtd} em alerta` : 'Normalizado'}
+              </p>
+              <p className="text-xs text-dark-400 mt-0.5">produtos críticos/esgotados</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Crediário</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.crediarioAberto} contrato(s) em aberto
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-dark-700">{formatMoney(state.crediarioRecebidoPeriodo)}</p>
+              <p className="text-xs text-dark-400 mt-0.5">{formatMoney(state.crediarioAbertoValor)} a receber</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Leads</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.leadsTotal} lead(s) · {state.leadsCanaisDistintos} canal(is)
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-dark-700">{state.leadsCanalPrincipal ?? '—'}</p>
+              <p className={`text-xs mt-0.5 ${state.leadsSemOrigem > 0 ? 'text-red-600' : 'text-dark-400'}`}>
+                {state.leadsSemOrigem} sem origem
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Contas a Pagar</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.contasVencidasQtd > 0 ? `${state.contasVencidasQtd} vencida(s)` : `${state.contasPendentesQtd} pendente(s)`}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className={`text-sm font-semibold ${state.contasVencidasQtd > 0 ? 'text-red-600' : 'text-dark-700'}`}>
+                {formatMoney(state.contasTotalPendente)}
+              </p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.contasVencidasQtd > 0 ? `${formatMoney(state.contasValorVencido)} vencido` : 'Em dia'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-700">Clientes</p>
+              <p className="text-xs text-dark-400 mt-0.5">
+                {state.clientesCadastrados} cadastrado(s) · {state.clientesAtivos} ativo(s)
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-dark-700">{state.clientesAtendidosPeriodo} atendido(s)</p>
+              <p className="text-xs text-dark-400 mt-0.5">{state.clientesNovosPeriodo} novo(s) no período</p>
+            </div>
           </div>
         </div>
       </Card>

@@ -42,7 +42,9 @@
       "Bash(grep -o '\\\\.sm\\\\\\\\:w-52[^{]*{[^}]*}' /tmp/relatorios2.css)",
       "Bash(grep -n \"lg\\\\\\\\\\\\\\\\:flex-1\" /tmp/relatorios2.css)",
       "Bash(grep -n \"lg\\\\\\\\\\\\\\\\:min-w-0\" /tmp/relatorios2.css)",
-      "Bash(powershell -Command \"Stop-Process -Id 14416 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 14416 -Force\")",
+      "Bash(netstat -ano)",
+      "Bash(git status *)"
     ]
   }
 }
