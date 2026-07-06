@@ -25,7 +25,24 @@
       "Bash(mkdir -p \"D:\\\\projetos\\\\oliveira-joias-frontend\\\\.claude\\\\rules\")",
       "Bash(mkdir -p \"D:\\\\projetos\\\\oliveira-joias-frontend\\\\.claude\\\\skills\\\\db\")",
       "Bash(xargs grep -l \"relatorio\\\\|vendas\\\\|origem\")",
-      "Bash(Select-String \"relatorios\")"
+      "Bash(Select-String \"relatorios\")",
+      "Bash(node -e ' *)",
+      "Skill(run)",
+      "Bash(ls .claude/skills/)",
+      "Bash(grep -Hm1 '^description:' .claude/skills/*/SKILL.md)",
+      "Bash(npx eslint *)",
+      "Read(//tmp/**)",
+      "Bash(grep -n \"sm\\\\\\\\\\\\\\\\:grid-cols\" /tmp/relatorios.css)",
+      "Bash(grep -o '\\\\.sm\\\\\\\\:[a-z-]*\\\\\\\\\\\\[[^]]*\\\\]' /tmp/relatorios.css)",
+      "Bash(powershell -Command \"Stop-Process -Id 11864 -Force\")",
+      "Bash(disown)",
+      "Bash(powershell -Command \"Stop-Process -Id 20340 -Force\")",
+      "Bash(powershell -Command \"Get-Process -Id 14416 -ErrorAction SilentlyContinue | Select-Object Id, CPU, WorkingSet, StartTime\")",
+      "Bash(grep -o '\\\\.sm\\\\\\\\:w-40[^{]*{[^}]*}' /tmp/relatorios2.css)",
+      "Bash(grep -o '\\\\.sm\\\\\\\\:w-52[^{]*{[^}]*}' /tmp/relatorios2.css)",
+      "Bash(grep -n \"lg\\\\\\\\\\\\\\\\:flex-1\" /tmp/relatorios2.css)",
+      "Bash(grep -n \"lg\\\\\\\\\\\\\\\\:min-w-0\" /tmp/relatorios2.css)",
+      "Bash(powershell -Command \"Stop-Process -Id 14416 -Force\")"
     ]
   }
 }

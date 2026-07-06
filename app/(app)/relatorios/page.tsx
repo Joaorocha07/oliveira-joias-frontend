@@ -10,12 +10,12 @@ import {
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
-  PeriodFilter, getPeriodRange, Button, Pagination, SearchInput, type PeriodPreset,
+  PeriodFilter, getPeriodRange, Button, Pagination, SearchInput, Badge, Select, Modal, type PeriodPreset,
 } from '@/components/ui'
 import { usePagination } from '@/hooks/use-pagination'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
-import { formatMoney, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
-import { Search } from 'lucide-react'
+import { formatMoney, formatDate, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
+import { Search, ChevronUp, ChevronDown } from 'lucide-react'
 import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
 import { listarContasPagar } from '@/services/contas-pagar'
 
@@ -73,6 +73,31 @@ interface VendaRelatorio {
 interface VendaLtvRow {
   cliente_id: string | null
   total: number
+  data_venda: string
+}
+
+interface ClienteCadastro {
+  id: string
+  nome: string
+  telefone: string | null
+  ativo: boolean
+}
+
+type ClienteLtvStatus = 'ativo' | 'inativo'
+
+interface ClienteLtvStats {
+  id: string
+  nome: string
+  telefone: string | null
+  compras: number
+  ltvTotal: number
+  ticketMedio: number | null
+  primeiraCompra: string | null
+  ultimaCompra: string | null
+  tempoVidaDias: number | null
+  recenciaDias: number | null
+  frequenciaMensal: number | null
+  status: ClienteLtvStatus
 }
 
 interface LancamentoRelatorio {
@@ -118,6 +143,12 @@ interface CrediarioParcelaPaga {
   } | {
     venda?: VendaRelatorio | VendaRelatorio[] | null
   }[] | null
+}
+
+function formatFrequenciaCompra(frequenciaMensal: number | null): string {
+  if (frequenciaMensal === null || frequenciaMensal <= 0) return '—'
+  const intervaloDias = Math.round(30.44 / frequenciaMensal)
+  return `a cada ${intervaloDias} dia${intervaloDias !== 1 ? 's' : ''}`
 }
 
 function healthClass(good: boolean, warn: boolean) {
@@ -196,14 +227,20 @@ export default function RelatoriosPage() {
   const [origensCliente, setOrigensCliente] = useState<OrigemCliente[]>([])
   const [contasPagar, setContasPagar] = useState<ContaPagar[]>([])
   const [clienteLtvData, setClienteLtvData] = useState<VendaLtvRow[]>([])
+  const [todosClientes, setTodosClientes] = useState<ClienteCadastro[]>([])
   const [clienteSearch, setClienteSearch] = useState('')
+  const [ltvStatusFiltro, setLtvStatusFiltro] = useState<'todos' | ClienteLtvStatus>('todos')
+  const [ltvInatividadeDias, setLtvInatividadeDias] = useState(90)
+  const [ltvSortField, setLtvSortField] = useState<keyof ClienteLtvStats>('ltvTotal')
+  const [ltvSortDir, setLtvSortDir] = useState<'asc' | 'desc'>('desc')
+  const [clienteLtvDetalhe, setClienteLtvDetalhe] = useState<ClienteLtvStats | null>(null)
 
   const loadRelatorios = useCallback(async () => {
     setLoading(true)
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult] = await Promise.all([
+    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult, clientesResult] = await Promise.all([
       supabase
         .from('vendas')
         .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
@@ -244,9 +281,12 @@ export default function RelatoriosPage() {
         .eq('ativo', true),
       supabase
         .from('vendas')
-        .select('cliente_id, total')
+        .select('cliente_id, total, data_venda')
         .not('status', 'eq', 'cancelado')
         .not('cliente_id', 'is', null),
+      supabase
+        .from('clientes')
+        .select('id, nome, telefone, ativo'),
     ])
 
     setVendas(((vendasResult.data ?? []) as unknown) as VendaRelatorio[])
@@ -257,6 +297,7 @@ export default function RelatoriosPage() {
     setCrediarioParcelasPagas(((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[])
     setOrigensCliente((origensResult.data ?? []) as OrigemCliente[])
     setClienteLtvData(((ltvResult.data ?? []) as unknown) as VendaLtvRow[])
+    setTodosClientes((clientesResult.data ?? []) as ClienteCadastro[])
 
     const { data: contasData } = await listarContasPagar()
     setContasPagar(contasData)
@@ -897,15 +938,117 @@ export default function RelatoriosPage() {
     return { clientes, rankingVendedores, ltvMedio, melhorCliente }
   }, [vendas, clienteLtvData])
 
+  // LTV completo: TODOS os clientes cadastrados, calculado a partir de todo o histórico de vendas (não filtrado por período)
+  const clientesLtv = useMemo(() => {
+    const hoje = today()
+    const porCliente = new Map<string, { total: number; compras: number; datas: string[] }>()
+    clienteLtvData.forEach((row) => {
+      if (!row.cliente_id) return
+      const entry = porCliente.get(row.cliente_id) ?? { total: 0, compras: 0, datas: [] }
+      entry.total += row.total ?? 0
+      entry.compras += 1
+      entry.datas.push(row.data_venda)
+      porCliente.set(row.cliente_id, entry)
+    })
+
+    return todosClientes.map((cliente): ClienteLtvStats => {
+      const dados = porCliente.get(cliente.id)
+      const compras = dados?.compras ?? 0
+      const ltvTotal = dados?.total ?? 0
+
+      if (compras === 0 || !dados) {
+        return {
+          id: cliente.id,
+          nome: cliente.nome,
+          telefone: cliente.telefone,
+          compras: 0,
+          ltvTotal: 0,
+          ticketMedio: null,
+          primeiraCompra: null,
+          ultimaCompra: null,
+          tempoVidaDias: null,
+          recenciaDias: null,
+          frequenciaMensal: null,
+          status: 'inativo',
+        }
+      }
+
+      const datasOrdenadas = [...dados.datas].sort()
+      const primeiraCompra = datasOrdenadas[0]
+      const ultimaCompra = datasOrdenadas[datasOrdenadas.length - 1]
+      const tempoVidaDias = differenceInCalendarDays(parseISO(ultimaCompra), parseISO(primeiraCompra))
+      const recenciaDias = differenceInCalendarDays(parseISO(hoje), parseISO(ultimaCompra))
+      const ticketMedio = ltvTotal / compras
+      const status: ClienteLtvStatus = recenciaDias > ltvInatividadeDias ? 'inativo' : 'ativo'
+      // Intervalos entre compras = compras - 1 (2 compras = 1 intervalo, não 2)
+      const frequenciaMensal = compras > 1 && tempoVidaDias > 0 ? (compras - 1) / (tempoVidaDias / 30.44) : null
+
+      return {
+        id: cliente.id,
+        nome: cliente.nome,
+        telefone: cliente.telefone,
+        compras,
+        ltvTotal,
+        ticketMedio,
+        primeiraCompra,
+        ultimaCompra,
+        tempoVidaDias,
+        recenciaDias,
+        frequenciaMensal,
+        status,
+      }
+    })
+  }, [todosClientes, clienteLtvData, ltvInatividadeDias])
+
+  const clientesLtvResumo = useMemo(() => {
+    const comCompra = clientesLtv.filter((c) => c.compras > 0)
+    const ativos = clientesLtv.filter((c) => c.status === 'ativo').length
+    const somaLtv = comCompra.reduce((s, c) => s + c.ltvTotal, 0)
+    const somaCompras = comCompra.reduce((s, c) => s + c.compras, 0)
+    const melhorCliente = [...comCompra].sort((a, b) => b.ltvTotal - a.ltvTotal)[0] ?? null
+    return {
+      total: clientesLtv.length,
+      ativos,
+      ltvMedioGeral: comCompra.length > 0 ? somaLtv / comCompra.length : 0,
+      ticketMedioGeral: somaCompras > 0 ? somaLtv / somaCompras : 0,
+      melhorCliente,
+    }
+  }, [clientesLtv])
+
+  const handleLtvSort = useCallback((field: keyof ClienteLtvStats) => {
+    setLtvSortField((current) => {
+      if (current === field) {
+        setLtvSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+        return current
+      }
+      setLtvSortDir(field === 'nome' ? 'asc' : 'desc')
+      return field
+    })
+  }, [])
+
   const clientesFiltrados = useMemo(() => {
     const term = clienteSearch.trim().toLowerCase()
-    if (!term) return analiseClientes.clientes
-    return analiseClientes.clientes.filter(
-      (c) =>
-        c.nome.toLowerCase().includes(term) ||
-        (c.telefone ?? '').toLowerCase().includes(term),
-    )
-  }, [analiseClientes.clientes, clienteSearch])
+    let lista = clientesLtv
+    if (term) {
+      lista = lista.filter(
+        (c) => c.nome.toLowerCase().includes(term) || (c.telefone ?? '').toLowerCase().includes(term),
+      )
+    }
+    if (ltvStatusFiltro !== 'todos') {
+      lista = lista.filter((c) => c.status === ltvStatusFiltro)
+    }
+    const dir = ltvSortDir === 'asc' ? 1 : -1
+    return [...lista].sort((a, b) => {
+      const va = a[ltvSortField]
+      const vb = b[ltvSortField]
+      if (va === null && vb === null) return 0
+      if (va === null) return 1
+      if (vb === null) return -1
+      if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb) * dir
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
+      return 0
+    })
+  }, [clientesLtv, clienteSearch, ltvStatusFiltro, ltvSortField, ltvSortDir])
 
   const clientesPagination = usePagination(clientesFiltrados, 10)
 
@@ -1917,129 +2060,144 @@ export default function RelatoriosPage() {
 
           {activeSection === 'clientes' && (
             <ReportBlock>
-              <SectionTitle title="Clientes" subtitle="Top compradores, LTV e desempenho por vendedor no período selecionado" />
+              <SectionTitle title="Clientes" subtitle="LTV histórico de cada cliente cadastrado, calculado a partir de todo o histórico de vendas" />
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                  label="Clientes com compra"
-                  value={String(analiseClientes.clientes.length)}
+                  label="Clientes cadastrados"
+                  value={String(clientesLtvResumo.total)}
                   changeType="neutral"
                 />
                 <MetricCard
-                  label="Ticket médio / cliente"
-                  value={analiseClientes.clientes.length > 0
-                    ? formatMoney(analiseClientes.clientes.reduce((s, c) => s + c.totalPeriodo, 0) / analiseClientes.clientes.length)
-                    : formatMoney(0)}
+                  label="Clientes ativos"
+                  value={String(clientesLtvResumo.ativos)}
+                  change={clientesLtvResumo.total > 0
+                    ? `${((clientesLtvResumo.ativos / clientesLtvResumo.total) * 100).toFixed(0)}% do total · inativo após ${ltvInatividadeDias}d`
+                    : undefined}
                   changeType="neutral"
-                />
-                <MetricCard
-                  label="Melhor cliente (período)"
-                  value={analiseClientes.melhorCliente ? formatMoney(analiseClientes.melhorCliente.totalPeriodo) : '—'}
-                  change={analiseClientes.melhorCliente?.nome}
-                  changeType="up"
                 />
                 <MetricCard
                   label="LTV médio"
-                  value={formatMoney(analiseClientes.ltvMedio)}
+                  value={formatMoney(clientesLtvResumo.ltvMedioGeral)}
+                  changeType="neutral"
+                />
+                <MetricCard
+                  label="Ticket médio geral"
+                  value={formatMoney(clientesLtvResumo.ticketMedioGeral)}
                   changeType="neutral"
                 />
               </div>
 
-              {analiseClientes.clientes.length === 0 ? (
+              {clientesLtv.length === 0 ? (
                 <Card>
-                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhuma venda com cliente no período" description="Vendas vinculadas a clientes aparecem aqui." />
+                  <EmptyState imageSrc="/images/Analytics-rafiki.svg" title="Nenhum cliente cadastrado" description="Cadastre clientes para acompanhar o LTV histórico." />
                 </Card>
               ) : (
                 <Card>
                   {/* Cabeçalho */}
                   <div className="border-b border-gold-100 bg-cream-50/60 px-5 py-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-[1px] text-gold-700">Análise de clientes</span>
-                        <h2 className="mt-1 font-serif text-xl text-dark-800">Top Compradores</h2>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div className="lg:flex-shrink-0">
+                        <span className="text-[11px] font-bold uppercase tracking-[1px] text-gold-700">LTV por cliente</span>
+                        <h2 className="mt-1 font-serif text-xl text-dark-800">Valor histórico de cada cliente</h2>
                         <p className="mt-0.5 text-xs text-dark-400">
-                          {analiseClientes.clientes.length} cliente{analiseClientes.clientes.length !== 1 ? 's' : ''} com compra no período · ordenado por valor
+                          {clientesFiltrados.length} de {clientesLtv.length} cliente{clientesLtv.length !== 1 ? 's' : ''} cadastrado{clientesLtv.length !== 1 ? 's' : ''}
                         </p>
                       </div>
 
-                      {/* Barra de busca */}
-                      <SearchInput
-                        value={clienteSearch}
-                        onChange={setClienteSearch}
-                        placeholder="Buscar por nome ou telefone..."
-                        className="w-full sm:w-72"
-                      />
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_auto_1fr] sm:items-center sm:gap-3 lg:flex-1 lg:min-w-0">
+                        <Select
+                          value={ltvStatusFiltro}
+                          onChange={(e) => setLtvStatusFiltro(e.target.value as 'todos' | ClienteLtvStatus)}
+                          wrapperClassName="w-full sm:w-40"
+                        >
+                          <option value="todos">Todos status</option>
+                          <option value="ativo">Ativos</option>
+                          <option value="inativo">Inativos</option>
+                        </Select>
+                        <Select
+                          value={String(ltvInatividadeDias)}
+                          onChange={(e) => setLtvInatividadeDias(Number(e.target.value))}
+                          wrapperClassName="w-full sm:w-52"
+                        >
+                          <option value="30">Inativo após 30 dias</option>
+                          <option value="60">Inativo após 60 dias</option>
+                          <option value="90">Inativo após 90 dias</option>
+                          <option value="120">Inativo após 120 dias</option>
+                          <option value="180">Inativo após 180 dias</option>
+                        </Select>
+                        <SearchInput
+                          value={clienteSearch}
+                          onChange={setClienteSearch}
+                          placeholder="Buscar por nome ou telefone..."
+                          className="w-full min-w-0"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Lista */}
+                  {/* Tabela */}
                   {clientesFiltrados.length === 0 ? (
                     <div className="flex flex-col items-center gap-1 px-5 py-10 text-center">
                       <Search size={22} className="text-dark-200 mb-1" />
                       <p className="text-sm font-medium text-dark-600">Nenhum resultado</p>
-                      <p className="text-xs text-dark-400">Nenhum cliente encontrado para &ldquo;{clienteSearch}&rdquo;</p>
+                      <p className="text-xs text-dark-400">
+                        {clienteSearch ? <>Nenhum cliente encontrado para &ldquo;{clienteSearch}&rdquo;</> : 'Nenhum cliente corresponde ao filtro selecionado'}
+                      </p>
                     </div>
                   ) : (
-                    <div className="divide-y divide-gold-50">
-                      {clientesPagination.paginated.map((cliente, idx) => {
-                        const pos = (clientesPagination.page - 1) * 10 + idx + 1
-                        return (
-                          <div key={cliente.id} className="px-5 py-4 space-y-3">
-                            {/* Linha principal: posição + nome + valor */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-gold-100 flex items-center justify-center text-[11px] font-bold text-gold-700 ring-1 ring-gold-200">
-                                  {pos}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-dark-800 truncate">{cliente.nome}</p>
-                                  {cliente.telefone && (
-                                    <p className="text-xs text-dark-400 mt-0.5">{cliente.telefone}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex-shrink-0 text-right">
-                                <p className="text-sm font-bold text-dark-800">{formatMoney(cliente.totalPeriodo)}</p>
-                                <p className="text-xs text-dark-400 mt-0.5">
-                                  {cliente.compras} compra{cliente.compras !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Sub-cards: LTV · vendedor · produtos */}
-                            <div className="grid grid-cols-1 xs:grid-cols-3 sm:grid-cols-3 gap-2 pl-10">
-                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">LTV histórico</p>
-                                <p className="mt-1 text-sm font-bold text-gold-700">{formatMoney(cliente.ltvTotal)}</p>
-                              </div>
-                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">Vendedor principal</p>
-                                <p className="mt-1 text-sm font-semibold text-dark-700 truncate">
-                                  {cliente.topVendedor?.nome ?? '—'}
-                                </p>
-                                {cliente.topVendedor && (
-                                  <p className="text-[11px] text-dark-400 mt-0.5">{formatMoney(cliente.topVendedor.total)}</p>
-                                )}
-                              </div>
-                              <div className="rounded-lg bg-cream-50 border border-gold-100 px-3 py-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">Principais produtos</p>
-                                {cliente.produtosList.length === 0 ? (
-                                  <p className="mt-1 text-xs text-dark-400">—</p>
-                                ) : (
-                                  <ul className="mt-1 space-y-0.5">
-                                    {cliente.produtosList.map((p, i) => (
-                                      <li key={i} className="text-xs text-dark-700 truncate">
-                                        <span className="text-gold-600 font-semibold">{formatMoney(p.valor)}</span>
-                                        {' '}{p.nome}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gold-100 bg-cream-50/50">
+                            <LtvSortHeader label="Cliente" field="nome" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} />
+                            <LtvSortHeader label="Compras" field="compras" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden md:table-cell" />
+                            <LtvSortHeader label="LTV histórico" field="ltvTotal" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} />
+                            <LtvSortHeader label="Ticket médio" field="ticketMedio" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden md:table-cell" />
+                            <LtvSortHeader label="1ª compra" field="primeiraCompra" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden lg:table-cell" />
+                            <LtvSortHeader label="Última compra" field="ultimaCompra" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden lg:table-cell" />
+                            <LtvSortHeader label="Tempo de vida" field="tempoVidaDias" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden xl:table-cell" />
+                            <LtvSortHeader label="Recência" field="recenciaDias" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} />
+                            <LtvSortHeader label="Frequência" field="frequenciaMensal" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} className="hidden lg:table-cell" />
+                            <LtvSortHeader label="Status" field="status" sortField={ltvSortField} sortDir={ltvSortDir} onSort={handleLtvSort} />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gold-50">
+                          {clientesPagination.paginated.map((cliente) => (
+                            <tr
+                              key={cliente.id}
+                              className="hover:bg-[#FAF7F0] transition-colors cursor-pointer"
+                              onClick={() => setClienteLtvDetalhe(cliente)}
+                            >
+                              <td className="px-4 py-3 max-w-[200px]">
+                                <p className="font-medium text-dark-700 truncate">{cliente.nome}</p>
+                                {cliente.telefone && <p className="text-xs text-dark-400 truncate">{cliente.telefone}</p>}
+                              </td>
+                              <td className="hidden md:table-cell px-4 py-3 text-dark-600">{cliente.compras}</td>
+                              <td className="px-4 py-3 font-semibold text-gold-700 whitespace-nowrap">{formatMoney(cliente.ltvTotal)}</td>
+                              <td className="hidden md:table-cell px-4 py-3 text-dark-600 whitespace-nowrap">
+                                {cliente.ticketMedio !== null ? formatMoney(cliente.ticketMedio) : '—'}
+                              </td>
+                              <td className="hidden lg:table-cell px-4 py-3 text-dark-400 whitespace-nowrap">{formatDate(cliente.primeiraCompra)}</td>
+                              <td className="hidden lg:table-cell px-4 py-3 text-dark-400 whitespace-nowrap">{formatDate(cliente.ultimaCompra)}</td>
+                              <td className="hidden xl:table-cell px-4 py-3 text-dark-600 whitespace-nowrap">
+                                {cliente.tempoVidaDias !== null ? `${cliente.tempoVidaDias} dia${cliente.tempoVidaDias !== 1 ? 's' : ''}` : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-dark-600 whitespace-nowrap">
+                                {cliente.recenciaDias !== null ? `${cliente.recenciaDias} dia${cliente.recenciaDias !== 1 ? 's' : ''}` : '—'}
+                              </td>
+                              <td className="hidden lg:table-cell px-4 py-3 text-dark-600 whitespace-nowrap">
+                                {formatFrequenciaCompra(cliente.frequenciaMensal)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant={cliente.status === 'ativo' ? 'success' : 'gray'}>
+                                  {cliente.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
 
@@ -2090,6 +2248,50 @@ export default function RelatoriosPage() {
                   </div>
                 </Card>
               )}
+
+              <Modal
+                open={!!clienteLtvDetalhe}
+                onClose={() => setClienteLtvDetalhe(null)}
+                title={clienteLtvDetalhe?.nome ?? 'Cliente'}
+                size="md"
+              >
+                {clienteLtvDetalhe && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm text-dark-400">{clienteLtvDetalhe.telefone ?? 'Sem telefone cadastrado'}</p>
+                      <Badge variant={clienteLtvDetalhe.status === 'ativo' ? 'success' : 'gray'}>
+                        {clienteLtvDetalhe.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <LtvDetailItem label="Número de compras" value={String(clienteLtvDetalhe.compras)} />
+                      <LtvDetailItem label="LTV histórico" value={formatMoney(clienteLtvDetalhe.ltvTotal)} highlight />
+                      <LtvDetailItem
+                        label="Ticket médio"
+                        value={clienteLtvDetalhe.ticketMedio !== null ? formatMoney(clienteLtvDetalhe.ticketMedio) : '—'}
+                      />
+                      <LtvDetailItem label="1ª compra" value={formatDate(clienteLtvDetalhe.primeiraCompra)} />
+                      <LtvDetailItem label="Última compra" value={formatDate(clienteLtvDetalhe.ultimaCompra)} />
+                      <LtvDetailItem
+                        label="Tempo de vida"
+                        value={clienteLtvDetalhe.tempoVidaDias !== null
+                          ? `${clienteLtvDetalhe.tempoVidaDias} dia${clienteLtvDetalhe.tempoVidaDias !== 1 ? 's' : ''}`
+                          : '—'}
+                      />
+                      <LtvDetailItem
+                        label="Recência"
+                        value={clienteLtvDetalhe.recenciaDias !== null
+                          ? `${clienteLtvDetalhe.recenciaDias} dia${clienteLtvDetalhe.recenciaDias !== 1 ? 's' : ''} sem comprar`
+                          : '—'}
+                      />
+                      <LtvDetailItem
+                        label="Frequência de compra"
+                        value={formatFrequenciaCompra(clienteLtvDetalhe.frequenciaMensal)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </Modal>
             </ReportBlock>
           )}
         </>
@@ -2099,6 +2301,38 @@ export default function RelatoriosPage() {
 }
 
 // ─── Sub-componentes ─────────────────────────────────────────────────────────
+
+function LtvSortHeader({ label, field, sortField, sortDir, onSort, className }: {
+  label: string
+  field: keyof ClienteLtvStats
+  sortField: keyof ClienteLtvStats
+  sortDir: 'asc' | 'desc'
+  onSort: (field: keyof ClienteLtvStats) => void
+  className?: string
+}) {
+  const active = field === sortField
+  return (
+    <th className={`px-4 py-3 text-left text-xs font-medium text-dark-300 uppercase tracking-wide ${className ?? ''}`}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="inline-flex items-center gap-1 hover:text-gold-700 transition-colors whitespace-nowrap"
+      >
+        {label}
+        {active && (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+      </button>
+    </th>
+  )
+}
+
+function LtvDetailItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${highlight ? 'border-gold-200 bg-gold-50/60' : 'border-gold-100 bg-cream-50'}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[1px] text-dark-300">{label}</p>
+      <p className={`mt-1 text-sm font-semibold ${highlight ? 'text-gold-700' : 'text-dark-700'}`}>{value}</p>
+    </div>
+  )
+}
 
 function ProductSalesReport({ data }: { data: CategoriaData[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0)
