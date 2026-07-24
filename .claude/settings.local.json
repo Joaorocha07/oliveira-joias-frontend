@@ -44,7 +44,16 @@
       "Bash(grep -n \"lg\\\\\\\\\\\\\\\\:min-w-0\" /tmp/relatorios2.css)",
       "Bash(powershell -Command \"Stop-Process -Id 14416 -Force\")",
       "Bash(netstat -ano)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(xargs grep -l \"QueryClient\")",
+      "Bash(git rm *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npm audit *)",
+      "Bash(npm ls *)"
     ]
   }
 }
