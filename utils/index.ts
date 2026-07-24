@@ -1,8 +1,9 @@
-import { format, parseISO, isValid, isBefore, startOfDay } from 'date-fns'
+import { format, parseISO, isValid, isBefore, startOfDay, differenceInCalendarDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type {
   FormaPagamento, VendaStatus, ServicoStatus,
   ParcelaStatus, CrediarioStatus, ProdutoCategoria,
+  StatusFunil, ProdutoInteresse, FollowUpStatus, StatusQualificacao,
 } from '@/types'
 
 // ── FORMATAÇÃO MONETÁRIA ───────────────────────────────────────
@@ -107,6 +108,66 @@ export const PRODUTO_CATEGORIA_LABEL: Record<ProdutoCategoria, string> = {
   outro: 'Outro',
 }
 
+export const STATUS_FUNIL_LABEL: Record<StatusFunil, string> = {
+  novo_lead: 'Novo Lead',
+  primeiro_atendimento: 'Primeiro Atendimento',
+  orcamento: 'Orçamento',
+  negociacao: 'Negociação',
+  follow_up: 'Follow-up',
+  pedido_confirmado: 'Pedido Confirmado',
+  producao: 'Produção',
+  pedido_entregue: 'Pedido Entregue',
+  pos_venda: 'Pós-venda',
+  lead_perdido: 'Lead Perdido',
+}
+
+// Ordem das colunas do Kanban — "lead_perdido" sempre por último
+export const STATUS_FUNIL_ORDEM: StatusFunil[] = [
+  'novo_lead', 'primeiro_atendimento', 'orcamento', 'negociacao', 'follow_up',
+  'pedido_confirmado', 'producao', 'pedido_entregue', 'pos_venda', 'lead_perdido',
+]
+
+export const PRODUTO_INTERESSE_LABEL: Record<ProdutoInteresse, string> = {
+  alianca_prata: 'Aliança de Prata',
+  alianca_ouro: 'Aliança de Ouro',
+  alianca_moeda_antiga: 'Aliança de Moeda Antiga',
+  alianca_aco: 'Aliança de Aço',
+  semijoias: 'Semi Joias',
+  outro: 'Outro',
+}
+
+export const FOLLOWUP_STATUS_LABEL: Record<FollowUpStatus, string> = {
+  pendente: 'Pendente',
+  concluido: 'Concluído',
+  cancelado: 'Cancelado',
+}
+
+// Seção 3 do documento — status de qualificação/atendimento, independente do
+// estágio no funil (Kanban). Cores seguem os "circulos coloridos" do doc.
+export const STATUS_QUALIFICACAO_LABEL: Record<StatusQualificacao, string> = {
+  novo_lead: 'Novo Lead',
+  em_atendimento: 'Em Atendimento',
+  fazendo_orcamento: 'Fazendo Orçamento',
+  interessado: 'Interessado',
+  aguardando_resposta: 'Aguardando Resposta',
+  follow_up_agendado: 'Follow-up Agendado',
+  venda_concluida: 'Venda Concluída',
+  lead_perdido: 'Lead Perdido',
+  nao_respondeu: 'Não Respondeu',
+}
+
+export const STATUS_QUALIFICACAO_COR: Record<StatusQualificacao, string> = {
+  novo_lead: '#22C55E',
+  em_atendimento: '#D4A72C',
+  fazendo_orcamento: '#F97316',
+  interessado: '#5B8EB8',
+  aguardando_resposta: '#8B5CF6',
+  follow_up_agendado: '#92603A',
+  venda_concluida: '#5B8C5B',
+  lead_perdido: '#C75B5B',
+  nao_respondeu: '#4B5563',
+}
+
 // ── CPF / CNPJ / TELEFONE ──────────────────────────────────────
 export function formatCPF(cpf: string): string {
   const n = cpf.replace(/\D/g, '')
@@ -123,6 +184,14 @@ export function formatPhone(phone: string): string {
   if (n.length === 11) return n.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
   if (n.length === 10) return n.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
   return phone
+}
+
+// ── WHATSAPP ───────────────────────────────────────────────────
+export function buildWhatsAppLink(phone: string, message?: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const withCountry = digits.length <= 11 ? `55${digits}` : digits
+  const query = message ? `?text=${encodeURIComponent(message)}` : ''
+  return `https://wa.me/${withCountry}${query}`
 }
 
 // ── INICIAIS ───────────────────────────────────────────────────
@@ -165,6 +234,31 @@ export function servicoStatusVariant(status: ServicoStatus): BadgeVariant {
     em_andamento: 'info',
     concluido: 'success',
     cancelado: 'danger',
+  }
+  return map[status]
+}
+
+export function followUpStatusVariant(status: FollowUpStatus): BadgeVariant {
+  const map: Record<FollowUpStatus, BadgeVariant> = {
+    pendente: 'warning',
+    concluido: 'success',
+    cancelado: 'gray',
+  }
+  return map[status]
+}
+
+export function statusFunilVariant(status: StatusFunil): BadgeVariant {
+  const map: Record<StatusFunil, BadgeVariant> = {
+    novo_lead: 'gray',
+    primeiro_atendimento: 'info',
+    orcamento: 'info',
+    negociacao: 'warning',
+    follow_up: 'warning',
+    pedido_confirmado: 'gold',
+    producao: 'gold',
+    pedido_entregue: 'success',
+    pos_venda: 'success',
+    lead_perdido: 'danger',
   }
   return map[status]
 }
@@ -228,6 +322,42 @@ export function calcularCondicaoOrcamento(
   return { percentual, parcelas, valorParcelado, valorParcela }
 }
 
+// ── CRM: LEAD SCORE ─────────────────────────────────────────────
+interface LeadScoreInput {
+  data_casamento?: string | null
+  data_noivado?: string | null
+  modelo_desejado?: string | null
+  valor_pretendido?: number | null
+  numeracao?: string | null
+  perguntou_pagamento?: boolean
+  solicitou_gravacao?: boolean
+  demonstrou_intencao?: boolean
+}
+
+function dataProxima(data: string | null | undefined, dias: number): boolean {
+  if (!data) return false
+  try {
+    const diff = differenceInCalendarDays(parseISO(data), startOfDay(new Date()))
+    return diff >= 0 && diff <= dias
+  } catch {
+    return false
+  }
+}
+
+// Heurística simples: cada sinal de intenção de compra soma 1 ponto (máx. 7),
+// convertido para 1–5 estrelas. Não persiste em trigger — recalculado a cada save.
+export function calcularLeadScore(lead: LeadScoreInput): number {
+  let pontos = 0
+  if (dataProxima(lead.data_casamento, 90) || dataProxima(lead.data_noivado, 90)) pontos++
+  if (lead.modelo_desejado) pontos++
+  if (lead.valor_pretendido) pontos++
+  if (lead.numeracao) pontos++
+  if (lead.perguntou_pagamento) pontos++
+  if (lead.solicitou_gravacao) pontos++
+  if (lead.demonstrou_intencao) pontos++
+  return clamp(Math.ceil((pontos / 7) * 5), 1, 5)
+}
+
 // ── CATEGORIAS DE DESPESA ──────────────────────────────────────
 export const CATEGORIAS_DESPESA = [
   'Reposição / aumento de estoque',
@@ -246,3 +376,20 @@ export const CATEGORIAS_DESPESA = [
 ] as const
 
 export type CategoriaDespesa = typeof CATEGORIAS_DESPESA[number]
+
+// ── EXPORTAÇÃO CSV (Excel) ──────────────────────────────────────
+export function exportarCsv(nomeArquivo: string, headers: string[], rows: (string | number | null | undefined)[][]) {
+  const escapar = (valor: string | number | null | undefined) => {
+    const texto = String(valor ?? '')
+    return /[";\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto
+  }
+  const linhas = [headers, ...rows].map((linha) => linha.map(escapar).join(';'))
+  const conteudo = '﻿' + linhas.join('\r\n')
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = nomeArquivo.endsWith('.csv') ? nomeArquivo : `${nomeArquivo}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}

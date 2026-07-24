@@ -62,8 +62,91 @@ status, observacoes, recebido_por, created_at, updated_at
 ```
 id, nome, cpf, rg, email, telefone, whatsapp, data_nascimento,
 endereco, numero, complemento, bairro, cidade, estado, cep,
-observacoes, ativo, created_by, created_at, updated_at
+observacoes, ativo, created_by, created_at, updated_at,
+-- CRM (funil de leads) --
+status_funil,       ← 'novo_lead'|'primeiro_atendimento'|'orcamento'|'negociacao'|'follow_up'|
+                       'pedido_confirmado'|'producao'|'pedido_entregue'|'pos_venda'|'lead_perdido'
+lead_score,         ← 1-5, calculado por calcularLeadScore() em utils/index.ts a cada save
+origem_id,          ← FK origens_cliente
+origem_outro, instagram,
+produto_interesse,  ← 'alianca_prata'|'alianca_ouro'|'alianca_moeda_antiga'|'alianca_aco'|'semijoias'|'outro'
+valor_pretendido, data_casamento, data_noivado, quando_pretende_comprar,
+modelo_desejado, numeracao,
+vendedor_id,        ← FK profiles (role='vendedor')
+perguntou_pagamento, solicitou_gravacao, demonstrou_intencao,  ← booleans, entram no lead_score
+motivo_perda,       ← preenchido quando status_funil='lead_perdido'
+ultimo_contato_em,  ← timestamptz, atualizado a cada nota/mudança de estágio/follow-up concluído
+                       (base dos alertas de "sem resposta"/"esquecido" em services/follow-ups.ts)
+status_qualificacao,← 'novo_lead'|'em_atendimento'|'fazendo_orcamento'|'interessado'|
+                       'aguardando_resposta'|'follow_up_agendado'|'venda_concluida'|
+                       'lead_perdido'|'nao_respondeu' — independente do status_funil (seção 3 do
+                       doc de requisitos); editável na aba Timeline do modal de detalhe do cliente
+parceiro_nome, parceiro_telefone  ← cadastro de casal (item 16 do doc), opcionais
 ```
+> Leads e clientes convertidos coexistem na mesma tabela (decisão de projeto: sem tabela `leads`
+> separada). Ver `.claude/migrations/crm_leads.sql`, `crm_leads_fix_timeline_fk.sql`,
+> `crm_followups.sql`, `crm_status_qualificacao.sql` e `crm_extras.sql`.
+>
+> Vendedores (`profiles.role='vendedor'`) só enxergam os próprios leads no `/crm` e
+> `/crm/follow-up` (filtro por `vendedor_id` em `services/clientes.ts`/`services/follow-ups.ts`);
+> outros roles veem tudo. É uma restrição de UI/query, não RLS por role no banco.
+>
+> `created_by` referencia `profiles(id)` (não `auth.users` como na maioria das outras tabelas) —
+> importante ao escrever embeds do PostgREST: qualquer segunda FK para `profiles` (ex.: `vendedor_id`)
+> exige o hint explícito `profiles!clientes_vendedor_id_fkey(...)`, senão dá erro `PGRST201`
+> (relação ambígua).
+
+### `cliente_timeline`
+```
+id, cliente_id, tipo ('nota'|'status'|'sistema'), descricao,
+status_anterior, status_novo, created_by, created_at
+```
+> Log append-only da Timeline do cliente/lead — notas manuais e eventos automáticos de mudança de
+> `status_funil`/follow-up (preenchidos por `services/clientes.ts` e `services/follow-ups.ts`). Sem
+> `updated_at`, não é editável. `created_by` referencia `profiles(id)`.
+
+### `cliente_followups`
+```
+id, cliente_id, data_agendada, horario, motivo,
+status ('pendente'|'concluido'|'cancelado'), created_by, created_at, updated_at
+```
+> Agenda de retornos do CRM (`services/follow-ups.ts`). Agendar/reagendar/concluir/cancelar também
+> gravam um evento em `cliente_timeline`; concluir atualiza `clientes.ultimo_contato_em`.
+
+### `metas_mensais`
+```
+id, mes (date, sempre dia 1), vendedor_id (null = meta geral da loja),
+valor_meta, created_by, created_at, updated_at
+```
+> `services/metas.ts`. Índices únicos parciais garantem no máximo 1 meta geral por mês
+> (`vendedor_id is null`) e 1 meta por vendedor por mês. Editável direto no CRM Dashboard
+> (ícone de lápis no card "Meta Mensal").
+
+### `mensagens_modelo`
+```
+id, categoria, titulo, mensagem, ativo, created_by, created_at, updated_at
+```
+> Biblioteca de mensagens do CRM (`services/mensagens.ts`, CRUD em `/crm/mensagens`). Placeholders
+> no texto: `{nome}`, `{produto}`, `{empresa}`, `{endereco}`, `{instagram}` — substituídos por
+> `preencherMensagem()` antes de abrir o WhatsApp (`modal-whatsapp.tsx`). Seed inicial com ~11
+> modelos cobrindo atendimento, pedido, pós-venda e promoção.
+
+### `cliente_arquivos`
+```
+id, cliente_id, tipo ('foto'|'documento'), nome, url (= caminho no storage), created_by, created_at
+```
+> Fotos de modelos escolhidos e documentos/comprovantes do cliente (`services/arquivos.ts`, upload
+> na aba Timeline do modal do cliente). `url` guarda o **path** dentro do bucket, não a URL pública
+> — usar `getArquivoUrl(path)` pra montar a URL de exibição. Bucket: `crm-arquivos` (público, ver
+> `crm_extras.sql`).
+
+### `origens_cliente`
+```
+id, nome, ativo, created_at
+```
+> Catálogo de origens (Instagram, Google, Anúncio, Indicação, Outro, Vitrine, Facebook, WhatsApp).
+> Referenciado por `origem_id` em `vendas`, `servicos` e `clientes`. Quando `nome='Outro'`, o texto
+> livre vai no campo irmão `origem_outro` de cada tabela.
 
 ### `servicos`
 ```
@@ -83,7 +166,9 @@ categoria, observacoes, ativo, created_by, created_at, updated_at
 
 ### `profiles`
 ```
-id, nome, email, role, ativo, avatar_url, telefone, created_at, updated_at, cpf
+id, nome, email, role, ativo, avatar_url, telefone, created_at, updated_at, cpf,
+comissao_percentual  ← numeric(5,2), editável em /vendedores; usado no cálculo de
+                        comissão do CRM (dashboard e relatórios)
 ```
 > Vendedores = `profiles` com `role = 'vendedor'`. Não existe tabela `vendedores` separada.
 

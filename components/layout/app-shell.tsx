@@ -79,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="font-display text-base text-gold-600 leading-none">Oliveira Joias</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 min-w-0">
           {children}
         </div>
       </main>

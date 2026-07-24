@@ -2,18 +2,37 @@
 
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
-import { X, ShoppingBag, Wrench, BarChart3, Star, Phone, Mail, CreditCard, UserRound } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { Badge, Spinner, Pagination } from '@/components/ui'
-import { usePagination } from '@/hooks/use-pagination'
 import {
-  formatDate, formatMoney, formatCPF, formatPhone,
-  vendaStatusVariant, servicoStatusVariant,
+  X, ShoppingBag, Wrench, BarChart3, Star, Phone, Mail, CreditCard, UserRound,
+  History, FileText, Repeat, Send, CalendarClock, MessageCircle,
+} from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Badge, Spinner, Pagination, Button, Textarea } from '@/components/ui'
+import { usePagination } from '@/hooks/use-pagination'
+import { useAuth } from '@/context/auth-context'
+import { useAlert } from '@/hooks/use-alert'
+import { listarTimeline, criarNotaTimeline, updateStatusQualificacao } from '@/services/clientes'
+import { listarArquivos, uploadArquivo, excluirArquivo, getArquivoUrl } from '@/services/arquivos'
+import { ModalAgendarFollowUp } from '@/components/modals/modal-agendar-followup'
+import { ModalWhatsApp } from '@/components/modals/modal-whatsapp'
+import {
+  formatDate, formatDateTime, formatMoney, formatCPF, formatPhone,
+  vendaStatusVariant, servicoStatusVariant, statusFunilVariant,
   VENDA_STATUS_LABEL, SERVICO_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
+  STATUS_FUNIL_LABEL, PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL, STATUS_QUALIFICACAO_COR,
 } from '@/utils'
-import type { Cliente, Venda, VendaItem, Servico, ProfileResumo } from '@/types'
+import type {
+  Cliente, Venda, VendaItem, Servico, ProfileResumo, ClienteTimelineEvento, StatusQualificacao,
+  ClienteArquivo, ClienteArquivoTipo,
+} from '@/types'
 
-type Tab = 'compras' | 'servicos' | 'resumo'
+const STATUS_QUALIFICACAO_OPTS: StatusQualificacao[] = [
+  'novo_lead', 'em_atendimento', 'fazendo_orcamento', 'interessado',
+  'aguardando_resposta', 'follow_up_agendado', 'venda_concluida',
+  'lead_perdido', 'nao_respondeu',
+]
+
+type Tab = 'compras' | 'servicos' | 'resumo' | 'timeline'
 type VendaComItens = Omit<Venda, 'itens' | 'vendedor'> & {
   itens?: VendaItem[]
   vendedor?: ProfileResumo | ProfileResumo[] | null
@@ -26,11 +45,77 @@ interface Props {
 }
 
 export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
+  const { user } = useAuth()
+  const alert = useAlert()
   const [tab, setTab] = useState<Tab>('compras')
   const [vendas, setVendas] = useState<VendaComItens[]>([])
   const [servicos, setServicos] = useState<Servico[]>([])
+  const [timeline, setTimeline] = useState<ClienteTimelineEvento[]>([])
   const [loading, setLoading] = useState(false)
+  const [nota, setNota] = useState('')
+  const [enviandoNota, setEnviandoNota] = useState(false)
+  const [agendarOpen, setAgendarOpen] = useState(false)
+  const [whatsappOpen, setWhatsappOpen] = useState(false)
+  const [statusQualif, setStatusQualif] = useState<StatusQualificacao>('novo_lead')
+  const [salvandoStatus, setSalvandoStatus] = useState(false)
+  const [arquivos, setArquivos] = useState<ClienteArquivo[]>([])
+  const [enviandoArquivo, setEnviandoArquivo] = useState<ClienteArquivoTipo | null>(null)
   const clienteId = cliente?.id
+
+  async function recarregarTimeline() {
+    if (!clienteId) return
+    const { data } = await listarTimeline(clienteId)
+    setTimeline(data ?? [])
+  }
+
+  async function recarregarArquivos() {
+    if (!clienteId) return
+    const { data } = await listarArquivos(clienteId)
+    setArquivos(data ?? [])
+  }
+
+  async function handleUploadArquivo(file: File | undefined, tipo: ClienteArquivoTipo) {
+    if (!file || !clienteId || !user) return
+    setEnviandoArquivo(tipo)
+    const { error } = await uploadArquivo(clienteId, file, tipo, user.id)
+    if (error) alert.error('Erro', error)
+    else await recarregarArquivos()
+    setEnviandoArquivo(null)
+  }
+
+  async function handleExcluirArquivo(arquivo: ClienteArquivo) {
+    const { error } = await excluirArquivo(arquivo)
+    if (error) alert.error('Erro', error)
+    else setArquivos((prev) => prev.filter((a) => a.id !== arquivo.id))
+  }
+
+  async function handleChangeStatusQualificacao(novo: StatusQualificacao) {
+    if (!clienteId || !user) return
+    const anterior = statusQualif
+    setStatusQualif(novo)
+    setSalvandoStatus(true)
+    const { error } = await updateStatusQualificacao(clienteId, novo, user.id)
+    if (error) {
+      alert.error('Erro', error)
+      setStatusQualif(anterior)
+    } else {
+      await recarregarTimeline()
+    }
+    setSalvandoStatus(false)
+  }
+
+  async function handleEnviarNota() {
+    if (!clienteId || !user || !nota.trim()) return
+    setEnviandoNota(true)
+    const { error } = await criarNotaTimeline(clienteId, nota.trim(), user.id)
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      setNota('')
+      await recarregarTimeline()
+    }
+    setEnviandoNota(false)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -48,8 +133,11 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
       setLoading(true)
       setVendas([])
       setServicos([])
+      setTimeline([])
+      setArquivos([])
+      if (cliente) setStatusQualif(cliente.status_qualificacao)
 
-      const [vendasRes, servicosRes] = await Promise.all([
+      const [vendasRes, servicosRes, timelineRes, arquivosRes] = await Promise.all([
         supabase
           .from('vendas')
           .select('*, vendedor:profiles(nome), itens:venda_itens(*)')
@@ -60,10 +148,14 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
           .select('*')
           .eq('cliente_id', clienteId)
           .order('data_entrada', { ascending: false }),
+        listarTimeline(clienteId),
+        listarArquivos(clienteId),
       ])
       if (cancelled) return
       setVendas((vendasRes.data ?? []) as VendaComItens[])
       setServicos(servicosRes.data ?? [])
+      setTimeline(timelineRes.data ?? [])
+      setArquivos(arquivosRes.data ?? [])
       setLoading(false)
     })()
     return () => { cancelled = true }
@@ -79,6 +171,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
   const iniciais = cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
       role="dialog"
@@ -150,7 +243,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
           </div>
 
           {/* Abas */}
-          <div className="grid grid-cols-3 border-b border-[#F0EBE0] bg-white px-1 sm:flex sm:px-6 sm:overflow-x-auto">
+          <div className="grid grid-cols-4 border-b border-[#F0EBE0] bg-white px-1 sm:flex sm:px-6 sm:overflow-x-auto">
             {TABS.map(({ key, label, Icon }) => (
               <button
                 key={key}
@@ -191,11 +284,46 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
                   totalServicosCount={servicos.length}
                 />
               )}
+              {tab === 'timeline' && (
+                <TabTimeline
+                  cliente={cliente}
+                  eventos={timeline}
+                  nota={nota}
+                  onChangeNota={setNota}
+                  onEnviarNota={handleEnviarNota}
+                  enviando={enviandoNota}
+                  onAgendar={() => setAgendarOpen(true)}
+                  onWhatsApp={() => setWhatsappOpen(true)}
+                  statusQualif={statusQualif}
+                  onChangeStatusQualif={handleChangeStatusQualificacao}
+                  salvandoStatus={salvandoStatus}
+                  arquivos={arquivos}
+                  enviandoArquivo={enviandoArquivo}
+                  onUploadArquivo={handleUploadArquivo}
+                  onExcluirArquivo={handleExcluirArquivo}
+                />
+              )}
             </>
           )}
         </div>
       </div>
     </div>
+
+    <ModalAgendarFollowUp
+      open={agendarOpen}
+      onClose={() => setAgendarOpen(false)}
+      onSuccess={recarregarTimeline}
+      clienteId={cliente.id}
+      clienteNome={cliente.nome}
+    />
+
+    <ModalWhatsApp
+      open={whatsappOpen}
+      onClose={() => setWhatsappOpen(false)}
+      onSent={recarregarTimeline}
+      cliente={cliente}
+    />
+    </>
   )
 }
 
@@ -205,6 +333,7 @@ const TABS = [
   { key: 'compras' as const,  label: 'Compras',      Icon: ShoppingBag },
   { key: 'servicos' as const, label: 'Serviços',     Icon: Wrench },
   { key: 'resumo' as const,   label: 'Resumo Geral', Icon: BarChart3 },
+  { key: 'timeline' as const, label: 'Timeline',     Icon: History },
 ]
 
 // ── TAB COMPRAS ──────────────────────────────────────────────────
@@ -468,6 +597,254 @@ function TabResumo({
             </div>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ── TAB TIMELINE ─────────────────────────────────────────────────
+
+const TIMELINE_ICON = { nota: FileText, status: Repeat, sistema: History } as const
+
+interface TabTimelineProps {
+  cliente: Cliente
+  eventos: ClienteTimelineEvento[]
+  nota: string
+  onChangeNota: (value: string) => void
+  onEnviarNota: () => void
+  enviando: boolean
+  onAgendar: () => void
+  onWhatsApp: () => void
+  statusQualif: StatusQualificacao
+  onChangeStatusQualif: (status: StatusQualificacao) => void
+  salvandoStatus: boolean
+  arquivos: ClienteArquivo[]
+  enviandoArquivo: ClienteArquivoTipo | null
+  onUploadArquivo: (file: File | undefined, tipo: ClienteArquivoTipo) => Promise<void>
+  onExcluirArquivo: (arquivo: ClienteArquivo) => Promise<void>
+}
+
+function TabTimeline({
+  cliente, eventos, nota, onChangeNota, onEnviarNota, enviando, onAgendar, onWhatsApp,
+  statusQualif, onChangeStatusQualif, salvandoStatus,
+  arquivos, enviandoArquivo, onUploadArquivo, onExcluirArquivo,
+}: TabTimelineProps) {
+  return (
+    <div className="space-y-5">
+      {/* Resumo CRM */}
+      <div className="rounded-xl border border-[#F0EBE0] bg-[#FAF7F0] p-4">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <Badge variant={statusFunilVariant(cliente.status_funil)}>
+              {STATUS_FUNIL_LABEL[cliente.status_funil]}
+            </Badge>
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  size={12}
+                  className={i < cliente.lead_score ? 'text-[#C9A84C]' : 'text-[#E8D5A3]'}
+                  fill="currentColor"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {cliente.telefone && (
+              <Button variant="secondary" size="sm" leftIcon={<MessageCircle size={12} />} onClick={onWhatsApp}>
+                WhatsApp
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" leftIcon={<CalendarClock size={12} />} onClick={onAgendar}>
+              Agendar retorno
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: STATUS_QUALIFICACAO_COR[statusQualif] }}
+          />
+          <select
+            className="input-base !h-8 !py-0 text-xs flex-1 max-w-[220px]"
+            value={statusQualif}
+            disabled={salvandoStatus}
+            onChange={(e) => onChangeStatusQualif(e.target.value as StatusQualificacao)}
+          >
+            {STATUS_QUALIFICACAO_OPTS.map((s) => (
+              <option key={s} value={s}>{STATUS_QUALIFICACAO_LABEL[s]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
+          <div>
+            <p className="text-[#9E9484]">Origem</p>
+            <p className="text-[#2D2418] font-medium">{cliente.origem?.nome || cliente.origem_outro || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[#9E9484]">Produto de interesse</p>
+            <p className="text-[#2D2418] font-medium">
+              {cliente.produto_interesse ? PRODUTO_INTERESSE_LABEL[cliente.produto_interesse] : '—'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[#9E9484]">Vendedor</p>
+            <p className="text-[#2D2418] font-medium">{cliente.vendedor?.nome || '—'}</p>
+          </div>
+          <div>
+            <p className="text-[#9E9484]">Valor pretendido</p>
+            <p className="text-[#2D2418] font-medium">
+              {cliente.valor_pretendido ? formatMoney(cliente.valor_pretendido) : '—'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[#9E9484]">Data do casamento</p>
+            <p className="text-[#2D2418] font-medium">{cliente.data_casamento ? formatDate(cliente.data_casamento) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[#9E9484]">Data do noivado</p>
+            <p className="text-[#2D2418] font-medium">{cliente.data_noivado ? formatDate(cliente.data_noivado) : '—'}</p>
+          </div>
+          {cliente.parceiro_nome && (
+            <div>
+              <p className="text-[#9E9484]">Parceiro(a)</p>
+              <p className="text-[#2D2418] font-medium">
+                {cliente.parceiro_nome}{cliente.parceiro_telefone ? ` · ${formatPhone(cliente.parceiro_telefone)}` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+        {cliente.status_funil === 'lead_perdido' && cliente.motivo_perda && (
+          <p className="text-xs text-red-600 mt-3 pt-3 border-t border-red-100">
+            <strong>Motivo da perda:</strong> {cliente.motivo_perda}
+          </p>
+        )}
+      </div>
+
+      {/* Anexos: fotos de modelos e documentos/comprovantes */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-[#6B5E4E] uppercase tracking-wide">Anexos</p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-[#A68B3C] hover:text-[#8A7230] cursor-pointer transition-colors">
+              {enviandoArquivo === 'foto' ? 'Enviando...' : '+ Foto'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={!!enviandoArquivo}
+                onChange={(e) => { void onUploadArquivo(e.target.files?.[0], 'foto'); e.target.value = '' }}
+              />
+            </label>
+            <label className="text-xs font-medium text-[#A68B3C] hover:text-[#8A7230] cursor-pointer transition-colors">
+              {enviandoArquivo === 'documento' ? 'Enviando...' : '+ Documento'}
+              <input
+                type="file"
+                className="hidden"
+                disabled={!!enviandoArquivo}
+                onChange={(e) => { void onUploadArquivo(e.target.files?.[0], 'documento'); e.target.value = '' }}
+              />
+            </label>
+          </div>
+        </div>
+        {arquivos.length === 0 ? (
+          <p className="text-xs text-[#9E9484]">Nenhum arquivo anexado.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {arquivos.map((arquivo) => (
+              <div key={arquivo.id} className="relative group">
+                {arquivo.tipo === 'foto' ? (
+                  <a href={getArquivoUrl(arquivo.url)} target="_blank" rel="noopener noreferrer">
+                    <Image
+                      src={getArquivoUrl(arquivo.url)}
+                      alt={arquivo.nome}
+                      width={64}
+                      height={64}
+                      className="w-16 h-16 rounded-lg object-cover border border-[#F0EBE0]"
+                      unoptimized
+                    />
+                  </a>
+                ) : (
+                  <a
+                    href={getArquivoUrl(arquivo.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border border-[#F0EBE0] bg-[#FAF7F0] text-center px-1"
+                    title={arquivo.nome}
+                  >
+                    <FileText size={18} className="text-[#A68B3C]" />
+                    <span className="text-[9px] text-[#6B5E4E] truncate w-full mt-0.5">{arquivo.nome}</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void onExcluirArquivo(arquivo)}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Excluir arquivo"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Adicionar nota */}
+      <div className="flex flex-col gap-2">
+        <Textarea
+          value={nota}
+          onChange={(e) => onChangeNota(e.target.value)}
+          placeholder="Registrar um atendimento, retorno ou observação..."
+          rows={2}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          className="self-end"
+          leftIcon={<Send size={12} />}
+          onClick={onEnviarNota}
+          loading={enviando}
+          disabled={!nota.trim()}
+        >
+          Adicionar nota
+        </Button>
+      </div>
+
+      {/* Lista de eventos */}
+      {eventos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Image
+            src="/images/No data-cuate.svg"
+            alt="Sem eventos"
+            width={140}
+            height={140}
+            className="opacity-80 mb-3"
+          />
+          <p className="text-sm font-medium text-[#6B5E4E]">Nenhum evento registrado</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {eventos.map((evento) => {
+            const Icon = TIMELINE_ICON[evento.tipo]
+            return (
+              <div key={evento.id} className="flex gap-3">
+                <div className="w-7 h-7 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#A68B3C]">
+                  <Icon size={13} />
+                </div>
+                <div className="flex-1 min-w-0 pb-3 border-b border-[#F0EBE0] last:border-0">
+                  <p className="text-sm text-[#2D2418] leading-snug">{evento.descricao}</p>
+                  <p className="text-xs text-[#9E9484] mt-0.5">
+                    {formatDateTime(evento.created_at)}
+                    {evento.autor?.nome && <> · {evento.autor.nome}</>}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

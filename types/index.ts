@@ -12,6 +12,16 @@ export type LancamentoTipo = 'entrada' | 'saida'
 export type ServicoStatus = 'orcamento' | 'aguardando' | 'em_andamento' | 'concluido' | 'cancelado'
 export type EstoqueMovimentoTipo = 'entrada' | 'saida' | 'ajuste' | 'devolucao'
 export type ProdutoCategoria = 'anel' | 'colar' | 'brinco' | 'pulseira' | 'alianca' | 'pingente' | 'relogio' | 'kit' | 'outro'
+export type StatusFunil =
+  | 'novo_lead' | 'primeiro_atendimento' | 'orcamento' | 'negociacao' | 'follow_up'
+  | 'pedido_confirmado' | 'producao' | 'pedido_entregue' | 'pos_venda' | 'lead_perdido'
+export type ProdutoInteresse = 'alianca_prata' | 'alianca_ouro' | 'alianca_moeda_antiga' | 'alianca_aco' | 'semijoias' | 'outro'
+export type TimelineTipo = 'nota' | 'status' | 'sistema'
+export type FollowUpStatus = 'pendente' | 'concluido' | 'cancelado'
+export type StatusQualificacao =
+  | 'novo_lead' | 'em_atendimento' | 'fazendo_orcamento' | 'interessado'
+  | 'aguardando_resposta' | 'follow_up_agendado' | 'venda_concluida'
+  | 'lead_perdido' | 'nao_respondeu'
 
 // ── PROFILE ────────────────────────────────────────────────────
 export interface Profile {
@@ -23,6 +33,7 @@ export interface Profile {
   avatar_url: string | null
   telefone: string | null
   cpf: string | null
+  comissao_percentual: number
   created_at: string
   updated_at: string
 }
@@ -57,10 +68,109 @@ export interface Cliente {
   created_by: string | null
   created_at: string
   updated_at: string
+  // CRM
+  status_funil: StatusFunil
+  lead_score: number
+  origem_id: string | null
+  origem_outro: string | null
+  produto_interesse: ProdutoInteresse | null
+  valor_pretendido: number | null
+  data_casamento: string | null
+  data_noivado: string | null
+  quando_pretende_comprar: string | null
+  modelo_desejado: string | null
+  numeracao: string | null
+  vendedor_id: string | null
+  instagram: string | null
+  perguntou_pagamento: boolean
+  solicitou_gravacao: boolean
+  demonstrou_intencao: boolean
+  motivo_perda: string | null
+  ultimo_contato_em: string
+  status_qualificacao: StatusQualificacao
+  parceiro_nome: string | null
+  parceiro_telefone: string | null
+  origem?: Pick<OrigemCliente, 'id' | 'nome'> | null
+  vendedor?: ProfileResumo | null
 }
 
-export type ClienteInsert = Omit<Cliente, 'id' | 'created_at' | 'updated_at'>
+// Campos de CRM têm default no banco — opcionais ao criar um cliente "simples" em /clientes
+type ClienteCrmFields =
+  | 'status_funil' | 'lead_score' | 'origem_id' | 'origem_outro' | 'produto_interesse'
+  | 'valor_pretendido' | 'data_casamento' | 'data_noivado' | 'quando_pretende_comprar'
+  | 'modelo_desejado' | 'numeracao' | 'vendedor_id' | 'instagram'
+  | 'perguntou_pagamento' | 'solicitou_gravacao' | 'demonstrou_intencao' | 'motivo_perda'
+  | 'ultimo_contato_em' | 'status_qualificacao' | 'parceiro_nome' | 'parceiro_telefone'
+
+type ClienteBase = Omit<Cliente, 'id' | 'created_at' | 'updated_at' | 'origem' | 'vendedor'>
+export type ClienteInsert = Omit<ClienteBase, ClienteCrmFields> & Partial<Pick<ClienteBase, ClienteCrmFields>>
 export type ClienteUpdate = Partial<ClienteInsert>
+
+// ── CLIENTE TIMELINE ───────────────────────────────────────────
+export interface ClienteTimelineEvento {
+  id: string
+  cliente_id: string
+  tipo: TimelineTipo
+  descricao: string
+  status_anterior: StatusFunil | null
+  status_novo: StatusFunil | null
+  created_by: string | null
+  created_at: string
+  autor?: Pick<Profile, 'nome'> | null
+}
+
+// ── CLIENTE FOLLOW-UP ──────────────────────────────────────────
+export interface ClienteFollowUp {
+  id: string
+  cliente_id: string
+  data_agendada: string
+  horario: string | null
+  motivo: string
+  status: FollowUpStatus
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  cliente?: Pick<Cliente, 'id' | 'nome' | 'telefone' | 'produto_interesse' | 'ultimo_contato_em'> & {
+    vendedor?: ProfileResumo | null
+  }
+}
+
+// ── META MENSAL ────────────────────────────────────────────────
+export interface MetaMensal {
+  id: string
+  mes: string
+  vendedor_id: string | null
+  valor_meta: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  vendedor?: ProfileResumo | null
+}
+
+// ── MENSAGEM MODELO ────────────────────────────────────────────
+export interface MensagemModelo {
+  id: string
+  categoria: string
+  titulo: string
+  mensagem: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+export type MensagemModeloInsert = Omit<MensagemModelo, 'id' | 'created_at' | 'updated_at'>
+
+// ── CLIENTE ARQUIVO ────────────────────────────────────────────
+export type ClienteArquivoTipo = 'foto' | 'documento'
+export interface ClienteArquivo {
+  id: string
+  cliente_id: string
+  tipo: ClienteArquivoTipo
+  nome: string
+  url: string
+  created_by: string | null
+  created_at: string
+}
 
 // ── FORNECEDOR ─────────────────────────────────────────────────
 export interface Fornecedor {

@@ -33,10 +33,11 @@ interface VendedorForm {
   cpf: string
   telefone: string
   role: UserRole
+  comissao_percentual: string
 }
 
 const EMPTY_FORM: VendedorForm = {
-  nome: '', email: '', senha: '', cpf: '', telefone: '', role: 'vendedor',
+  nome: '', email: '', senha: '', cpf: '', telefone: '', role: 'vendedor', comissao_percentual: '0',
 }
 
 export default function VendedoresPage() {
@@ -98,6 +99,7 @@ export default function VendedoresPage() {
       cpf: p.cpf ?? '',
       telefone: p.telefone ?? '',
       role: p.role,
+      comissao_percentual: String(p.comissao_percentual ?? 0),
     })
     setModalOpen(true)
   }
@@ -111,6 +113,7 @@ export default function VendedoresPage() {
     setSalvando(true)
 
     if (editando) {
+      const comissao = parseFloat(form.comissao_percentual.replace(',', '.')) || 0
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -118,6 +121,7 @@ export default function VendedoresPage() {
           cpf: form.cpf.trim() || null,
           telefone: form.telefone.trim() || null,
           role: form.role,
+          comissao_percentual: comissao,
         })
         .eq('id', editando.id)
 
@@ -126,7 +130,7 @@ export default function VendedoresPage() {
       } else {
         setProfiles((prev) => prev.map((p) =>
           p.id === editando.id
-            ? { ...p, nome: form.nome.trim(), cpf: form.cpf.trim() || null, telefone: form.telefone.trim() || null, role: form.role }
+            ? { ...p, nome: form.nome.trim(), cpf: form.cpf.trim() || null, telefone: form.telefone.trim() || null, role: form.role, comissao_percentual: comissao }
             : p
         ))
         alert.success('Perfil Atualizado!', 'As informações foram salvas com sucesso.', {
@@ -406,6 +410,18 @@ export default function VendedoresPage() {
             <option value="caixa">Caixa</option>
             <option value="visualizador">Visualizador</option>
           </Select>
+          {form.role === 'vendedor' && (
+            <Input
+              label="Comissão (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={form.comissao_percentual}
+              onChange={(e) => setField('comissao_percentual', e.target.value)}
+              hint="Usada no cálculo de comissão do CRM (dashboard e relatórios)."
+            />
+          )}
         </div>
       </Modal>
 
