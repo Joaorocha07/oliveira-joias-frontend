@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
-  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt,
+  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { href: '/crediario',    icon: <CreditCard size={18} />,   label: 'Crediário' },
   { section: 'Cadastros', href: '/estoque',  icon: <Diamond size={18} />,  label: 'Estoque' },
   { href: '/servicos',     icon: <Wrench size={18} />,       label: 'Serviços' },
+  { href: '/orcamentos',   icon: <FileText size={18} />,     label: 'Orçamentos' },
   { href: '/clientes',     icon: <Users size={18} />,        label: 'Clientes' },
   { href: '/fornecedores', icon: <Truck size={18} />,        label: 'Fornecedores' },
   { href: '/vendedores',   icon: <UserCog size={18} />,      label: 'Equipe de Vendas' },

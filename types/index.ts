@@ -349,6 +349,68 @@ export interface ContaPagar {
 export type ContaPagarInsert = Omit<ContaPagar, 'id' | 'created_at' | 'updated_at'>
 export type ContaPagarUpdate = Partial<ContaPagarInsert>
 
+// ── ORÇAMENTOS ─────────────────────────────────────────────────
+export interface OrcamentoModelo {
+  id: string
+  nome: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OrcamentoModeloInsert = Omit<OrcamentoModelo, 'id' | 'created_at' | 'updated_at'>
+
+export interface OrcamentoMaterial {
+  id: string
+  nome: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OrcamentoMaterialInsert = Omit<OrcamentoMaterial, 'id' | 'created_at' | 'updated_at'>
+
+export interface OrcamentoConfiguracao {
+  id: string
+  nome_empresa: string
+  contato: string | null
+  endereco: string | null
+  whatsapp: string | null
+  instagram: string | null
+  texto_rodape: string | null
+  cor_principal: string
+  created_at: string
+  updated_at: string
+}
+
+export type OrcamentoConfiguracaoInsert = Omit<OrcamentoConfiguracao, 'id' | 'created_at' | 'updated_at'>
+
+export interface Orcamento {
+  id: string
+  numero: number
+  cliente_nome: string | null
+  cliente_telefone: string | null
+  modelo_nome: string | null
+  material: string | null
+  largura: string | null
+  itens_inclusos: string[]
+  valor_vista: number
+  percentual_acrescimo: number
+  num_parcelas: number
+  valor_parcelado: number
+  valor_parcela: number
+  prazo_fabricacao: string | null
+  observacoes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OrcamentoInsert = Omit<Orcamento, 'id' | 'numero' | 'created_at' | 'updated_at'>
+export type OrcamentoUpdate = Partial<OrcamentoInsert>
+
 // ── DASHBOARD / RELATÓRIOS ─────────────────────────────────────
 export interface DashboardData {
   faturamento_mes: number

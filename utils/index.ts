@@ -211,6 +211,23 @@ export function parcelaVencida(dataVencimento: string): boolean {
   return isBefore(startOfDay(parseISO(dataVencimento)), startOfDay(new Date()))
 }
 
+// ── ORÇAMENTOS: CONDIÇÃO DE PAGAMENTO ──────────────────────────
+export function calcularCondicaoOrcamento(
+  valorVista: number,
+  material: string | null | undefined,
+  numParcelas?: number,
+  parcelasSemJurosAte?: number,
+) {
+  const isOuro = /ouro/i.test(material ?? '')
+  const percentualBase = isOuro ? 20 : 10
+  const parcelas = numParcelas ?? (isOuro ? 12 : 3)
+  const semJurosAte = parcelasSemJurosAte ?? 0
+  const percentual = parcelas > semJurosAte ? percentualBase : 0
+  const valorParcelado = round2(valorVista * (1 + percentual / 100))
+  const valorParcela = parcelas > 0 ? round2(valorParcelado / parcelas) : 0
+  return { percentual, parcelas, valorParcelado, valorParcela }
+}
+
 // ── CATEGORIAS DE DESPESA ──────────────────────────────────────
 export const CATEGORIAS_DESPESA = [
   'Reposição / aumento de estoque',

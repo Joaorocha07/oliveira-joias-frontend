@@ -94,6 +94,35 @@ id, variacao_id, produto_id, tipo (entrada|saida|ajuste|devolucao),
 quantidade, quantidade_antes, quantidade_depois, motivo, created_by, created_at
 ```
 
+### `orcamentos`
+```
+id, numero, cliente_nome, cliente_telefone, modelo_nome, material, largura,
+itens_inclusos (text[]), valor_vista, percentual_acrescimo, num_parcelas,
+valor_parcelado, valor_parcela, prazo_fabricacao, observacoes,
+created_by, created_at, updated_at
+```
+> `percentual_acrescimo`/`num_parcelas`/`valor_parcelado`/`valor_parcela` são calculados a partir de `material` no momento do save (ouro: +20% em 12x; outros: +10% em 3x) — ver `calcularCondicaoOrcamento` em `utils/index.ts`.
+>
+> `numero` **não é** identity/sequence — é calculado pelo app (`services/orcamentos.ts`) como `max(numero)+1` a cada criação, e renumerado (todos os posteriores decrescem 1) via RPC `renumerar_orcamentos_apos_delete` a cada exclusão. Objetivo: refletir sempre a quantidade atual de orçamentos (1..N sem lacunas), a pedido do usuário — ver `.claude/migrations/orcamento_renumeracao.sql`. Risco aceito: corrida em criações simultâneas pode gerar `numero` duplicado (baixa probabilidade, uso interno de poucos usuários).
+
+### `orcamento_modelos`
+```
+id, nome, ativo, created_by, created_at, updated_at
+```
+> Catálogo de sugestões para o campo "Modelo" do orçamento (texto livre, sem FK em `orcamentos`).
+
+### `orcamento_materiais`
+```
+id, nome, ativo, created_by, created_at, updated_at
+```
+> Catálogo de sugestões para o campo "Material" do orçamento (texto livre, sem FK em `orcamentos`). Mesma estrutura de `orcamento_modelos`. Seed: Ouro 10k, Ouro 16k, Ouro 18k, Prata 950 (`.claude/migrations/orcamento_materiais.sql`).
+
+### `orcamento_configuracoes`
+```
+id, nome_empresa, contato, endereco, whatsapp, instagram, texto_rodape, cor_principal, created_at, updated_at
+```
+> Tabela singleton — sempre uma única linha com `id = '00000000-0000-0000-0000-000000000001'` (constante `ORCAMENTO_CONFIG_ID` em `services/orcamentos.ts`). Dados de marca usados no documento impresso do orçamento.
+
 ---
 
 ## Relacionamentos principais
