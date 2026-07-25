@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
-  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt,
+  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText,
+  Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
@@ -25,9 +26,17 @@ const navItems: NavItem[] = [
   { href: '/crediario',    icon: <CreditCard size={18} />,   label: 'Crediário' },
   { section: 'Cadastros', href: '/estoque',  icon: <Diamond size={18} />,  label: 'Estoque' },
   { href: '/servicos',     icon: <Wrench size={18} />,       label: 'Serviços' },
+  { href: '/orcamentos',   icon: <FileText size={18} />,     label: 'Orçamentos' },
   { href: '/clientes',     icon: <Users size={18} />,        label: 'Clientes' },
   { href: '/fornecedores', icon: <Truck size={18} />,        label: 'Fornecedores' },
   { href: '/vendedores',   icon: <UserCog size={18} />,      label: 'Equipe de Vendas' },
+  { section: 'CRM', href: '/crm/dashboard', icon: <Gauge size={18} />, label: 'Dashboard' },
+  { href: '/crm',            icon: <Kanban size={18} />,       label: 'Funil de Vendas' },
+  { href: '/crm/follow-up',  icon: <CalendarClock size={18} />, label: 'Follow-up' },
+  { href: '/crm/calendario', icon: <Calendar size={18} />,     label: 'Calendário' },
+  { href: '/crm/pos-venda',  icon: <Gift size={18} />,         label: 'Pós-venda' },
+  { href: '/crm/mensagens',  icon: <MessageSquareText size={18} />, label: 'Mensagens' },
+  { href: '/crm/relatorios', icon: <LineChart size={18} />,    label: 'Relatórios CRM' },
   { section: 'Financeiro', href: '/caixa',       icon: <Wallet size={18} />,   label: 'Caixa & Financeiro' },
   { href: '/contas-pagar', icon: <Receipt size={18} />,  label: 'Contas a Pagar' },
   { href: '/relatorios',   icon: <BarChart3 size={18} />, label: 'Relatórios' },
@@ -79,7 +88,10 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 space-y-0.5 px-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            // Prefix-match só conta se nenhum outro item do menu já for a rota exata
+            // (evita "Funil de Vendas" e "Follow-up" ficarem ativos ao mesmo tempo)
+            const isActive = pathname === item.href
+              || (pathname.startsWith(item.href + '/') && !navItems.some((o) => o.href === pathname))
             return (
               <div key={item.href}>
                 {item.section && !collapsed && (
