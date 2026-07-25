@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { MoreVertical } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -18,29 +19,55 @@ interface ActionMenuProps {
 
 export function ActionMenu({ items, className }: ActionMenuProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  function handleOpen(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen((v) => !v)
+  }
 
   useEffect(() => {
     if (!open) return
+
     function handleOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      const inTrigger = triggerRef.current?.contains(target)
+      const inDropdown = dropdownRef.current?.contains(target)
+      if (!inTrigger && !inDropdown) setOpen(false)
     }
+
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false)
     }
+
+    // Fecha ao rolar para evitar dropdown desposicionado
+    function handleScroll() { setOpen(false) }
+
     document.addEventListener('mousedown', handleOutside)
     document.addEventListener('keydown', handleEscape)
+    window.addEventListener('scroll', handleScroll, true)
     return () => {
       document.removeEventListener('mousedown', handleOutside)
       document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('scroll', handleScroll, true)
     }
   }, [open])
 
   return (
-    <div ref={ref} className={cn('relative inline-block', className)}>
+    <div className={cn('relative inline-block', className)}>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        onClick={handleOpen}
         className="flex items-center justify-center w-8 h-8 rounded-lg text-dark-300 hover:text-dark-600 hover:bg-cream-200 transition-colors"
         aria-label="Abrir ações"
         aria-expanded={open}
@@ -49,8 +76,12 @@ export function ActionMenu({ items, className }: ActionMenuProps) {
         <MoreVertical size={15} />
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[156px] bg-white rounded-xl border border-gold-100 shadow-lg py-1 overflow-hidden">
+      {open && typeof window !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] min-w-[156px] bg-white rounded-xl border border-gold-100 shadow-lg py-1 overflow-hidden"
+          style={{ top: pos.top, right: pos.right }}
+        >
           {items.map((item, i) => (
             <button
               key={i}
@@ -67,7 +98,8 @@ export function ActionMenu({ items, className }: ActionMenuProps) {
               {item.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -108,6 +108,19 @@ export const PRODUTO_CATEGORIA_LABEL: Record<ProdutoCategoria, string> = {
   outro: 'Outro',
 }
 
+export const STATUS_FUNIL_COR: Record<StatusFunil, string> = {
+  novo_lead: '#22C55E',
+  primeiro_atendimento: '#3B82F6',
+  orcamento: '#F97316',
+  negociacao: '#8B5CF6',
+  follow_up: '#EC4899',
+  pedido_confirmado: '#EAB308',
+  producao: '#6366F1',
+  pedido_entregue: '#5B8C5B',
+  pos_venda: '#14B8A6',
+  lead_perdido: '#C75B5B',
+}
+
 export const STATUS_FUNIL_LABEL: Record<StatusFunil, string> = {
   novo_lead: 'Novo Lead',
   primeiro_atendimento: 'Primeiro Atendimento',
@@ -356,6 +369,28 @@ export function calcularLeadScore(lead: LeadScoreInput): number {
   if (lead.solicitou_gravacao) pontos++
   if (lead.demonstrou_intencao) pontos++
   return clamp(Math.ceil((pontos / 7) * 5), 1, 5)
+}
+
+// ── TEMPO RELATIVO (CRM) ───────────────────────────────────────
+export function formatRelativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  try {
+    const date = parseISO(dateStr)
+    if (!isValid(date)) return ''
+    const diffMs = Date.now() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60_000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffMins < 1) return 'agora'
+    if (diffMins < 60) return `${diffMins}min`
+    if (diffHours < 24) return `${diffHours}h`
+    if (diffDays === 1) return 'ontem'
+    if (diffDays < 7) return `${diffDays}d`
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}sem`
+    return `${Math.floor(diffDays / 30)}m`
+  } catch {
+    return ''
+  }
 }
 
 // ── CATEGORIAS DE DESPESA ──────────────────────────────────────
