@@ -8,16 +8,16 @@ import { Modal, Button, Select, Input, Textarea } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { clienteLeadSchema, type ClienteLeadFormData } from '@/schemas/cliente'
-import { createLead } from '@/services/clientes'
-import { useAuth } from '@/context/auth-context'
+import { updateLead } from '@/services/clientes'
 import { supabase } from '@/lib/supabase'
 import { PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL } from '@/utils'
-import type { OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
+import type { Cliente, OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
 
 interface Props {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  cliente: Cliente | null
 }
 
 const PRODUTOS: ProdutoInteresse[] = [
@@ -30,34 +30,35 @@ const STATUS_QUALIFICACAO_OPTS: StatusQualificacao[] = [
   'lead_perdido', 'nao_respondeu',
 ]
 
-const DEFAULTS: ClienteLeadFormData = {
-  nome: '',
-  telefone: null,
-  whatsapp: null,
-  instagram: null,
-  cidade: null,
-  origem_id: null,
-  origem_outro: null,
-  produto_interesse: null,
-  valor_pretendido: null,
-  data_casamento: null,
-  data_noivado: null,
-  quando_pretende_comprar: null,
-  modelo_desejado: null,
-  numeracao: null,
-  vendedor_id: null,
-  parceiro_nome: null,
-  parceiro_telefone: null,
-  status_qualificacao: 'novo_lead',
-  perguntou_pagamento: false,
-  solicitou_gravacao: false,
-  demonstrou_intencao: false,
-  observacoes: null,
-  data_inicio_conversa: null,
+function clienteToForm(c: Cliente): ClienteLeadFormData {
+  return {
+    nome: c.nome,
+    telefone: c.telefone,
+    whatsapp: c.whatsapp,
+    instagram: c.instagram,
+    cidade: c.cidade,
+    origem_id: c.origem_id,
+    origem_outro: c.origem_outro,
+    produto_interesse: c.produto_interesse,
+    valor_pretendido: c.valor_pretendido,
+    data_casamento: c.data_casamento,
+    data_noivado: c.data_noivado,
+    quando_pretende_comprar: c.quando_pretende_comprar,
+    modelo_desejado: c.modelo_desejado,
+    numeracao: c.numeracao,
+    vendedor_id: c.vendedor_id,
+    parceiro_nome: c.parceiro_nome,
+    parceiro_telefone: c.parceiro_telefone,
+    status_qualificacao: c.status_qualificacao,
+    perguntou_pagamento: c.perguntou_pagamento,
+    solicitou_gravacao: c.solicitou_gravacao,
+    demonstrou_intencao: c.demonstrou_intencao,
+    observacoes: c.observacoes,
+    data_inicio_conversa: c.data_inicio_conversa,
+  }
 }
 
-export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
-  const { user, profile } = useAuth()
+export function ModalEditarLead({ open, onClose, onSuccess, cliente }: Props) {
   const alert = useAlert()
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
@@ -67,19 +68,15 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
     formState: { errors, isSubmitting },
   } = useForm<ClienteLeadFormData>({
     resolver: zodResolver(clienteLeadSchema) as never,
-    defaultValues: DEFAULTS,
   })
 
   const watchedOrigemId = watch('origem_id')
   const isOrigemOutro = origens.find((o) => o.id === watchedOrigemId)?.nome === 'Outro'
 
   useEffect(() => {
-    if (!open) return
-    // Vendedor sempre cria o lead pra si mesmo — evita esquecer de preencher e
-    // já casa com a regra de "vendedor só vê os próprios leads" no funil.
-    const isVendedor = profile?.role === 'vendedor'
-    reset({ ...DEFAULTS, vendedor_id: isVendedor ? profile!.id : null })
-    setVendedorDisplayValue(isVendedor ? profile!.nome : undefined)
+    if (!open || !cliente) return
+    reset(clienteToForm(cliente))
+    setVendedorDisplayValue(cliente.vendedor?.nome ?? undefined)
     supabase
       .from('origens_cliente')
       .select('id, nome, ativo, created_at')
@@ -89,7 +86,7 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
         if (error) alert.error('Erro', 'Erro ao carregar origens.')
         else setOrigens((data as OrigemCliente[]) ?? [])
       })
-  }, [open, reset, profile])
+  }, [open, cliente, reset])
 
   const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
     const { data } = await supabase
@@ -103,35 +100,37 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
   }, [])
 
   async function onSave(data: ClienteLeadFormData) {
-    if (!user) return
-    const { error } = await createLead(data, user.id)
+    if (!cliente) return
+    const { error } = await updateLead(cliente.id, data)
     if (error) {
       alert.error('Erro', error)
     } else {
-      alert.success('Lead Criado!', 'O lead foi adicionado ao funil.', {
+      alert.success('Salvo!', 'Lead atualizado com sucesso.', {
         onConfirm: () => { onSuccess(); onClose() },
       })
     }
   }
 
+  if (!cliente) return null
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Novo Lead"
+      title="Editar Lead"
       size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancelar
           </Button>
-          <Button variant="primary" type="submit" form="form-novo-lead" loading={isSubmitting}>
-            Adicionar ao Funil
+          <Button variant="primary" type="submit" form="form-editar-lead" loading={isSubmitting}>
+            Salvar alterações
           </Button>
         </>
       }
     >
-      <form id="form-novo-lead" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-4">
+      <form id="form-editar-lead" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-4">
         <Input label="Nome *" error={errors.nome?.message} {...register('nome')} />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

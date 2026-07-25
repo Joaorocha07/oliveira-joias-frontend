@@ -33,6 +33,7 @@ export const clienteLeadSchema = z.object({
   solicitou_gravacao: z.boolean(),
   demonstrou_intencao: z.boolean(),
   observacoes: z.string().nullable(),
+  data_inicio_conversa: z.string().nullable(),
 })
 
 export type ClienteLeadFormData = z.infer<typeof clienteLeadSchema>

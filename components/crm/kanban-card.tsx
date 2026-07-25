@@ -1,5 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
-import { Star, AtSign, CalendarClock, MessageCircle } from 'lucide-react'
+import { Star, AtSign, CalendarClock, MessageCircle, Pencil, Trash2 } from 'lucide-react'
 import { Badge, ActionMenu } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatMoney, formatPhone, PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL, STATUS_QUALIFICACAO_COR, getInitials } from '@/utils'
@@ -10,9 +10,11 @@ interface Props {
   onClick: () => void
   onScheduleFollowUp: () => void
   onOpenWhatsApp: () => void
+  onEdit: () => void
+  onDelete: () => void
 }
 
-export function KanbanCard({ cliente, onClick, onScheduleFollowUp, onOpenWhatsApp }: Props) {
+export function KanbanCard({ cliente, onClick, onScheduleFollowUp, onOpenWhatsApp, onEdit, onDelete }: Props) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: cliente.id,
     data: { statusAtual: cliente.status_funil },
@@ -30,7 +32,7 @@ export function KanbanCard({ cliente, onClick, onScheduleFollowUp, onOpenWhatsAp
         isDragging && 'opacity-30'
       )}
     >
-      <KanbanCardContent cliente={cliente} onScheduleFollowUp={onScheduleFollowUp} onOpenWhatsApp={onOpenWhatsApp} />
+      <KanbanCardContent cliente={cliente} onScheduleFollowUp={onScheduleFollowUp} onOpenWhatsApp={onOpenWhatsApp} onEdit={onEdit} onDelete={onDelete} />
     </div>
   )
 }
@@ -44,10 +46,12 @@ export function KanbanCardOverlay({ cliente }: { cliente: Cliente }) {
   )
 }
 
-function KanbanCardContent({ cliente, onScheduleFollowUp, onOpenWhatsApp, readOnly }: {
+function KanbanCardContent({ cliente, onScheduleFollowUp, onOpenWhatsApp, onEdit, onDelete, readOnly }: {
   cliente: Cliente
   onScheduleFollowUp?: () => void
   onOpenWhatsApp?: () => void
+  onEdit?: () => void
+  onDelete?: () => void
   readOnly?: boolean
 }) {
   return (
@@ -72,7 +76,7 @@ function KanbanCardContent({ cliente, onScheduleFollowUp, onOpenWhatsApp, readOn
               />
             ))}
           </div>
-          {!readOnly && onScheduleFollowUp && onOpenWhatsApp && (
+          {!readOnly && onScheduleFollowUp && onOpenWhatsApp && onEdit && onDelete && (
             <div onPointerDown={(e) => e.stopPropagation()}>
               <ActionMenu
                 items={[
@@ -85,6 +89,17 @@ function KanbanCardContent({ cliente, onScheduleFollowUp, onOpenWhatsApp, readOn
                     label: 'WhatsApp',
                     icon: <MessageCircle size={14} />,
                     onClick: onOpenWhatsApp,
+                  },
+                  {
+                    label: 'Editar',
+                    icon: <Pencil size={14} />,
+                    onClick: onEdit,
+                  },
+                  {
+                    label: 'Excluir',
+                    icon: <Trash2 size={14} />,
+                    onClick: onDelete,
+                    variant: 'danger',
                   },
                 ]}
               />

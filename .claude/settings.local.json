@@ -1,4 +1,16 @@
 {
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \".claude\\hooks\\notify-whatsapp.ps1\""
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
@@ -53,7 +65,8 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(npm audit *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(New-Item *)"
     ]
   }
 }

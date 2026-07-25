@@ -90,6 +90,7 @@ export interface Cliente {
   status_qualificacao: StatusQualificacao
   parceiro_nome: string | null
   parceiro_telefone: string | null
+  data_inicio_conversa: string | null
   origem?: Pick<OrigemCliente, 'id' | 'nome'> | null
   vendedor?: ProfileResumo | null
 }
@@ -101,6 +102,7 @@ type ClienteCrmFields =
   | 'modelo_desejado' | 'numeracao' | 'vendedor_id' | 'instagram'
   | 'perguntou_pagamento' | 'solicitou_gravacao' | 'demonstrou_intencao' | 'motivo_perda'
   | 'ultimo_contato_em' | 'status_qualificacao' | 'parceiro_nome' | 'parceiro_telefone'
+  | 'data_inicio_conversa'
 
 type ClienteBase = Omit<Cliente, 'id' | 'created_at' | 'updated_at' | 'origem' | 'vendedor'>
 export type ClienteInsert = Omit<ClienteBase, ClienteCrmFields> & Partial<Pick<ClienteBase, ClienteCrmFields>>

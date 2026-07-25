@@ -16,14 +16,18 @@ interface Props {
   onMoveCard: (clienteId: string, novoStatus: StatusFunil, statusAnterior: StatusFunil, motivoPerda?: string) => Promise<void>
   onScheduleFollowUp: (cliente: Cliente) => void
   onOpenWhatsApp: (cliente: Cliente) => void
+  onEdit: (cliente: Cliente) => void
+  onDelete: (cliente: Cliente) => void
 }
 
-function Column({ status, clientes, onCardClick, onScheduleFollowUp, onOpenWhatsApp }: {
+function Column({ status, clientes, onCardClick, onScheduleFollowUp, onOpenWhatsApp, onEdit, onDelete }: {
   status: StatusFunil
   clientes: Cliente[]
   onCardClick: (cliente: Cliente) => void
   onScheduleFollowUp: (cliente: Cliente) => void
   onOpenWhatsApp: (cliente: Cliente) => void
+  onEdit: (cliente: Cliente) => void
+  onDelete: (cliente: Cliente) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
 
@@ -50,6 +54,8 @@ function Column({ status, clientes, onCardClick, onScheduleFollowUp, onOpenWhats
             onClick={() => onCardClick(cliente)}
             onScheduleFollowUp={() => onScheduleFollowUp(cliente)}
             onOpenWhatsApp={() => onOpenWhatsApp(cliente)}
+            onEdit={() => onEdit(cliente)}
+            onDelete={() => onDelete(cliente)}
           />
         ))}
       </div>
@@ -57,7 +63,7 @@ function Column({ status, clientes, onCardClick, onScheduleFollowUp, onOpenWhats
   )
 }
 
-export function KanbanBoard({ clientes, onCardClick, onMoveCard, onScheduleFollowUp, onOpenWhatsApp }: Props) {
+export function KanbanBoard({ clientes, onCardClick, onMoveCard, onScheduleFollowUp, onOpenWhatsApp, onEdit, onDelete }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const [pendingPerda, setPendingPerda] = useState<{ clienteId: string; statusAnterior: StatusFunil } | null>(null)
   const [motivoPerda, setMotivoPerda] = useState('')
@@ -122,6 +128,8 @@ export function KanbanBoard({ clientes, onCardClick, onMoveCard, onScheduleFollo
               onCardClick={onCardClick}
               onScheduleFollowUp={onScheduleFollowUp}
               onOpenWhatsApp={onOpenWhatsApp}
+              onEdit={onEdit}
+              onDelete={onDelete}
             />
           ))}
         </div>

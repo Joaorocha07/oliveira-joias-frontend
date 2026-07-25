@@ -9,10 +9,11 @@ import { PageHeader, Button, SearchInput, Spinner, EmptyState, Card } from '@/co
 import { KanbanBoard } from '@/components/crm/kanban-board'
 import { CrmFiltrosPanel, FILTROS_VAZIOS, contarFiltrosAtivos, type CrmFiltros } from '@/components/crm/crm-filtros'
 import { ModalNovoLead } from '@/components/modals/modal-novo-lead'
+import { ModalEditarLead } from '@/components/modals/modal-editar-lead'
 import { ModalHistoricoCliente } from '@/components/modals/modal-historico-cliente'
 import { ModalAgendarFollowUp } from '@/components/modals/modal-agendar-followup'
 import { ModalWhatsApp } from '@/components/modals/modal-whatsapp'
-import { listarLeadsFunil, updateStatusFunil } from '@/services/clientes'
+import { listarLeadsFunil, updateStatusFunil, deleteLead } from '@/services/clientes'
 import {
   exportarCsv, formatPhone, formatDate, formatMoney,
   STATUS_FUNIL_LABEL, STATUS_QUALIFICACAO_LABEL, PRODUTO_INTERESSE_LABEL,
@@ -20,7 +21,7 @@ import {
 import type { Cliente, StatusFunil, OrigemCliente } from '@/types'
 
 export default function CrmPage() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const alert = useAlert()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,16 +30,15 @@ export default function CrmPage() {
   const [detalheCliente, setDetalheCliente] = useState<Cliente | null>(null)
   const [agendarCliente, setAgendarCliente] = useState<Cliente | null>(null)
   const [whatsappCliente, setWhatsappCliente] = useState<Cliente | null>(null)
+  const [editarCliente, setEditarCliente] = useState<Cliente | null>(null)
   const [filtrosAbertos, setFiltrosAbertos] = useState(false)
   const [filtros, setFiltros] = useState<CrmFiltros>(FILTROS_VAZIOS)
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
   const [vendedores, setVendedores] = useState<{ id: string; nome: string }[]>([])
 
-  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
-
   async function carregar() {
     setLoading(true)
-    const { data, error } = await listarLeadsFunil(escopoVendedor)
+    const { data, error } = await listarLeadsFunil()
     if (error) alert.error('Erro', 'Erro ao carregar o funil de leads.')
     else setClientes(data ?? [])
     setLoading(false)
@@ -47,7 +47,7 @@ export default function CrmPage() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void carregar(), 0)
     return () => window.clearTimeout(timeoutId)
-  }, [escopoVendedor])
+  }, [])
 
   useEffect(() => {
     supabase.from('origens_cliente').select('id, nome, ativo, created_at').eq('ativo', true).order('nome')
@@ -108,6 +108,27 @@ export default function CrmPage() {
         c.valor_pretendido ? formatMoney(c.valor_pretendido) : '',
         formatDate(c.created_at),
       ]),
+    )
+  }
+
+  async function handleDeleteCliente(cliente: Cliente) {
+    alert.warning(
+      'Excluir cliente permanentemente',
+      `Tem certeza que deseja excluir "${cliente.nome}"? Todos os dados vinculados a este cliente serão removidos permanentemente: vendas, crediário, serviços, histórico de atendimento e agendamentos. Esta ação não pode ser desfeita.`,
+      {
+        showCancel: true,
+        confirmText: 'Excluir tudo',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+          const { error } = await deleteLead(cliente.id)
+          if (error) {
+            alert.error('Erro ao excluir', error)
+          } else {
+            setClientes((prev) => prev.filter((c) => c.id !== cliente.id))
+            alert.success('Excluído', `"${cliente.nome}" e todos os dados vinculados foram removidos.`)
+          }
+        },
+      },
     )
   }
 
@@ -179,6 +200,8 @@ export default function CrmPage() {
           onMoveCard={handleMoveCard}
           onScheduleFollowUp={setAgendarCliente}
           onOpenWhatsApp={setWhatsappCliente}
+          onEdit={setEditarCliente}
+          onDelete={handleDeleteCliente}
         />
       )}
 
@@ -186,6 +209,13 @@ export default function CrmPage() {
         open={novoLeadOpen}
         onClose={() => setNovoLeadOpen(false)}
         onSuccess={carregar}
+      />
+
+      <ModalEditarLead
+        open={!!editarCliente}
+        onClose={() => setEditarCliente(null)}
+        onSuccess={carregar}
+        cliente={editarCliente}
       />
 
       <ModalHistoricoCliente

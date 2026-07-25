@@ -32,7 +32,36 @@ function buildLeadPayload(data: ClienteLeadFormData) {
     demonstrou_intencao: data.demonstrou_intencao,
     observacoes: data.observacoes || null,
     lead_score: calcularLeadScore(data),
+    data_inicio_conversa: data.data_inicio_conversa || null,
   }
+}
+
+export async function deleteLead(id: string): Promise<{ error: string | null }> {
+  // Remove registros CRM sem dependências
+  await supabase.from('cliente_arquivos').delete().eq('cliente_id', id)
+  await supabase.from('cliente_timeline').delete().eq('cliente_id', id)
+  await supabase.from('cliente_followups').delete().eq('cliente_id', id)
+
+  // Crediário: parcelas → crediário (crediário referencia vendas, então vem antes)
+  const { data: crediarios } = await supabase.from('crediario').select('id').eq('cliente_id', id)
+  if (crediarios?.length) {
+    await supabase.from('crediario_parcelas').delete().in('crediario_id', crediarios.map((c) => c.id))
+  }
+  await supabase.from('crediario').delete().eq('cliente_id', id)
+
+  // Vendas: itens → vendas
+  const { data: vendas } = await supabase.from('vendas').select('id').eq('cliente_id', id)
+  if (vendas?.length) {
+    await supabase.from('venda_itens').delete().in('venda_id', vendas.map((v) => v.id))
+  }
+  await supabase.from('vendas').delete().eq('cliente_id', id)
+
+  // Serviços
+  await supabase.from('servicos').delete().eq('cliente_id', id)
+
+  // Remove o cliente
+  const { error } = await supabase.from('clientes').delete().eq('id', id)
+  return { error: error?.message ?? null }
 }
 
 export async function listarLeadsFunil(vendedorId?: string): Promise<{ data: Cliente[] | null; error: string | null }> {
