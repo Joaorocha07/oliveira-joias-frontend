@@ -146,3 +146,25 @@
     animation: alertOut 200ms ease-in forwards;
   }
 }
+
+/* ── SCROLLBAR DOURADA (fora de @layer para máxima prioridade) ─── */
+.scrollbar-gold::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scrollbar-gold::-webkit-scrollbar-track {
+  background: #F5ECD0;
+  border-radius: 9999px;
+}
+.scrollbar-gold::-webkit-scrollbar-thumb {
+  background: #C9A84C;
+  border-radius: 9999px;
+}
+.scrollbar-gold::-webkit-scrollbar-thumb:hover {
+  background: #A68B3C;
+}
+/* Firefox */
+.scrollbar-gold {
+  scrollbar-width: thin;
+  scrollbar-color: #C9A84C #F5ECD0;
+}
