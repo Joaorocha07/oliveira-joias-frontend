@@ -9,8 +9,6 @@ function buildOrcamentoPayload(data: OrcamentoFormData) {
   const { percentual, parcelas, valorParcelado, valorParcela } = calcularCondicaoOrcamento(
     data.valor_vista,
     data.material,
-    data.num_parcelas,
-    data.parcelas_sem_juros_ate,
   )
   return {
     cliente_nome: data.cliente_nome || null,

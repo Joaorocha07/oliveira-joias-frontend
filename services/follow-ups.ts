@@ -1,8 +1,14 @@
 import { differenceInHours, differenceInDays, parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabase'
-import { formatDate, today } from '@/utils'
+import { formatDate, formatMoney, today } from '@/utils'
 import type { FollowUpFormData } from '@/schemas/follow-up'
-import type { ClienteFollowUp, StatusFunil } from '@/types'
+import type { ClienteFollowUp, FormaPagamento, StatusFunil } from '@/types'
+
+export interface ValorConcluirFollowUp {
+  valor: number
+  forma_pagamento: FormaPagamento
+  descricao: string
+}
 
 const SELECT_COM_CLIENTE =
   '*, cliente:clientes(id, nome, telefone, produto_interesse, ultimo_contato_em, vendedor:profiles!clientes_vendedor_id_fkey(id, nome))'
@@ -24,7 +30,9 @@ function descreverAgendamento(data: FollowUpFormData): string {
   return `para ${formatDate(data.data_agendada)}${data.horario ? ` às ${data.horario}` : ''} — ${data.motivo}`
 }
 
-export async function listarFollowUps(vendedorId?: string): Promise<{ data: ClienteFollowUp[] | null; error: string | null }> {
+export async function listarFollowUps(): Promise<{ data: ClienteFollowUp[] | null; error: string | null }> {
+  // Agenda de follow-up é compartilhada: todos os vendedores veem todos os follow-ups pendentes,
+  // independente de quem cadastrou ou de qual vendedor está vinculado ao cliente.
   const { data, error } = await supabase
     .from('cliente_followups')
     .select(SELECT_COM_CLIENTE)
@@ -33,10 +41,7 @@ export async function listarFollowUps(vendedorId?: string): Promise<{ data: Clie
     .order('horario', { ascending: true, nullsFirst: true })
 
   if (error) return { data: null, error: error.message }
-  let rows = data as unknown as ClienteFollowUp[]
-  // Vendedor vê os próprios follow-ups + os de leads ainda sem dono
-  if (vendedorId) rows = rows.filter((f) => !f.cliente?.vendedor || f.cliente.vendedor.id === vendedorId)
-  return { data: rows, error: null }
+  return { data: data as unknown as ClienteFollowUp[], error: null }
 }
 
 export async function criarFollowUp(
@@ -75,11 +80,29 @@ export async function reagendarFollowUp(
 export async function concluirFollowUp(
   followUp: ClienteFollowUp,
   userId: string,
+  valorRegistrado?: ValorConcluirFollowUp,
 ): Promise<{ error: string | null }> {
   const { error } = await supabase.from('cliente_followups').update({ status: 'concluido' }).eq('id', followUp.id)
   if (error) return { error: error.message }
 
-  await registrarEventoTimeline(followUp.cliente_id, 'Follow-up concluído', userId)
+  if (valorRegistrado) {
+    const { error: lancamentoError } = await supabase.from('lancamentos').insert({
+      tipo: 'entrada',
+      descricao: valorRegistrado.descricao,
+      valor: valorRegistrado.valor,
+      data_lancamento: today(),
+      forma_pagamento: valorRegistrado.forma_pagamento,
+      referencia_id: followUp.id,
+      referencia_tipo: 'follow_up',
+      created_by: userId,
+    })
+    if (lancamentoError) return { error: lancamentoError.message }
+  }
+
+  const descricaoTimeline = valorRegistrado
+    ? `Follow-up concluído — ${formatMoney(valorRegistrado.valor)} registrado no caixa`
+    : 'Follow-up concluído'
+  await registrarEventoTimeline(followUp.cliente_id, descricaoTimeline, userId)
   await supabase.from('clientes').update({ ultimo_contato_em: new Date().toISOString() }).eq('id', followUp.cliente_id)
   return { error: null }
 }

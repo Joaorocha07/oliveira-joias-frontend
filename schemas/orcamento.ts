@@ -16,8 +16,6 @@ export const orcamentoSchema = z.object({
   largura: z.string().optional(),
   itens_inclusos: z.array(z.string()),
   valor_vista: z.number().min(0.01, 'Valor inválido'),
-  num_parcelas: z.number().int().min(1, 'Mínimo 1 parcela').max(60, 'Máximo 60 parcelas'),
-  parcelas_sem_juros_ate: z.number().int().min(0, 'Não pode ser negativo').max(60, 'Máximo 60 parcelas'),
   prazo_fabricacao: z.string().optional(),
   observacoes: z.string().optional(),
 })

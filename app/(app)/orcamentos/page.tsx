@@ -113,8 +113,6 @@ export default function OrcamentosPage() {
       largura: orcamento.largura ?? '',
       itens_inclusos: orcamento.itens_inclusos,
       valor_vista: orcamento.valor_vista,
-      num_parcelas: orcamento.num_parcelas,
-      parcelas_sem_juros_ate: orcamento.percentual_acrescimo === 0 ? orcamento.num_parcelas : 0,
       prazo_fabricacao: orcamento.prazo_fabricacao ?? '',
       observacoes: orcamento.observacoes ?? '',
     })

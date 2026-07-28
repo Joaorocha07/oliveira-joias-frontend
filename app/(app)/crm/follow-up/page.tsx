@@ -7,9 +7,10 @@ import { useAlert } from '@/hooks/use-alert'
 import { PageHeader, Card, Spinner, EmptyState } from '@/components/ui'
 import { FollowUpCard } from '@/components/crm/followup-card'
 import { ModalAgendarFollowUp } from '@/components/modals/modal-agendar-followup'
+import { ModalConcluirFollowUp } from '@/components/modals/modal-concluir-followup'
 import { ModalWhatsApp } from '@/components/modals/modal-whatsapp'
 import {
-  listarFollowUps, listarAlertas, concluirFollowUp, cancelarFollowUp,
+  listarFollowUps, listarAlertas, cancelarFollowUp,
   type AlertasFunil,
 } from '@/services/follow-ups'
 import { today } from '@/utils'
@@ -23,6 +24,7 @@ export default function FollowUpPage() {
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [reagendando, setReagendando] = useState<ClienteFollowUp | null>(null)
+  const [concluindo, setConcluindo] = useState<ClienteFollowUp | null>(null)
   const [whatsappFollowUp, setWhatsappFollowUp] = useState<ClienteFollowUp | null>(null)
 
   const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
@@ -30,7 +32,7 @@ export default function FollowUpPage() {
   async function carregar() {
     setLoading(true)
     const [followUpsRes, alertasRes] = await Promise.all([
-      listarFollowUps(escopoVendedor),
+      listarFollowUps(),
       listarAlertas(escopoVendedor),
     ])
     if (followUpsRes.error) alert.error('Erro', 'Erro ao carregar a agenda de follow-up.')
@@ -52,15 +54,6 @@ export default function FollowUpPage() {
       proximos: followUps.filter((f) => f.data_agendada > hojeStr),
     }
   }, [followUps])
-
-  async function handleConcluir(followUp: ClienteFollowUp) {
-    if (!user) return
-    setProcessingId(followUp.id)
-    const { error } = await concluirFollowUp(followUp, user.id)
-    if (error) alert.error('Erro', error)
-    else await carregar()
-    setProcessingId(null)
-  }
 
   async function handleCancelar(followUp: ClienteFollowUp) {
     if (!user) return
@@ -128,7 +121,7 @@ export default function FollowUpPage() {
             items={atrasados}
             atrasado
             processingId={processingId}
-            onConcluir={handleConcluir}
+            onConcluir={setConcluindo}
             onReagendar={setReagendando}
             onCancelar={handleCancelar}
             onWhatsApp={setWhatsappFollowUp}
@@ -137,7 +130,7 @@ export default function FollowUpPage() {
             title="Hoje"
             items={hoje}
             processingId={processingId}
-            onConcluir={handleConcluir}
+            onConcluir={setConcluindo}
             onReagendar={setReagendando}
             onCancelar={handleCancelar}
             onWhatsApp={setWhatsappFollowUp}
@@ -146,7 +139,7 @@ export default function FollowUpPage() {
             title="Próximos"
             items={proximos}
             processingId={processingId}
-            onConcluir={handleConcluir}
+            onConcluir={setConcluindo}
             onReagendar={setReagendando}
             onCancelar={handleCancelar}
             onWhatsApp={setWhatsappFollowUp}
@@ -170,6 +163,16 @@ export default function FollowUpPage() {
           open={!!whatsappFollowUp}
           onClose={() => setWhatsappFollowUp(null)}
           cliente={whatsappFollowUp.cliente}
+        />
+      )}
+
+      {concluindo && user && (
+        <ModalConcluirFollowUp
+          open={!!concluindo}
+          onClose={() => setConcluindo(null)}
+          onSuccess={carregar}
+          followUp={concluindo}
+          userId={user.id}
         />
       )}
     </div>

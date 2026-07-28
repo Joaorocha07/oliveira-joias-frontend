@@ -1,10 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Printer, Download } from 'lucide-react'
+import { addDays } from 'date-fns'
+import {
+  X, Printer, Download, Gem, CheckCircle2, Clock, Ruler,
+  Phone, MapPin, AtSign, ShieldCheck,
+} from 'lucide-react'
 import { Button } from '@/components/ui'
 import { formatMoney, formatDate } from '@/utils'
 import type { Orcamento, OrcamentoConfiguracao } from '@/types'
+
+const VALIDADE_DIAS = 7
 
 interface OrcamentoPreviewModalProps {
   open: boolean
@@ -61,11 +67,14 @@ export function OrcamentoPreviewModal({ open, onClose, orcamento, configuracao }
     }
   }
 
+  const cor = configuracao.cor_principal
+  const validoAte = formatDate(addDays(new Date(orcamento.created_at), VALIDADE_DIAS))
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <style>{`
         @media print {
-          @page { size: A4; margin: 14mm; }
+          @page { size: A4; margin: 0; }
           body * { visibility: hidden; }
           #orcamento-print-area, #orcamento-print-area * { visibility: visible; }
           #orcamento-print-area {
@@ -74,12 +83,11 @@ export function OrcamentoPreviewModal({ open, onClose, orcamento, configuracao }
             width: 100%;
             height: auto;
             margin: 0;
-            padding: 0;
           }
         }
       `}</style>
       <div
-        className="absolute inset-0 bg-[rgba(26,21,16,0.55)] backdrop-blur-[6px]"
+        className="absolute inset-0 bg-[rgba(26,21,16,0.55)] backdrop-blur-[8px]"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -111,103 +119,171 @@ export function OrcamentoPreviewModal({ open, onClose, orcamento, configuracao }
         </div>
 
         <div className="overflow-y-auto flex-1">
-          <div id="orcamento-print-area" className="p-10 flex flex-col bg-white">
+          <div id="orcamento-print-area" className="flex flex-col bg-white">
+
+            {/* ── Cabeçalho de marca ─────────────────────────────────────── */}
             <header
-              className="flex flex-col items-center text-center pb-6 mb-8 border-b-2"
-              style={{ borderColor: configuracao.cor_principal }}
+              className="relative overflow-hidden px-10 py-8"
+              style={{ background: 'linear-gradient(135deg, #1A1510 0%, #2D2418 100%)' }}
             >
-              <h1 className="font-display text-3xl font-semibold" style={{ color: configuracao.cor_principal }}>
-                {configuracao.nome_empresa}
-              </h1>
-              {configuracao.endereco && <p className="text-sm text-dark-400 mt-1">{configuracao.endereco}</p>}
-              {(configuracao.contato || configuracao.whatsapp || configuracao.instagram) && (
-                <p className="text-sm text-dark-400 mt-0.5">
-                  {[configuracao.contato, configuracao.whatsapp, configuracao.instagram].filter(Boolean).join(' · ')}
-                </p>
-              )}
+              <div
+                className="absolute inset-0 opacity-[0.10] pointer-events-none"
+                style={{ backgroundImage: `radial-gradient(circle at 88% 12%, ${cor} 0%, transparent 55%)` }}
+              />
+              <div className="relative flex items-start justify-between gap-6">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div
+                    className="w-12 h-12 rounded-full border flex items-center justify-center flex-shrink-0"
+                    style={{ borderColor: `${cor}55`, backgroundColor: `${cor}1A` }}
+                  >
+                    <Gem size={20} style={{ color: cor }} />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="font-display text-2xl font-semibold text-white leading-tight truncate">
+                      {configuracao.nome_empresa}
+                    </h1>
+                    <div className="flex flex-col gap-0.5 mt-1.5">
+                      {configuracao.endereco && (
+                        <p className="flex items-center gap-1.5 text-[11px] text-white/55">
+                          <MapPin size={10} className="flex-shrink-0" /> {configuracao.endereco}
+                        </p>
+                      )}
+                      {(configuracao.contato || configuracao.whatsapp) && (
+                        <p className="flex items-center gap-1.5 text-[11px] text-white/55">
+                          <Phone size={10} className="flex-shrink-0" /> {configuracao.contato || configuracao.whatsapp}
+                        </p>
+                      )}
+                      {configuracao.instagram && (
+                        <p className="flex items-center gap-1.5 text-[11px] text-white/55">
+                          <AtSign size={10} className="flex-shrink-0" /> {configuracao.instagram}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[10px] uppercase tracking-[2.5px] font-semibold" style={{ color: cor }}>
+                    Orçamento
+                  </p>
+                  <p className="font-display text-3xl font-semibold text-white leading-tight mt-0.5">
+                    Nº {orcamento.numero}
+                  </p>
+                  <p className="text-[11px] text-white/50 mt-1">{formatDate(orcamento.created_at)}</p>
+                </div>
+              </div>
             </header>
 
-            <div className="flex justify-between items-start mb-8 text-base">
-              <div>
-                <p className="text-sm text-dark-300 uppercase tracking-wide">Cliente</p>
-                <p className="font-medium text-dark-700 text-lg">{orcamento.cliente_nome || '—'}</p>
-                {orcamento.cliente_telefone && (
-                  <p className="text-dark-500 text-sm mt-0.5">{orcamento.cliente_telefone}</p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-dark-300 uppercase tracking-wide">Orçamento</p>
-                <p className="font-medium text-dark-700 text-lg">#{orcamento.numero}</p>
-                <p className="text-dark-500 text-sm mt-0.5">{formatDate(orcamento.created_at)}</p>
-              </div>
-            </div>
+            {/* ── Corpo ────────────────────────────────────────────────── */}
+            <div className="p-10 flex flex-col flex-1">
 
-            <div className="grid grid-cols-2 gap-12 mb-8">
-              <div className="flex flex-col gap-8">
+              <div className="flex items-center justify-between gap-4 mb-8 pb-6 border-b border-gold-100">
                 <div>
-                  <p className="text-sm text-dark-300 uppercase tracking-wide mb-1.5">Produto</p>
-                  <p className="text-lg text-dark-700 font-medium">{orcamento.modelo_nome || '—'}</p>
-                  {(orcamento.material || orcamento.largura) && (
-                    <p className="text-base text-dark-500">
-                      {[orcamento.material, orcamento.largura].filter(Boolean).join(' · ')}
+                  <p className="text-[11px] text-dark-300 uppercase tracking-[1.5px] font-semibold mb-1">Preparado para</p>
+                  <p className="font-display text-xl font-semibold text-dark-700">{orcamento.cliente_nome || 'Cliente'}</p>
+                  {orcamento.cliente_telefone && (
+                    <p className="flex items-center gap-1.5 text-sm text-dark-400 mt-0.5">
+                      <Phone size={11} /> {orcamento.cliente_telefone}
                     </p>
                   )}
                 </div>
-
-                {orcamento.itens_inclusos.length > 0 && (
-                  <div>
-                    <p className="text-sm text-dark-300 uppercase tracking-wide mb-1.5">Itens Inclusos</p>
-                    <ul className="text-base text-dark-600 space-y-1.5">
-                      {orcamento.itens_inclusos.map((item) => (
-                        <li key={item} className="flex items-center gap-2">
-                          <span style={{ color: configuracao.cor_principal }}>✓</span> {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {orcamento.prazo_fabricacao && (
-                  <div>
-                    <p className="text-sm text-dark-300 uppercase tracking-wide mb-1">Prazo de Fabricação</p>
-                    <p className="text-base text-dark-700">{orcamento.prazo_fabricacao}</p>
-                  </div>
-                )}
+                <div
+                  className="flex items-center gap-2 rounded-full border px-3.5 py-2 flex-shrink-0"
+                  style={{ borderColor: `${cor}40`, backgroundColor: `${cor}0D` }}
+                >
+                  <ShieldCheck size={14} style={{ color: cor }} />
+                  <span className="text-xs font-medium text-dark-600">Válido até {validoAte}</span>
+                </div>
               </div>
 
-              <div className="rounded-xl p-8 h-fit" style={{ backgroundColor: `${configuracao.cor_principal}14` }}>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-base text-dark-600">Valor à vista</span>
-                  <span className="text-3xl font-semibold" style={{ color: configuracao.cor_principal }}>
+              <div className="grid grid-cols-2 gap-10 mb-8">
+                {/* Detalhes do produto */}
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <p className="text-[11px] text-dark-300 uppercase tracking-[1.5px] font-semibold mb-2">Peça</p>
+                    <p className="font-display text-lg text-dark-700 font-medium leading-snug">
+                      {orcamento.modelo_nome || '—'}
+                    </p>
+                    {(orcamento.material || orcamento.largura) && (
+                      <p className="flex items-center gap-1.5 text-sm text-dark-500 mt-1">
+                        <Ruler size={12} className="flex-shrink-0" style={{ color: cor }} />
+                        {[orcamento.material, orcamento.largura].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                  </div>
+
+                  {orcamento.itens_inclusos.length > 0 && (
+                    <div>
+                      <p className="text-[11px] text-dark-300 uppercase tracking-[1.5px] font-semibold mb-2">Itens Inclusos</p>
+                      <ul className="flex flex-col gap-1.5">
+                        {orcamento.itens_inclusos.map((item) => (
+                          <li key={item} className="flex items-center gap-2 text-sm text-dark-600">
+                            <CheckCircle2 size={14} className="flex-shrink-0" style={{ color: cor }} />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {orcamento.prazo_fabricacao && (
+                    <div>
+                      <p className="text-[11px] text-dark-300 uppercase tracking-[1.5px] font-semibold mb-2">Prazo de Fabricação</p>
+                      <p className="flex items-center gap-1.5 text-sm text-dark-700">
+                        <Clock size={12} style={{ color: cor }} /> {orcamento.prazo_fabricacao}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Investimento */}
+                <div
+                  className="rounded-2xl p-7 h-fit border"
+                  style={{ backgroundColor: `${cor}0D`, borderColor: `${cor}30` }}
+                >
+                  <p className="text-[11px] uppercase tracking-[1.5px] font-semibold mb-4" style={{ color: cor }}>
+                    Investimento
+                  </p>
+                  <p className="text-xs text-dark-400 mb-1">À vista</p>
+                  <p className="font-display text-4xl font-bold leading-none" style={{ color: cor }}>
                     {formatMoney(orcamento.valor_vista)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-baseline mt-3 text-base text-dark-500">
-                  <span>ou parcelado</span>
-                  <span>
+                  </p>
+
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="h-px flex-1" style={{ backgroundColor: `${cor}30` }} />
+                    <span className="text-[11px] text-dark-300 uppercase tracking-wide">ou</span>
+                    <div className="h-px flex-1" style={{ backgroundColor: `${cor}30` }} />
+                  </div>
+
+                  <p className="text-xl font-display font-semibold text-dark-700">
                     {orcamento.num_parcelas}x de {formatMoney(orcamento.valor_parcela)}
-                    {orcamento.percentual_acrescimo === 0
-                      ? ' sem juros'
-                      : ` com acréscimo de ${orcamento.percentual_acrescimo}%`}
-                  </span>
+                  </p>
+                  <p className="text-xs text-dark-400 mt-0.5">sem juros no cartão</p>
                 </div>
+              </div>
+
+              {orcamento.observacoes && (
+                <div className="mb-8 pb-8 border-b border-gold-100">
+                  <p className="text-[11px] text-dark-300 uppercase tracking-[1.5px] font-semibold mb-1.5">Observações</p>
+                  <p className="text-sm text-dark-600 whitespace-pre-line leading-relaxed">{orcamento.observacoes}</p>
+                </div>
+              )}
+
+              <div className="mt-auto pt-2 text-center">
+                {configuracao.texto_rodape && (
+                  <p className="text-sm text-dark-500 whitespace-pre-line leading-relaxed font-medium mb-3">
+                    {configuracao.texto_rodape}
+                  </p>
+                )}
+                <p className="text-[10px] text-dark-300 tracking-wide">
+                  {configuracao.nome_empresa}
+                  {configuracao.instagram && ` · ${configuracao.instagram}`}
+                  {(configuracao.contato || configuracao.whatsapp) && ` · ${configuracao.contato || configuracao.whatsapp}`}
+                </p>
               </div>
             </div>
 
-            {orcamento.observacoes && (
-              <div className="mb-8">
-                <p className="text-sm text-dark-300 uppercase tracking-wide mb-1">Observações</p>
-                <p className="text-base text-dark-600 whitespace-pre-line">{orcamento.observacoes}</p>
-              </div>
-            )}
-
-            {configuracao.texto_rodape && (
-              <footer className="pt-6 border-t border-gold-100 text-center mt-auto">
-                <p className="text-sm text-dark-400 whitespace-pre-line leading-relaxed">
-                  {configuracao.texto_rodape}
-                </p>
-              </footer>
-            )}
+            {/* Faixa de rodapé */}
+            <div className="h-2" style={{ backgroundColor: cor }} />
           </div>
         </div>
       </div>

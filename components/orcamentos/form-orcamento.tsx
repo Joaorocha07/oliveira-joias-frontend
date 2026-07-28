@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAlert } from '@/hooks/use-alert'
@@ -41,8 +41,6 @@ function buildDefaults(
       largura: orcamento.largura ?? '',
       itens_inclusos: orcamento.itens_inclusos ?? [],
       valor_vista: orcamento.valor_vista,
-      num_parcelas: orcamento.num_parcelas,
-      parcelas_sem_juros_ate: orcamento.percentual_acrescimo === 0 ? orcamento.num_parcelas : 0,
       prazo_fabricacao: orcamento.prazo_fabricacao ?? '',
       observacoes: orcamento.observacoes ?? '',
     }
@@ -55,8 +53,6 @@ function buildDefaults(
     largura: initialValues?.largura ?? '',
     itens_inclusos: initialValues?.itens_inclusos ?? [],
     valor_vista: initialValues?.valor_vista ?? 0,
-    num_parcelas: initialValues?.num_parcelas ?? 3,
-    parcelas_sem_juros_ate: initialValues?.parcelas_sem_juros_ate ?? 0,
     prazo_fabricacao: initialValues?.prazo_fabricacao ?? '',
     observacoes: initialValues?.observacoes ?? '',
   }
@@ -94,7 +90,7 @@ export function FormOrcamento({
     watch,
     reset,
     setValue,
-    formState: { errors, isSubmitting, dirtyFields },
+    formState: { errors, isSubmitting },
   } = useForm<OrcamentoFormData>({
     resolver: zodResolver(orcamentoSchema) as never,
     defaultValues: buildDefaults(orcamento, initialValues),
@@ -170,17 +166,7 @@ export function FormOrcamento({
 
   const watchedValor = watch('valor_vista') ?? 0
   const watchedMaterial = watch('material') ?? ''
-  const watchedNumParcelas = watch('num_parcelas') ?? 1
-  const watchedSemJurosAte = watch('parcelas_sem_juros_ate') ?? 0
-  const condicao = calcularCondicaoOrcamento(watchedValor, watchedMaterial, watchedNumParcelas, watchedSemJurosAte)
-
-  useEffect(() => {
-    if (orcamento || initialValues) return
-    if (dirtyFields.num_parcelas) return
-    const isOuro = /ouro/i.test(watchedMaterial)
-    setValue('num_parcelas', isOuro ? 12 : 3)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedMaterial])
+  const condicao = calcularCondicaoOrcamento(watchedValor, watchedMaterial)
 
   async function onSave(data: OrcamentoFormData) {
     if (!user) return
@@ -321,33 +307,13 @@ export function FormOrcamento({
               />
             )}
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Quantidade de parcelas"
-              type="number"
-              min={1}
-              max={60}
-              error={errors.num_parcelas?.message}
-              {...register('num_parcelas', { valueAsNumber: true })}
-            />
-            <Input
-              label="Sem juros até quantas parcelas"
-              type="number"
-              min={0}
-              max={60}
-              error={errors.parcelas_sem_juros_ate?.message}
-              {...register('parcelas_sem_juros_ate', { valueAsNumber: true })}
-            />
-          </div>
           <p className="text-xs text-dark-300 leading-relaxed">
-            Parcelas além do limite &ldquo;sem juros&rdquo; recebem acréscimo de 20% (ouro) ou 10% (outros materiais),
-            calculado automaticamente pelo Material informado acima.
+            O parcelamento é calculado automaticamente pelo Material: Ouro → 12x sem juros (+20%),
+            outros materiais → 3x sem juros (+10%).
           </p>
           {watchedValor > 0 && (
             <p className="text-sm font-medium text-gold-600">
-              ou {condicao.parcelas}x de {formatMoney(condicao.valorParcela)}
-              {condicao.percentual === 0 ? ' sem juros' : ` com acréscimo de ${condicao.percentual}%`}
-              <span className="text-dark-300 font-normal"> (total parcelado {formatMoney(condicao.valorParcelado)})</span>
+              ou {condicao.parcelas}x de {formatMoney(condicao.valorParcela)} sem juros
             </p>
           )}
         </section>

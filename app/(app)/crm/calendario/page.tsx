@@ -13,15 +13,16 @@ import { useAlert } from '@/hooks/use-alert'
 import { PageHeader, Card, Button, Spinner, EmptyState } from '@/components/ui'
 import { FollowUpCard } from '@/components/crm/followup-card'
 import { ModalAgendarFollowUp } from '@/components/modals/modal-agendar-followup'
+import { ModalConcluirFollowUp } from '@/components/modals/modal-concluir-followup'
 import { ModalWhatsApp } from '@/components/modals/modal-whatsapp'
-import { listarFollowUps, concluirFollowUp, cancelarFollowUp } from '@/services/follow-ups'
+import { listarFollowUps, cancelarFollowUp } from '@/services/follow-ups'
 import { cn } from '@/lib/cn'
 import type { ClienteFollowUp } from '@/types'
 
 type ViewMode = 'dia' | 'semana' | 'mes'
 
 export default function CalendarioPage() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const alert = useAlert()
   const [followUps, setFollowUps] = useState<ClienteFollowUp[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,13 +30,12 @@ export default function CalendarioPage() {
   const [dataRef, setDataRef] = useState(new Date())
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [reagendando, setReagendando] = useState<ClienteFollowUp | null>(null)
+  const [concluindo, setConcluindo] = useState<ClienteFollowUp | null>(null)
   const [whatsappFollowUp, setWhatsappFollowUp] = useState<ClienteFollowUp | null>(null)
-
-  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
 
   async function carregar() {
     setLoading(true)
-    const { data, error } = await listarFollowUps(escopoVendedor)
+    const { data, error } = await listarFollowUps()
     if (error) alert.error('Erro', 'Erro ao carregar a agenda.')
     else setFollowUps(data ?? [])
     setLoading(false)
@@ -44,7 +44,7 @@ export default function CalendarioPage() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void carregar(), 0)
     return () => window.clearTimeout(timeoutId)
-  }, [escopoVendedor])
+  }, [])
 
   const porDia = useMemo(() => {
     const map = new Map<string, ClienteFollowUp[]>()
@@ -60,15 +60,6 @@ export default function CalendarioPage() {
     if (view === 'mes') setDataRef((d) => direcao === 1 ? addMonths(d, 1) : subMonths(d, 1))
     else if (view === 'semana') setDataRef((d) => direcao === 1 ? addWeeks(d, 1) : subWeeks(d, 1))
     else setDataRef((d) => direcao === 1 ? addDays(d, 1) : subDays(d, 1))
-  }
-
-  async function handleConcluir(followUp: ClienteFollowUp) {
-    if (!user) return
-    setProcessingId(followUp.id)
-    const { error } = await concluirFollowUp(followUp, user.id)
-    if (error) alert.error('Erro', error)
-    else await carregar()
-    setProcessingId(null)
   }
 
   async function handleCancelar(followUp: ClienteFollowUp) {
@@ -216,7 +207,7 @@ export default function CalendarioPage() {
                 followUp={followUp}
                 atrasado={false}
                 processing={processingId === followUp.id}
-                onConcluir={() => void handleConcluir(followUp)}
+                onConcluir={() => setConcluindo(followUp)}
                 onReagendar={() => setReagendando(followUp)}
                 onCancelar={() => void handleCancelar(followUp)}
                 onWhatsApp={() => setWhatsappFollowUp(followUp)}
@@ -242,6 +233,16 @@ export default function CalendarioPage() {
           open={!!whatsappFollowUp}
           onClose={() => setWhatsappFollowUp(null)}
           cliente={whatsappFollowUp.cliente}
+        />
+      )}
+
+      {concluindo && user && (
+        <ModalConcluirFollowUp
+          open={!!concluindo}
+          onClose={() => setConcluindo(null)}
+          onSuccess={carregar}
+          followUp={concluindo}
+          userId={user.id}
         />
       )}
     </div>

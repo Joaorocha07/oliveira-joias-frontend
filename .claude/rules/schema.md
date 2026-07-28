@@ -87,9 +87,16 @@ parceiro_nome, parceiro_telefone  ← cadastro de casal (item 16 do doc), opcion
 > separada). Ver `.claude/migrations/crm_leads.sql`, `crm_leads_fix_timeline_fk.sql`,
 > `crm_followups.sql`, `crm_status_qualificacao.sql` e `crm_extras.sql`.
 >
-> Vendedores (`profiles.role='vendedor'`) só enxergam os próprios leads no `/crm` e
-> `/crm/follow-up` (filtro por `vendedor_id` em `services/clientes.ts`/`services/follow-ups.ts`);
-> outros roles veem tudo. É uma restrição de UI/query, não RLS por role no banco.
+> Vendedores (`profiles.role='vendedor'`) só enxergam os próprios leads no Kanban `/crm` (filtro por
+> `vendedor_id` em `services/clientes.ts`); outros roles veem tudo. É uma restrição de UI/query, não
+> RLS por role no banco.
+>
+> A agenda de follow-up (`/crm/follow-up` e `/crm/calendario`, `listarFollowUps()` em
+> `services/follow-ups.ts`) é **compartilhada**: todos os vendedores veem todos os follow-ups
+> pendentes, independente de quem cadastrou ou de qual vendedor está vinculado ao cliente. Antes
+> havia o mesmo filtro por `vendedor_id`, o que fazia um vendedor não ver follow-ups agendados por
+> outro — corrigido a pedido do usuário (a agenda de retornos precisa ser única para a equipe toda).
+> Os cards de alerta (`listarAlertas`) continuam por vendedor quando chamados com `vendedorId`.
 >
 > `created_by` referencia `profiles(id)` (não `auth.users` como na maioria das outras tabelas) —
 > importante ao escrever embeds do PostgREST: qualquer segunda FK para `profiles` (ex.: `vendedor_id`)
@@ -178,6 +185,30 @@ Campos inferidos do service:
 id, variacao_id, produto_id, tipo (entrada|saida|ajuste|devolucao),
 quantidade, quantidade_antes, quantidade_depois, motivo, created_by, created_at
 ```
+
+### `lancamentos`
+```
+id, tipo ('entrada'|'saida'), descricao, valor, data_lancamento,
+categoria_id, categoria_nome, forma_pagamento, referencia_id, referencia_tipo,
+observacoes, editado, created_by, updated_by, created_at, updated_at
+```
+> Alimenta a tela Caixa & Financeiro (`app/(app)/caixa/page.tsx`). `referencia_tipo` é texto livre
+> (sem FK/enum no banco) usado para rastrear a origem do lançamento: `'venda'`, `'servico'`,
+> `'crediario'`, `'crediario_parcela'`, `'venda_estorno'`, `'follow_up'` (valor registrado ao
+> concluir um follow-up do CRM, ver `services/follow-ups.ts`). `referencia_id` aponta para o id da
+> respectiva linha de origem. Lançamentos manuais (criados direto na tela Caixa) têm
+> `referencia_id`/`referencia_tipo` nulos.
+>
+> Atenção: em `services/servicos.ts`, `updateServicoStatus()` (usado no select rápido de status da
+> tela `/servicos`) só atualiza `servicos.status`/`pago` — **não** cria/edita lançamento em caixa.
+> Só o modal completo de edição (`updateServico()`) recria os lançamentos. Isso é uma inconsistência
+> pré-existente, fora do escopo do que foi corrigido na sessão que documentou este bloco.
+
+### `categorias`
+```
+id, nome, tipo ('entrada'|'saida'), cor, ativo, created_at
+```
+> Categorias de lançamento usadas no filtro/formulário da tela Caixa.
 
 ### `orcamentos`
 ```

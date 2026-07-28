@@ -306,19 +306,15 @@ export function parcelaVencida(dataVencimento: string): boolean {
 }
 
 // ── ORÇAMENTOS: CONDIÇÃO DE PAGAMENTO ──────────────────────────
-export function calcularCondicaoOrcamento(
-  valorVista: number,
-  material: string | null | undefined,
-  numParcelas?: number,
-  parcelasSemJurosAte?: number,
-) {
+// Regra fixa: Ouro → +20% em 12x sem juros. Outros materiais → +10% em 3x sem
+// juros. Valor da parcela sempre arredondado para o número inteiro mais
+// próximo (sem centavos).
+export function calcularCondicaoOrcamento(valorVista: number, material: string | null | undefined) {
   const isOuro = /ouro/i.test(material ?? '')
-  const percentualBase = isOuro ? 20 : 10
-  const parcelas = numParcelas ?? (isOuro ? 12 : 3)
-  const semJurosAte = parcelasSemJurosAte ?? 0
-  const percentual = parcelas > semJurosAte ? percentualBase : 0
+  const percentual = isOuro ? 20 : 10
+  const parcelas = isOuro ? 12 : 3
   const valorParcelado = round2(valorVista * (1 + percentual / 100))
-  const valorParcela = parcelas > 0 ? round2(valorParcelado / parcelas) : 0
+  const valorParcela = Math.round(valorParcelado / parcelas)
   return { percentual, parcelas, valorParcelado, valorParcela }
 }
 
