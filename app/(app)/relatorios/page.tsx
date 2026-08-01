@@ -242,18 +242,32 @@ export default function RelatoriosPage() {
     const inicioCompleto = `${dataInicio}T00:00:00`
     const fimCompleto = `${dataFim}T23:59:59`
 
-    const [vendasResult, lancamentosResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult, clientesResult] = await Promise.all([
+    const lancamentosResult = await (async () => {
+      const pageSize = 1000
+      const all: LancamentoRelatorio[] = []
+      let offset = 0
+      while (true) {
+        const { data } = await supabase
+          .from('lancamentos')
+          .select('tipo, descricao, valor, data_lancamento, forma_pagamento, categoria_nome, referencia_tipo')
+          .gte('data_lancamento', dataInicio)
+          .lte('data_lancamento', dataFim)
+          .range(offset, offset + pageSize - 1)
+        if (!data || data.length === 0) break
+        all.push(...(data as LancamentoRelatorio[]))
+        if (data.length < pageSize) break
+        offset += pageSize
+      }
+      return { data: all }
+    })()
+
+    const [vendasResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult, clientesResult] = await Promise.all([
       supabase
         .from('vendas')
         .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
         .gte('data_venda', dataInicio)
         .lte('data_venda', dataFim)
         .not('status', 'eq', 'cancelado'),
-      supabase
-        .from('lancamentos')
-        .select('tipo, descricao, valor, data_lancamento, forma_pagamento, categoria_nome, referencia_tipo')
-        .gte('data_lancamento', dataInicio)
-        .lte('data_lancamento', dataFim),
       supabase
         .from('servicos')
         .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro')

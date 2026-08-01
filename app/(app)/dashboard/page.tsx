@@ -174,6 +174,25 @@ export default function DashboardPage() {
     const periodoAnteriorFim = format(subDays(inicio, 1), 'yyyy-MM-dd')
     const periodoAnteriorInicio = format(subDays(inicio, diasPeriodo + 1), 'yyyy-MM-dd')
 
+    const lancamentos = await (async () => {
+      const pageSize = 1000
+      const all: Array<{ tipo: string; descricao: string; valor: number; referencia_tipo: string; forma_pagamento: string }> = []
+      let offset = 0
+      while (true) {
+        const { data } = await supabase
+          .from('lancamentos')
+          .select('tipo, descricao, valor, referencia_tipo, forma_pagamento')
+          .gte('data_lancamento', dataInicio)
+          .lte('data_lancamento', dataFim)
+          .range(offset, offset + pageSize - 1)
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        offset += pageSize
+      }
+      return all
+    })()
+
     const [
       { data: vendasPeriodo },
       { data: vendasPeriodoAnterior },
@@ -181,7 +200,6 @@ export default function DashboardPage() {
       { data: parcelasPagasPeriodoAnterior },
       { data: entradasCrediarioPeriodo },
       { data: entradasCrediarioPeriodoAnterior },
-      { data: lancamentos },
       { data: crediariosAbertos },
       { data: servicos },
       { data: vendasRecentes },
@@ -222,10 +240,6 @@ export default function DashboardPage() {
         .not('status', 'eq', 'cancelado')
         .gte('created_at', `${periodoAnteriorInicio}T00:00:00`)
         .lte('created_at', `${periodoAnteriorFim}T23:59:59`),
-      supabase.from('lancamentos')
-        .select('tipo, descricao, valor, referencia_tipo, forma_pagamento')
-        .gte('data_lancamento', dataInicio)
-        .lte('data_lancamento', dataFim),
       supabase.from('crediario')
         .select('saldo')
         .in('status', ['em_dia', 'vencido']),

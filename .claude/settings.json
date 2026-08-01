@@ -6,5 +6,6 @@
       "PowerShell(Test-Path *)",
       "PowerShell(Get-Content *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true
 }

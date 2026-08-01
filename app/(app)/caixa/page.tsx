@@ -57,17 +57,28 @@ export default function CaixaPage() {
   const [salvando, setSalvando] = useState(false)
 
   const loadLancamentos = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('lancamentos')
-      .select('*')
-      .gte('data_lancamento', dataInicio)
-      .lte('data_lancamento', dataFim)
-      .order('data_lancamento', { ascending: false })
-
-    if (error) {
+    const pageSize = 1000
+    const all: Lancamento[] = []
+    let offset = 0
+    let hasError = false
+    while (true) {
+      const { data, error } = await supabase
+        .from('lancamentos')
+        .select('*')
+        .gte('data_lancamento', dataInicio)
+        .lte('data_lancamento', dataFim)
+        .order('data_lancamento', { ascending: false })
+        .range(offset, offset + pageSize - 1)
+      if (error) { hasError = true; break }
+      if (!data || data.length === 0) break
+      all.push(...data)
+      if (data.length < pageSize) break
+      offset += pageSize
+    }
+    if (hasError) {
       alert.error('Erro', 'Erro ao carregar lançamentos.')
     } else {
-      setLancamentos(data ?? [])
+      setLancamentos(all)
     }
     setLoading(false)
   }, [dataFim, dataInicio])
