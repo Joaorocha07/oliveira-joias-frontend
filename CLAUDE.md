@@ -26,6 +26,8 @@ Sem configuração de testes — nenhum arquivo de teste existe no projeto.
 Copiar `.env.example` para `.env.local` e preencher:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_BACKEND_URL` — API do `oliveira-joias-backend` (repositório separado, Express),
+  usada só pela tela `/portfolio` para cadastrar/listar os produtos do site público.
 
 ## Acesso ao banco de dados
 
@@ -49,7 +51,7 @@ Para consultar dados reais diretamente, use o skill `/db`. Ele lê as credenciai
 | Notificações | react-hot-toast |
 | Datas | date-fns v4 |
 
-**Não há camada de API própria.** O frontend faz chamadas diretamente ao Supabase via `@/lib/supabase`.
+**Não há camada de API própria para o domínio do ERP.** O frontend faz chamadas diretamente ao Supabase via `@/lib/supabase`. Exceção: a tela `/portfolio` (produtos do site público) fala com o `oliveira-joias-backend` (Express, repositório separado) via `fetch`, não via Supabase client — ver `services/catalogo.ts`.
 
 ---
 
@@ -70,6 +72,7 @@ Para consultar dados reais diretamente, use o skill `/db`. Ele lê as credenciai
     servicos/
     relatorios/
     vendedores/
+    portfolio/        ← cadastro de produtos do site público (fala com oliveira-joias-backend)
     configuracoes/
   login/              ← fora do grupo, sem auth
 ```
@@ -86,7 +89,7 @@ Componente → Service (/services/*.ts) → Supabase Client (/lib/supabase.ts)
 
 Services retornam `{ data: T | null, error: string | null }`. Nunca retornam throw — erros são capturados e convertidos para string em português.
 
-Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`. Rotas como `clientes`, `fornecedores`, `caixa`, `vendedores` ainda não têm service — ao criar funcionalidades nessas áreas, criar o service correspondente em `/services/`.
+Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`, `catalogo` (este último fala com o `oliveira-joias-backend`, não com Supabase — ver seção "Stack real"). Rotas como `clientes`, `fornecedores`, `caixa`, `vendedores` ainda não têm service — ao criar funcionalidades nessas áreas, criar o service correspondente em `/services/`.
 
 ### Autenticação
 

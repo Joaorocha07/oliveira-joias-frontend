@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
   Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText,
-  Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText,
+  Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
@@ -37,6 +37,7 @@ const navItems: NavItem[] = [
   { href: '/crm/pos-venda',  icon: <Gift size={18} />,         label: 'Pós-venda' },
   { href: '/crm/mensagens',  icon: <MessageSquareText size={18} />, label: 'Mensagens' },
   { href: '/crm/relatorios', icon: <LineChart size={18} />,    label: 'Relatórios CRM' },
+  { section: 'Site', href: '/portfolio', icon: <Globe size={18} />, label: 'Produtos do Portfólio' },
   { section: 'Financeiro', href: '/caixa',       icon: <Wallet size={18} />,   label: 'Caixa & Financeiro' },
   { href: '/contas-pagar', icon: <Receipt size={18} />,  label: 'Contas a Pagar' },
   { href: '/relatorios',   icon: <BarChart3 size={18} />, label: 'Relatórios' },
