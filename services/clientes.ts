@@ -101,6 +101,30 @@ export async function createLead(
   return { data: lead as Cliente, error: null }
 }
 
+export async function vincularClienteExistenteAoFunil(
+  clienteId: string,
+  data: ClienteLeadFormData,
+  userId: string,
+): Promise<{ data: Cliente | null; error: string | null }> {
+  const { data: lead, error } = await supabase
+    .from('clientes')
+    .update({ ...buildLeadPayload(data), status_funil: 'novo_lead' })
+    .eq('id', clienteId)
+    .select()
+    .single()
+
+  if (error) return { data: null, error: error.message }
+
+  await supabase.from('cliente_timeline').insert({
+    cliente_id: clienteId,
+    tipo: 'sistema',
+    descricao: 'Cliente adicionado ao funil de vendas',
+    created_by: userId,
+  })
+
+  return { data: lead as Cliente, error: null }
+}
+
 export async function updateLead(
   id: string,
   data: ClienteLeadFormData,

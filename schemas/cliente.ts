@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { Cliente } from '@/types'
 
 const produtosInteresse = [
   'alianca_prata', 'alianca_ouro', 'alianca_moeda_antiga', 'alianca_aco', 'semijoias', 'outro',
@@ -37,3 +38,31 @@ export const clienteLeadSchema = z.object({
 })
 
 export type ClienteLeadFormData = z.infer<typeof clienteLeadSchema>
+
+export function clienteToLeadFormData(c: Cliente): ClienteLeadFormData {
+  return {
+    nome: c.nome,
+    telefone: c.telefone,
+    whatsapp: c.whatsapp,
+    instagram: c.instagram,
+    cidade: c.cidade,
+    origem_id: c.origem_id,
+    origem_outro: c.origem_outro,
+    produto_interesse: c.produto_interesse,
+    valor_pretendido: c.valor_pretendido,
+    data_casamento: c.data_casamento,
+    data_noivado: c.data_noivado,
+    quando_pretende_comprar: c.quando_pretende_comprar,
+    modelo_desejado: c.modelo_desejado,
+    numeracao: c.numeracao,
+    vendedor_id: c.vendedor_id,
+    parceiro_nome: c.parceiro_nome,
+    parceiro_telefone: c.parceiro_telefone,
+    status_qualificacao: c.status_qualificacao,
+    perguntou_pagamento: c.perguntou_pagamento,
+    solicitou_gravacao: c.solicitou_gravacao,
+    demonstrou_intencao: c.demonstrou_intencao,
+    observacoes: c.observacoes,
+    data_inicio_conversa: c.data_inicio_conversa,
+  }
+}

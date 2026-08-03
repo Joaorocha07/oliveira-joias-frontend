@@ -7,12 +7,12 @@ import { useAlert } from '@/hooks/use-alert'
 import { Modal, Button, Select, Input, Textarea } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
-import { clienteLeadSchema, type ClienteLeadFormData } from '@/schemas/cliente'
-import { createLead } from '@/services/clientes'
+import { clienteLeadSchema, clienteToLeadFormData, type ClienteLeadFormData } from '@/schemas/cliente'
+import { createLead, vincularClienteExistenteAoFunil } from '@/services/clientes'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import { PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL } from '@/utils'
-import type { OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
+import type { Cliente, OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
 
 interface Props {
   open: boolean
@@ -61,6 +61,9 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
   const alert = useAlert()
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
+  const [modo, setModo] = useState<'novo' | 'existente'>('novo')
+  const [clienteExistenteId, setClienteExistenteId] = useState<string | null>(null)
+  const [clienteExistenteDisplayValue, setClienteExistenteDisplayValue] = useState<string | undefined>(undefined)
 
   const {
     register, handleSubmit, control, reset, setValue, watch,
@@ -80,6 +83,9 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
     const isVendedor = profile?.role === 'vendedor'
     reset({ ...DEFAULTS, vendedor_id: isVendedor ? profile!.id : null })
     setVendedorDisplayValue(isVendedor ? profile!.nome : undefined)
+    setModo('novo')
+    setClienteExistenteId(null)
+    setClienteExistenteDisplayValue(undefined)
     supabase
       .from('origens_cliente')
       .select('id, nome, ativo, created_at')
@@ -102,9 +108,60 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
     return (data ?? []).map((p: { id: string; nome: string }) => ({ id: p.id, label: p.nome }))
   }, [])
 
+  const searchClientesExistentes = useCallback(async (q: string): Promise<SelectOption[]> => {
+    const { data } = await supabase
+      .from('clientes')
+      .select('id, nome, telefone')
+      .eq('ativo', true)
+      .ilike('nome', `%${q}%`)
+      .limit(20)
+    return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
+      id: c.id,
+      label: c.nome,
+      sublabel: c.telefone ?? undefined,
+    }))
+  }, [])
+
+  function handleTrocarModo(novoModo: 'novo' | 'existente') {
+    setModo(novoModo)
+    setClienteExistenteId(null)
+    setClienteExistenteDisplayValue(undefined)
+    const isVendedor = profile?.role === 'vendedor'
+    reset({ ...DEFAULTS, vendedor_id: isVendedor ? profile!.id : null })
+    setVendedorDisplayValue(isVendedor ? profile!.nome : undefined)
+  }
+
+  async function handleSelectClienteExistente(id: string | null, option?: SelectOption) {
+    if (!id) {
+      setClienteExistenteId(null)
+      setClienteExistenteDisplayValue(undefined)
+      return
+    }
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('*, vendedor:profiles!clientes_vendedor_id_fkey(id, nome)')
+      .eq('id', id)
+      .single()
+    if (error || !data) {
+      alert.error('Erro', 'Erro ao carregar dados do cliente selecionado.')
+      return false
+    }
+    const cliente = data as Cliente
+    reset(clienteToLeadFormData(cliente))
+    setClienteExistenteId(id)
+    setClienteExistenteDisplayValue(option?.label)
+    setVendedorDisplayValue(cliente.vendedor?.nome ?? undefined)
+  }
+
   async function onSave(data: ClienteLeadFormData) {
     if (!user) return
-    const { error } = await createLead(data, user.id)
+    if (modo === 'existente' && !clienteExistenteId) {
+      alert.error('Atenção', 'Selecione um cliente já cadastrado.')
+      return
+    }
+    const { error } = modo === 'existente' && clienteExistenteId
+      ? await vincularClienteExistenteAoFunil(clienteExistenteId, data, user.id)
+      : await createLead(data, user.id)
     if (error) {
       alert.error('Erro', error)
     } else {
@@ -132,16 +189,48 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
       }
     >
       <form id="form-novo-lead" onSubmit={handleSubmit(onSave)} className="flex flex-col gap-4">
-        <Input label="Nome *" error={errors.nome?.message} {...register('nome')} />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => handleTrocarModo('novo')}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              modo === 'novo' ? 'border-gold-500 bg-gold-50 text-gold-600' : 'border-gold-100 text-dark-400'
+            }`}
+          >
+            Novo cliente
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTrocarModo('existente')}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              modo === 'existente' ? 'border-gold-500 bg-gold-50 text-gold-600' : 'border-gold-100 text-dark-400'
+            }`}
+          >
+            Cliente já cadastrado
+          </button>
+        </div>
+
+        {modo === 'existente' && (
+          <SearchableSelect
+            label="Buscar cliente"
+            value={clienteExistenteId}
+            onChange={handleSelectClienteExistente}
+            onSearch={searchClientesExistentes}
+            placeholder="Buscar por nome..."
+            displayValue={clienteExistenteDisplayValue}
+          />
+        )}
+
+        <Input label="Nome *" error={errors.nome?.message} disabled={modo === 'existente'} {...register('nome')} />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Input label="Telefone" placeholder="(00) 00000-0000" {...register('telefone')} />
-          <Input label="WhatsApp" placeholder="(00) 00000-0000" {...register('whatsapp')} />
-          <Input label="Instagram" placeholder="@usuario" {...register('instagram')} />
+          <Input label="Telefone" placeholder="(00) 00000-0000" disabled={modo === 'existente'} {...register('telefone')} />
+          <Input label="WhatsApp" placeholder="(00) 00000-0000" disabled={modo === 'existente'} {...register('whatsapp')} />
+          <Input label="Instagram" placeholder="@usuario" disabled={modo === 'existente'} {...register('instagram')} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Cidade" {...register('cidade')} />
+          <Input label="Cidade" disabled={modo === 'existente'} {...register('cidade')} />
           <Select
             label="Produto de interesse"
             placeholder="Selecione..."
