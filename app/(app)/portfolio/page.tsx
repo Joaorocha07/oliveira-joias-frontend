@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, ImageOff, Star, Pencil, Trash2, X } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
+import { cn } from '@/lib/cn'
 import {
   PageHeader, Card, Button, Spinner, EmptyState, Modal, Input, Select, Textarea,
   SearchInput, Pagination, ActionMenu, ConfirmDialog,
@@ -37,6 +38,8 @@ export default function PortfolioPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<ProdutoCatalogo | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [modoParcela, setModoParcela] = useState<'quantidade' | 'valor'>('quantidade')
+  const [valorParcela, setValorParcela] = useState('')
   const [imagensExistentes, setImagensExistentes] = useState<string[]>([])
   const [imagens, setImagens] = useState<File[]>([])
   const [salvando, setSalvando] = useState(false)
@@ -70,11 +73,25 @@ export default function PortfolioPage() {
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
+  const qtdCalculada = modoParcela === 'valor' && form.valor && valorParcela && Number(valorParcela) > 0
+    ? Math.max(1, Math.round(Number(form.valor) / Number(valorParcela)))
+    : null
+
+  function toggleModoParcela(modo: 'quantidade' | 'valor') {
+    if (modo === modoParcela) return
+    if (modo === 'valor' && form.valor && form.parcelas && Number(form.parcelas) > 0) {
+      setValorParcela((Number(form.valor) / Number(form.parcelas)).toFixed(2))
+    }
+    setModoParcela(modo)
+  }
+
   function openCreate() {
     setEditando(null)
     setForm(EMPTY_FORM)
     setImagensExistentes([])
     setImagens([])
+    setModoParcela('quantidade')
+    setValorParcela('')
     setModalOpen(true)
   }
 
@@ -93,6 +110,8 @@ export default function PortfolioPage() {
     })
     setImagensExistentes(p.imagens)
     setImagens([])
+    setModoParcela('quantidade')
+    setValorParcela('')
     setModalOpen(true)
   }
 
@@ -122,7 +141,8 @@ export default function PortfolioPage() {
     data.append('destaque', String(form.destaque))
     if (form.linha.trim()) data.append('linha', form.linha.trim())
     if (form.largura.trim()) data.append('largura', form.largura.trim())
-    if (form.parcelas.trim()) data.append('parcelas', form.parcelas.trim())
+    const parcelasFinal = modoParcela === 'valor' ? (qtdCalculada ? String(qtdCalculada) : '') : form.parcelas.trim()
+    if (parcelasFinal) data.append('parcelas', parcelasFinal)
     imagens.forEach((file) => data.append('imagens', file))
 
     let error: string | null
@@ -272,7 +292,7 @@ export default function PortfolioPage() {
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Nome *" value={form.nome} onChange={(e) => setField('nome', e.target.value)} className="sm:col-span-2" />
+          <Input label="Nome *" value={form.nome} onChange={(e) => setField('nome', e.target.value)} wrapperClassName="sm:col-span-2" />
 
           <Select label="Categoria *" value={form.categoria} onChange={(e) => setField('categoria', e.target.value as typeof form.categoria)} placeholder="Selecione">
             {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -282,10 +302,66 @@ export default function PortfolioPage() {
           <Input label="Material *" hint='ex: "Prata"' value={form.material} onChange={(e) => setField('material', e.target.value)} />
           <Input label="Largura" hint='ex: "3mm"' value={form.largura} onChange={(e) => setField('largura', e.target.value)} />
 
-          <Input label="Valor (à vista) *" type="number" min={0} step="0.01" leftAddon="R$" value={form.valor} onChange={(e) => setField('valor', e.target.value)} />
-          <Input label="Quantidade de parcelas" type="number" min={1} step={1} value={form.parcelas} onChange={(e) => setField('parcelas', e.target.value)} />
+          <Input label="Valor (à vista) *" type="number" min={0} step="0.01" leftAddon="R$" value={form.valor} onChange={(e) => setField('valor', e.target.value)} wrapperClassName="sm:col-span-2" />
 
-          <Textarea label="Descrição *" value={form.descricao} onChange={(e) => setField('descricao', e.target.value)} className="sm:col-span-2" rows={3} />
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="label-base">Parcelamento</label>
+              <div className="flex gap-1 rounded-lg bg-gold-50 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => toggleModoParcela('quantidade')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    modoParcela === 'quantidade' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                  )}
+                >
+                  Por quantidade
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleModoParcela('valor')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    modoParcela === 'valor' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                  )}
+                >
+                  Por valor da parcela
+                </button>
+              </div>
+            </div>
+
+            {modoParcela === 'quantidade' ? (
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={form.parcelas}
+                onChange={(e) => setField('parcelas', e.target.value)}
+                hint={
+                  form.valor && form.parcelas && Number(form.parcelas) > 0
+                    ? `${form.parcelas}x de ${formatMoney(Number(form.valor) / Number(form.parcelas))}`
+                    : undefined
+                }
+              />
+            ) : (
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                leftAddon="R$"
+                value={valorParcela}
+                onChange={(e) => setValorParcela(e.target.value)}
+                hint={
+                  qtdCalculada
+                    ? `≈ ${qtdCalculada}x de ${formatMoney(Number(form.valor) / qtdCalculada)}`
+                    : 'Informe o valor de cada parcela — a quantidade é calculada automaticamente'
+                }
+              />
+            )}
+          </div>
+
+          <Textarea label="Descrição *" value={form.descricao} onChange={(e) => setField('descricao', e.target.value)} wrapperClassName="sm:col-span-2" rows={3} />
 
           {editando && imagensExistentes.length > 0 && (
             <div className="sm:col-span-2 flex flex-col gap-1.5">
