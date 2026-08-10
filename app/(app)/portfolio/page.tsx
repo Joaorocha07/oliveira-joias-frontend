@@ -38,7 +38,7 @@ export default function PortfolioPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<ProdutoCatalogo | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [modoParcela, setModoParcela] = useState<'quantidade' | 'valor'>('quantidade')
+  const [modoParcela, setModoParcela] = useState<'quantidade' | 'valor' | 'manual'>('quantidade')
   const [valorParcela, setValorParcela] = useState('')
   const [imagensExistentes, setImagensExistentes] = useState<string[]>([])
   const [imagens, setImagens] = useState<File[]>([])
@@ -77,10 +77,17 @@ export default function PortfolioPage() {
     ? Math.max(1, Math.round(Number(form.valor) / Number(valorParcela)))
     : null
 
-  function toggleModoParcela(modo: 'quantidade' | 'valor') {
+  function toggleModoParcela(modo: 'quantidade' | 'valor' | 'manual') {
     if (modo === modoParcela) return
     if (modo === 'valor' && form.valor && form.parcelas && Number(form.parcelas) > 0) {
       setValorParcela((Number(form.valor) / Number(form.parcelas)).toFixed(2))
+    }
+    if (modo === 'manual') {
+      if (modoParcela === 'quantidade' && form.valor && form.parcelas && Number(form.parcelas) > 0) {
+        setValorParcela((Number(form.valor) / Number(form.parcelas)).toFixed(2))
+      } else if (modoParcela === 'valor' && qtdCalculada) {
+        setField('parcelas', String(qtdCalculada))
+      }
     }
     setModoParcela(modo)
   }
@@ -110,8 +117,13 @@ export default function PortfolioPage() {
     })
     setImagensExistentes(p.imagens)
     setImagens([])
-    setModoParcela('quantidade')
-    setValorParcela('')
+    if (p.valor_parcela != null) {
+      setModoParcela('manual')
+      setValorParcela(String(p.valor_parcela))
+    } else {
+      setModoParcela('quantidade')
+      setValorParcela('')
+    }
     setModalOpen(true)
   }
 
@@ -143,6 +155,11 @@ export default function PortfolioPage() {
     if (form.largura.trim()) data.append('largura', form.largura.trim())
     const parcelasFinal = modoParcela === 'valor' ? (qtdCalculada ? String(qtdCalculada) : '') : form.parcelas.trim()
     if (parcelasFinal) data.append('parcelas', parcelasFinal)
+    if (modoParcela === 'manual' && valorParcela && Number(valorParcela) > 0) {
+      data.append('valor_parcela', valorParcela)
+    } else if (editando) {
+      data.append('valor_parcela', '')
+    }
     imagens.forEach((file) => data.append('imagens', file))
 
     let error: string | null
@@ -328,6 +345,16 @@ export default function PortfolioPage() {
                 >
                   Por valor da parcela
                 </button>
+                <button
+                  type="button"
+                  onClick={() => toggleModoParcela('manual')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    modoParcela === 'manual' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                  )}
+                >
+                  Manual
+                </button>
               </div>
             </div>
 
@@ -344,7 +371,7 @@ export default function PortfolioPage() {
                     : undefined
                 }
               />
-            ) : (
+            ) : modoParcela === 'valor' ? (
               <Input
                 type="number"
                 min={0}
@@ -358,6 +385,39 @@ export default function PortfolioPage() {
                     : 'Informe o valor de cada parcela — a quantidade é calculada automaticamente'
                 }
               />
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Quantidade"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.parcelas}
+                  onChange={(e) => setField('parcelas', e.target.value)}
+                />
+                <Input
+                  label="Valor da parcela"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  leftAddon="R$"
+                  value={valorParcela}
+                  onChange={(e) => setValorParcela(e.target.value)}
+                />
+                <p className="col-span-2 text-xs text-dark-300">
+                  {form.parcelas && valorParcela && Number(form.parcelas) > 0 && Number(valorParcela) > 0 ? (
+                    <>
+                      Total parcelado: {formatMoney(Number(form.parcelas) * Number(valorParcela))}
+                      {form.valor && Number(form.valor) > 0 &&
+                        Math.abs(Number(form.parcelas) * Number(valorParcela) - Number(form.valor)) > 0.01 && (
+                          <> — difere do valor à vista ({formatMoney(Number(form.valor))})</>
+                        )}
+                    </>
+                  ) : (
+                    'Quantidade e valor da parcela definidos livremente, sem cálculo automático entre si.'
+                  )}
+                </p>
+              </div>
             )}
           </div>
 

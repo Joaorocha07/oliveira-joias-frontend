@@ -11,6 +11,7 @@ export type ProdutoCatalogo = {
   descricao: string
   valor: number
   parcelas: number | null
+  valor_parcela: number | null
   imagens: string[]
   destaque: boolean
   ativo: boolean

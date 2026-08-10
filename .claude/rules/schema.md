@@ -244,7 +244,7 @@ id, nome_empresa, contato, endereco, whatsapp, instagram, texto_rodape, cor_prin
 ### `catalogo_produtos` (Supabase, mas fora do domínio do frontend)
 ```
 id, nome, slug, categoria, linha, material, largura, descricao,
-valor, parcelas, imagens (text[]), destaque, ativo, created_at, updated_at
+valor, parcelas, valor_parcela, imagens (text[]), destaque, ativo, created_at, updated_at
 ```
 > Catálogo público exibido no `oliveira-joias-portfolio` — **não** é a mesma coisa que `produtos`
 > (que é o estoque interno do ERP). Só existe nesta base porque reaproveita o mesmo projeto
@@ -253,6 +253,13 @@ valor, parcelas, imagens (text[]), destaque, ativo, created_at, updated_at
 > onde `ativo = true`. O frontend consome via `POST/GET` ao backend (`services/catalogo.ts`,
 > `NEXT_PUBLIC_BACKEND_URL`), tela `/portfolio` — nunca via `supabase.from('catalogo_produtos')`
 > diretamente, mesmo sendo o mesmo banco.
+>
+> `valor_parcela` (`.claude/migrations/catalogo_produtos_valor_parcela.sql`) só é preenchido no modo
+> "Manual" do parcelamento em `/portfolio` — usuário define quantidade (`parcelas`) e valor da
+> parcela de forma independente, sem vínculo matemático com `valor`. Quando `null`, o valor de cada
+> parcela é sempre `valor / parcelas` (modos "Por quantidade" e "Por valor da parcela"). Requer que o
+> `oliveira-joias-backend` aceite/retorne esse campo em `POST/PUT /api/produtos` — mudança fora deste
+> repositório.
 
 ## Relacionamentos principais
 
