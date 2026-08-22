@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ImageOff, Star, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, FileText } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { cn } from '@/lib/cn'
 import {
@@ -12,14 +12,15 @@ import { usePagination } from '@/hooks/use-pagination'
 import { formatMoney, formatDate } from '@/utils'
 import {
   listarProdutosCatalogo, criarProdutoCatalogo, atualizarProdutoCatalogo,
-  excluirProdutoCatalogo, type ProdutoCatalogo,
+  excluirProdutoCatalogo, reordenarProdutosCatalogo,
+  listarCategoriasCatalogo, criarCategoriaCatalogo, excluirCategoriaCatalogo,
+  buscarConfigCatalogo, atualizarConfigCatalogo,
+  type ProdutoCatalogo, type CategoriaCatalogo, type ConfigCatalogo, type FaqItem,
 } from '@/services/catalogo'
-
-const CATEGORIAS = ['alianças', 'anéis', 'correntes', 'serviços'] as const
 
 const EMPTY_FORM = {
   nome: '',
-  categoria: '' as (typeof CATEGORIAS)[number] | '',
+  categoria: '',
   linha: '',
   material: '',
   largura: '',
@@ -29,12 +30,17 @@ const EMPTY_FORM = {
   destaque: false,
 }
 
+type Aba = 'produtos' | 'categorias' | 'descricao'
+
 export default function PortfolioPage() {
   const alert = useAlert()
+  const [aba, setAba] = useState<Aba>('produtos')
+
+  // --- Produtos ---
   const [produtos, setProdutos] = useState<ProdutoCatalogo[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filtroCategoria, setFiltroCategoria] = useState<(typeof CATEGORIAS)[number] | ''>('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<ProdutoCatalogo | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -45,6 +51,28 @@ export default function PortfolioPage() {
   const [salvando, setSalvando] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<ProdutoCatalogo | null>(null)
   const [deletando, setDeletando] = useState(false)
+  const [modoOrdenar, setModoOrdenar] = useState(false)
+  const [ordemLocal, setOrdemLocal] = useState<ProdutoCatalogo[]>([])
+  const [salvandoOrdem, setSalvandoOrdem] = useState(false)
+
+  // --- Categorias ---
+  const [categorias, setCategorias] = useState<CategoriaCatalogo[]>([])
+  const [loadingCats, setLoadingCats] = useState(false)
+  const [novaCategoria, setNovaCategoria] = useState('')
+  const [salvandoCategoria, setSalvandoCategoria] = useState(false)
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState<CategoriaCatalogo | null>(null)
+  const [deletandoCategoria, setDeletandoCategoria] = useState(false)
+
+  // --- Descrição Geral ---
+  const [config, setConfig] = useState<ConfigCatalogo>({ info_produto: '', voce_sabia: '', faq: [] })
+  const [loadingConfig, setLoadingConfig] = useState(false)
+  const [salvandoConfig, setSalvandoConfig] = useState(false)
+
+  // --- Aviso de categoria não vinculada ---
+  const [avisoCategoriaModal, setAvisoCategoriaModal] = useState<{
+    tipo: 'sem_cadastro' | 'sem_vinculo'
+    pendente: ProdutoCatalogo | null
+  } | null>(null)
 
   async function loadProdutos() {
     setLoading(true)
@@ -54,10 +82,35 @@ export default function PortfolioPage() {
     setLoading(false)
   }
 
+  async function loadCategorias() {
+    setLoadingCats(true)
+    const { data, error } = await listarCategoriasCatalogo()
+    if (error) alert.error('Erro', error)
+    else setCategorias(data ?? [])
+    setLoadingCats(false)
+  }
+
+  async function loadConfig() {
+    setLoadingConfig(true)
+    const { data, error } = await buscarConfigCatalogo()
+    if (error) alert.error('Erro', error)
+    else if (data) setConfig(data)
+    setLoadingConfig(false)
+  }
+
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadProdutos(), 0)
-    return () => window.clearTimeout(timeoutId)
+    const id = window.setTimeout(() => {
+      void loadProdutos()
+      void loadCategorias()
+      void loadConfig()
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [])
+
+  const nomesCategoriasSet = useMemo(
+    () => new Set(categorias.map((c) => c.nome)),
+    [categorias],
+  )
 
   const filtered = useMemo(() => {
     return produtos.filter((p) => {
@@ -66,10 +119,15 @@ export default function PortfolioPage() {
         p.nome.toLowerCase().includes(q) ||
         (p.linha ?? '').toLowerCase().includes(q) ||
         p.material.toLowerCase().includes(q)
-      const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria
+      let matchCategoria = true
+      if (filtroCategoria === '__sem_categoria__') {
+        matchCategoria = !nomesCategoriasSet.has(p.categoria)
+      } else if (filtroCategoria) {
+        matchCategoria = p.categoria === filtroCategoria
+      }
       return matchSearch && matchCategoria
     })
-  }, [produtos, search, filtroCategoria])
+  }, [produtos, search, filtroCategoria, nomesCategoriasSet])
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
@@ -77,6 +135,41 @@ export default function PortfolioPage() {
     ? Math.max(1, Math.round(Number(form.valor) / Number(valorParcela)))
     : null
 
+  // --- Ordenação ---
+  function entrarModoOrdenar() {
+    setOrdemLocal([...produtos])
+    setModoOrdenar(true)
+  }
+
+  function sairModoOrdenar() {
+    setModoOrdenar(false)
+    setOrdemLocal([])
+  }
+
+  function moverProduto(index: number, direcao: 'up' | 'down') {
+    const novaLista = [...ordemLocal]
+    const alvo = direcao === 'up' ? index - 1 : index + 1
+    if (alvo < 0 || alvo >= novaLista.length) return
+    ;[novaLista[index], novaLista[alvo]] = [novaLista[alvo], novaLista[index]]
+    setOrdemLocal(novaLista)
+  }
+
+  async function salvarOrdem() {
+    setSalvandoOrdem(true)
+    const itens = ordemLocal.map((p, i) => ({ id: p.id, ordem: i + 1 }))
+    const { error } = await reordenarProdutosCatalogo(itens)
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      alert.success('Ordem salva!', 'A ordem de exibição foi atualizada no portfólio.')
+      setProdutos(ordemLocal)
+      setModoOrdenar(false)
+      setOrdemLocal([])
+    }
+    setSalvandoOrdem(false)
+  }
+
+  // --- Form helpers ---
   function toggleModoParcela(modo: 'quantidade' | 'valor' | 'manual') {
     if (modo === modoParcela) return
     if (modo === 'valor' && form.valor && form.parcelas && Number(form.parcelas) > 0) {
@@ -93,6 +186,10 @@ export default function PortfolioPage() {
   }
 
   function openCreate() {
+    if (categorias.length === 0) {
+      setAvisoCategoriaModal({ tipo: 'sem_cadastro', pendente: null })
+      return
+    }
     setEditando(null)
     setForm(EMPTY_FORM)
     setImagensExistentes([])
@@ -103,10 +200,23 @@ export default function PortfolioPage() {
   }
 
   function openEdit(p: ProdutoCatalogo) {
+    if (categorias.length === 0) {
+      setAvisoCategoriaModal({ tipo: 'sem_cadastro', pendente: p })
+      return
+    }
+    const categoriaVinculada = nomesCategoriasSet.has(p.categoria)
+    if (!categoriaVinculada) {
+      setAvisoCategoriaModal({ tipo: 'sem_vinculo', pendente: p })
+      return
+    }
+    _abrirModalEdicao(p)
+  }
+
+  function _abrirModalEdicao(p: ProdutoCatalogo) {
     setEditando(p)
     setForm({
       nome: p.nome,
-      categoria: p.categoria as (typeof CATEGORIAS)[number],
+      categoria: p.categoria,
       linha: p.linha ?? '',
       material: p.material,
       largura: p.largura ?? '',
@@ -125,6 +235,15 @@ export default function PortfolioPage() {
       setValorParcela('')
     }
     setModalOpen(true)
+  }
+
+  function irParaCategorias(pendente?: ProdutoCatalogo | null) {
+    setAvisoCategoriaModal(null)
+    setAba('categorias')
+    if (pendente) {
+      // Guarda o produto para tentar abrir depois que categorias forem carregadas
+      // O usuário vai cadastrar a categoria e clicar em editar novamente
+    }
   }
 
   function removerImagemExistente(url: string) {
@@ -197,105 +316,450 @@ export default function PortfolioPage() {
     setConfirmDelete(null)
   }
 
+  // --- Categorias handlers ---
+  async function handleCriarCategoria() {
+    if (!novaCategoria.trim()) { alert.error('Atenção', 'Nome da categoria é obrigatório.'); return }
+    setSalvandoCategoria(true)
+    const { error } = await criarCategoriaCatalogo(novaCategoria.trim())
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      setNovaCategoria('')
+      void loadCategorias()
+    }
+    setSalvandoCategoria(false)
+  }
+
+  async function handleDeleteCategoria() {
+    if (!confirmDeleteCat) return
+    setDeletandoCategoria(true)
+    const { error } = await excluirCategoriaCatalogo(confirmDeleteCat.id)
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      setCategorias((prev) => prev.filter((c) => c.id !== confirmDeleteCat.id))
+    }
+    setDeletandoCategoria(false)
+    setConfirmDeleteCat(null)
+  }
+
+  // --- Config handlers ---
+  function addFaqItem() {
+    setConfig((prev) => ({ ...prev, faq: [...prev.faq, { pergunta: '', resposta: '' }] }))
+  }
+
+  function updateFaqItem(index: number, field: keyof FaqItem, value: string) {
+    setConfig((prev) => {
+      const faq = prev.faq.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+      return { ...prev, faq }
+    })
+  }
+
+  function removeFaqItem(index: number) {
+    setConfig((prev) => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))
+  }
+
+  async function handleSaveConfig() {
+    setSalvandoConfig(true)
+    const { error } = await atualizarConfigCatalogo(config)
+    if (error) alert.error('Erro', error)
+    else alert.success('Salvo!', 'A descrição geral foi atualizada.')
+    setSalvandoConfig(false)
+  }
+
   return (
     <div>
       <PageHeader
         title="Produtos do Portfólio"
         subtitle="Catálogo público exibido no site oliveira-joias-portfolio"
         actions={
-          <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
-            Novo Produto
-          </Button>
+          <div className="flex items-center gap-2">
+            {aba === 'produtos' && !modoOrdenar && (
+              <>
+                <Button variant="secondary" leftIcon={<ArrowUp size={14} />} onClick={entrarModoOrdenar}>
+                  Ordenar
+                </Button>
+                <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
+                  Novo Produto
+                </Button>
+              </>
+            )}
+            {aba === 'produtos' && modoOrdenar && (
+              <>
+                <Button variant="secondary" onClick={sairModoOrdenar} disabled={salvandoOrdem}>Cancelar</Button>
+                <Button variant="primary" onClick={salvarOrdem} loading={salvandoOrdem}>Salvar Ordem</Button>
+              </>
+            )}
+            {aba === 'descricao' && (
+              <Button variant="primary" onClick={handleSaveConfig} loading={salvandoConfig}>
+                Salvar Descrição
+              </Button>
+            )}
+          </div>
         }
       />
 
-      <Card padding="none">
-        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Buscar por nome, linha ou material..."
-            className="flex-1"
-          />
-          <Select
-            value={filtroCategoria}
-            onChange={(e) => setFiltroCategoria(e.target.value as (typeof CATEGORIAS)[number] | '')}
-            placeholder="Todas as categorias"
-            className="w-full sm:w-48"
-          >
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Select>
-        </div>
+      {/* Abas */}
+      <div className="flex gap-1 mb-4 border-b border-gold-100">
+        <button
+          onClick={() => { setModoOrdenar(false); setAba('produtos') }}
+          className={cn(
+            'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            aba === 'produtos'
+              ? 'border-gold-500 text-gold-700'
+              : 'border-transparent text-dark-400 hover:text-dark-600',
+          )}
+        >
+          Produtos
+        </button>
+        <button
+          onClick={() => { setModoOrdenar(false); setAba('categorias') }}
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            aba === 'categorias'
+              ? 'border-gold-500 text-gold-700'
+              : 'border-transparent text-dark-400 hover:text-dark-600',
+          )}
+        >
+          <Tag size={13} />
+          Categorias
+        </button>
+        <button
+          onClick={() => { setModoOrdenar(false); setAba('descricao') }}
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            aba === 'descricao'
+              ? 'border-gold-500 text-gold-700'
+              : 'border-transparent text-dark-400 hover:text-dark-600',
+          )}
+        >
+          <FileText size={13} />
+          Descrição Geral
+        </button>
+      </div>
 
-        {loading ? (
-          <div className="flex justify-center py-16"><Spinner size={24} /></div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            imageSrc="/images/Profile Interface-rafiki.svg"
-            title={search || filtroCategoria ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
-            description={search || filtroCategoria ? 'Ajuste a busca ou o filtro.' : 'Cadastre o primeiro produto do portfólio.'}
-            action={!search && !filtroCategoria && (
-              <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>Novo</Button>
-            )}
-          />
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gold-100 bg-cream-50/50">
-                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Produto</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Categoria</th>
-                    <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Material</th>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Valor</th>
-                    <th className="hidden sm:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Cadastrado em</th>
-                    <th className="px-5 py-3 w-16" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gold-50">
-                  {paginated.map((p) => (
-                    <tr key={p.id} className="hover:bg-cream-50/40 transition-colors">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {p.imagens[0] ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={p.imagens[0]} alt={p.nome} className="w-full h-full object-cover" />
-                            ) : (
-                              <ImageOff size={16} className="text-dark-300" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-dark-700 truncate max-w-[220px]">{p.nome}</p>
-                            {p.linha && <p className="text-xs text-dark-300 truncate">{p.linha}</p>}
-                          </div>
-                          {p.destaque && <Star size={13} className="text-gold-500 flex-shrink-0" fill="currentColor" />}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-dark-400 capitalize">{p.categoria}</td>
-                      <td className="hidden md:table-cell px-5 py-3 text-dark-400">{p.material}</td>
-                      <td className="px-5 py-3 text-dark-700 font-medium">{formatMoney(p.valor)}</td>
-                      <td className="hidden sm:table-cell px-5 py-3 text-dark-400">{formatDate(p.created_at)}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end">
-                          <ActionMenu
-                            items={[
-                              { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
-                              { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(p), variant: 'danger' },
-                            ]}
-                          />
-                        </div>
-                      </td>
-                    </tr>
+      {/* --- ABA: PRODUTOS --- */}
+      {aba === 'produtos' && (
+        <>
+          {modoOrdenar ? (
+            <Card padding="none">
+              <div className="px-5 py-3 border-b border-gold-100 bg-gold-50/30">
+                <p className="text-sm text-dark-500">
+                  Use as setas para definir a ordem de exibição no portfólio. Clique em <strong>Salvar Ordem</strong> para aplicar.
+                </p>
+              </div>
+              <div className="divide-y divide-gold-50">
+                {ordemLocal.map((p, i) => (
+                  <div key={p.id} className="flex items-center gap-3 px-5 py-3">
+                    <span className="text-xs text-dark-300 w-6 text-center font-medium">{i + 1}</span>
+                    <div className="w-9 h-9 rounded-lg bg-cream-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {p.imagens[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imagens[0]} alt={p.nome} className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageOff size={14} className="text-dark-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-dark-700 text-sm truncate">{p.nome}</p>
+                      <p className="text-xs text-dark-300 capitalize">{p.categoria}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moverProduto(i, 'up')}
+                        disabled={i === 0}
+                        className="p-1.5 rounded-lg text-dark-400 hover:text-dark-700 hover:bg-gold-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ArrowUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moverProduto(i, 'down')}
+                        disabled={i === ordemLocal.length - 1}
+                        className="p-1.5 rounded-lg text-dark-400 hover:text-dark-700 hover:bg-gold-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ArrowDown size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : (
+            <Card padding="none">
+              <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-gold-100">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Buscar por nome, linha ou material..."
+                  className="flex-1"
+                />
+                <Select
+                  value={filtroCategoria}
+                  onChange={(e) => setFiltroCategoria(e.target.value)}
+                  placeholder="Todas as categorias"
+                  className="w-full sm:w-52"
+                >
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.nome}>{c.nome}</option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
-          </>
-        )}
-      </Card>
+                  <option value="__sem_categoria__">— Sem categoria —</option>
+                </Select>
+              </div>
 
+              {loading ? (
+                <div className="flex justify-center py-16"><Spinner size={24} /></div>
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  imageSrc="/images/Profile Interface-rafiki.svg"
+                  title={search || filtroCategoria ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
+                  description={search || filtroCategoria ? 'Ajuste a busca ou o filtro.' : 'Cadastre o primeiro produto do portfólio.'}
+                  action={!search && !filtroCategoria && (
+                    <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>Novo</Button>
+                  )}
+                />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gold-100 bg-cream-50/50">
+                          <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Produto</th>
+                          <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Categoria</th>
+                          <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Material</th>
+                          <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Valor</th>
+                          <th className="hidden sm:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Cadastrado em</th>
+                          <th className="px-5 py-3 w-16" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gold-50">
+                        {paginated.map((p) => (
+                          <tr key={p.id} className="hover:bg-cream-50/40 transition-colors">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-cream-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  {p.imagens[0] ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={p.imagens[0]} alt={p.nome} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <ImageOff size={16} className="text-dark-300" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-dark-700 truncate max-w-[220px]">{p.nome}</p>
+                                  {p.linha && <p className="text-xs text-dark-300 truncate">{p.linha}</p>}
+                                </div>
+                                {p.destaque && <Star size={13} className="text-gold-500 flex-shrink-0" fill="currentColor" />}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-dark-400 capitalize">{p.categoria}</td>
+                            <td className="hidden md:table-cell px-5 py-3 text-dark-400">{p.material}</td>
+                            <td className="px-5 py-3 text-dark-700 font-medium">{formatMoney(p.valor)}</td>
+                            <td className="hidden sm:table-cell px-5 py-3 text-dark-400">{formatDate(p.created_at)}</td>
+                            <td className="px-5 py-3">
+                              <div className="flex justify-end">
+                                <ActionMenu
+                                  items={[
+                                    { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
+                                    { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(p), variant: 'danger' },
+                                  ]}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} from={from} to={to} total={total} />
+                </>
+              )}
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* --- ABA: CATEGORIAS --- */}
+      {aba === 'categorias' && (
+        <Card padding="none">
+          <div className="p-4 border-b border-gold-100">
+            <p className="text-sm text-dark-500 mb-4">
+              Categorias disponíveis ao cadastrar produtos. Serão exibidas como opções no formulário de novo produto.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={novaCategoria}
+                onChange={(e) => setNovaCategoria(e.target.value)}
+                placeholder="Nome da nova categoria..."
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCriarCategoria() }}
+                className="flex-1"
+              />
+              <Button
+                variant="primary"
+                leftIcon={<Plus size={14} />}
+                onClick={handleCriarCategoria}
+                loading={salvandoCategoria}
+              >
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          {loadingCats ? (
+            <div className="flex justify-center py-12"><Spinner size={24} /></div>
+          ) : categorias.length === 0 ? (
+            <div className="py-12 text-center text-dark-300 text-sm">
+              Nenhuma categoria cadastrada.
+            </div>
+          ) : (
+            <ul className="divide-y divide-gold-50">
+              {categorias.map((cat) => (
+                <li key={cat.id} className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-dark-700 capitalize">{cat.nome}</span>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteCat(cat)}
+                    className="p-1.5 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    title="Excluir categoria"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {/* --- ABA: DESCRIÇÃO GERAL --- */}
+      {aba === 'descricao' && (
+        loadingConfig ? (
+          <div className="flex justify-center py-16"><Spinner size={24} /></div>
+        ) : (
+          <div className="space-y-6">
+            <Card>
+              <p className="text-sm text-dark-500 mb-5">
+                Este conteúdo aparece na página de cada produto do portfólio, abaixo das especificações.
+                Edite e clique em <strong>Salvar Descrição</strong> para aplicar a todos os produtos.
+              </p>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="label-base mb-1.5 block">Seção &quot;Produto&quot;</label>
+                  <p className="text-xs text-dark-300 mb-2">Informações de prazo, composição do pedido e itens inclusos. Use linha em branco para separar parágrafos.</p>
+                  <Textarea
+                    value={config.info_produto}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, info_produto: e.target.value }))}
+                    rows={5}
+                  />
+                </div>
+
+                <div>
+                  <label className="label-base mb-1.5 block">Seção &quot;Você sabia?&quot;</label>
+                  <p className="text-xs text-dark-300 mb-2">Destaque sobre personalização e diferencial. Use linha em branco para separar parágrafos.</p>
+                  <Textarea
+                    value={config.voce_sabia}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, voce_sabia: e.target.value }))}
+                    rows={4}
+                  />
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-dark-700">Perguntas Frequentes (FAQ)</h3>
+                  <p className="text-xs text-dark-300 mt-0.5">Perguntas exibidas na página de cada produto.</p>
+                </div>
+                <Button variant="secondary" size="sm" leftIcon={<Plus size={13} />} onClick={addFaqItem}>
+                  Adicionar
+                </Button>
+              </div>
+
+              {config.faq.length === 0 ? (
+                <p className="text-sm text-dark-300 text-center py-6">Nenhuma pergunta cadastrada.</p>
+              ) : (
+                <div className="space-y-4">
+                  {config.faq.map((item, i) => (
+                    <div key={i} className="border border-gold-100 rounded-xl p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-medium text-gold-600 mt-0.5">Pergunta {i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFaqItem(i)}
+                          className="p-1 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                          title="Remover pergunta"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                      <Input
+                        placeholder="Pergunta..."
+                        value={item.pergunta}
+                        onChange={(e) => updateFaqItem(i, 'pergunta', e.target.value)}
+                      />
+                      <Textarea
+                        placeholder="Resposta... (use linha em branco para separar parágrafos)"
+                        value={item.resposta}
+                        onChange={(e) => updateFaqItem(i, 'resposta', e.target.value)}
+                        rows={4}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        )
+      )}
+
+      {/* Modal de aviso — categoria não vinculada ou sem categorias */}
+      <Modal
+        open={!!avisoCategoriaModal}
+        onClose={() => setAvisoCategoriaModal(null)}
+        title={
+          avisoCategoriaModal?.tipo === 'sem_cadastro'
+            ? 'Nenhuma categoria cadastrada'
+            : 'Produto sem categoria vinculada'
+        }
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAvisoCategoriaModal(null)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              leftIcon={<Tag size={14} />}
+              onClick={() => irParaCategorias(avisoCategoriaModal?.pendente)}
+            >
+              Ir para Categorias
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center gap-4 py-2 text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+            <AlertTriangle size={24} className="text-amber-500" />
+          </div>
+          {avisoCategoriaModal?.tipo === 'sem_cadastro' ? (
+            <p className="text-sm text-dark-500 leading-relaxed">
+              Para cadastrar ou editar um produto é necessário ter ao menos uma categoria registrada.
+              <br /><br />
+              Acesse a aba <strong>Categorias</strong> e adicione uma antes de continuar.
+            </p>
+          ) : (
+            <p className="text-sm text-dark-500 leading-relaxed">
+              O produto <strong>{avisoCategoriaModal?.pendente?.nome}</strong> está com a categoria{' '}
+              <strong>&quot;{avisoCategoriaModal?.pendente?.categoria}&quot;</strong> que não existe nas categorias cadastradas.
+              <br /><br />
+              Acesse a aba <strong>Categorias</strong>, cadastre essa categoria e tente editar novamente.
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      {/* Modal de produto */}
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -311,8 +775,13 @@ export default function PortfolioPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Nome *" value={form.nome} onChange={(e) => setField('nome', e.target.value)} wrapperClassName="sm:col-span-2" />
 
-          <Select label="Categoria *" value={form.categoria} onChange={(e) => setField('categoria', e.target.value as typeof form.categoria)} placeholder="Selecione">
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+          <Select
+            label="Categoria *"
+            value={form.categoria}
+            onChange={(e) => setField('categoria', e.target.value)}
+            placeholder="Selecione"
+          >
+            {categorias.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </Select>
           <Input label="Linha" hint='ex: "Aurora"' value={form.linha} onChange={(e) => setField('linha', e.target.value)} />
 
@@ -479,6 +948,16 @@ export default function PortfolioPage() {
         description={`Deseja excluir "${confirmDelete?.nome}" do portfólio? Esta ação é irreversível.`}
         confirmLabel="Excluir"
         loading={deletando}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteCat}
+        onClose={() => setConfirmDeleteCat(null)}
+        onConfirm={handleDeleteCategoria}
+        title="Excluir categoria"
+        description={`Deseja excluir a categoria "${confirmDeleteCat?.nome}"? Produtos já cadastrados com essa categoria não serão afetados.`}
+        confirmLabel="Excluir"
+        loading={deletandoCategoria}
       />
     </div>
   )
