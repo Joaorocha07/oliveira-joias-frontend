@@ -141,6 +141,55 @@ export async function excluirCategoriaCatalogo(id: string): Promise<{ error: str
   }
 }
 
+export type AcabamentoCatalogo = {
+  id: string
+  nome: string
+  ativo: boolean
+  created_at: string
+}
+
+export async function listarAcabamentosCatalogo(): Promise<{
+  data: AcabamentoCatalogo[] | null
+  error: string | null
+}> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/acabamentos`)
+    const json = await res.json()
+    if (!res.ok) return { data: null, error: json.error ?? 'Erro ao carregar acabamentos.' }
+    return { data: json.data, error: null }
+  } catch {
+    return { data: null, error: 'Não foi possível conectar ao servidor.' }
+  }
+}
+
+export async function criarAcabamentoCatalogo(nome: string): Promise<{ error: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/acabamentos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome }),
+    })
+    const json = await res.json()
+    if (!res.ok) return { error: json.error ?? 'Erro ao criar acabamento.' }
+    return { error: null }
+  } catch {
+    return { error: 'Não foi possível conectar ao servidor.' }
+  }
+}
+
+export async function excluirAcabamentoCatalogo(id: string): Promise<{ error: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/acabamentos/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      return { error: json.error ?? 'Erro ao excluir acabamento.' }
+    }
+    return { error: null }
+  } catch {
+    return { error: 'Não foi possível conectar ao servidor.' }
+  }
+}
+
 export type FaqItem = { pergunta: string; resposta: string }
 
 export type ConfigCatalogo = {

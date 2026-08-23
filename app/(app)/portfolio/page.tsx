@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, FileText } from 'lucide-react'
+import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, FileText, Layers } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { cn } from '@/lib/cn'
 import {
@@ -14,8 +14,9 @@ import {
   listarProdutosCatalogo, criarProdutoCatalogo, atualizarProdutoCatalogo,
   excluirProdutoCatalogo, reordenarProdutosCatalogo,
   listarCategoriasCatalogo, criarCategoriaCatalogo, excluirCategoriaCatalogo,
+  listarAcabamentosCatalogo, criarAcabamentoCatalogo, excluirAcabamentoCatalogo,
   buscarConfigCatalogo, atualizarConfigCatalogo,
-  type ProdutoCatalogo, type CategoriaCatalogo, type ConfigCatalogo, type FaqItem,
+  type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type ConfigCatalogo, type FaqItem,
 } from '@/services/catalogo'
 
 const EMPTY_FORM = {
@@ -30,7 +31,7 @@ const EMPTY_FORM = {
   destaque: false,
 }
 
-type Aba = 'produtos' | 'categorias' | 'descricao'
+type Aba = 'produtos' | 'categorias' | 'acabamentos' | 'descricao'
 
 export default function PortfolioPage() {
   const alert = useAlert()
@@ -54,6 +55,10 @@ export default function PortfolioPage() {
   const [modoOrdenar, setModoOrdenar] = useState(false)
   const [ordemLocal, setOrdemLocal] = useState<ProdutoCatalogo[]>([])
   const [salvandoOrdem, setSalvandoOrdem] = useState(false)
+  const [temJuros, setTemJuros] = useState(false)
+  const [modalQuickAdd, setModalQuickAdd] = useState<'categoria' | 'acabamento' | null>(null)
+  const [quickAddNome, setQuickAddNome] = useState('')
+  const [salvandoQuickAdd, setSalvandoQuickAdd] = useState(false)
 
   // --- Categorias ---
   const [categorias, setCategorias] = useState<CategoriaCatalogo[]>([])
@@ -62,6 +67,14 @@ export default function PortfolioPage() {
   const [salvandoCategoria, setSalvandoCategoria] = useState(false)
   const [confirmDeleteCat, setConfirmDeleteCat] = useState<CategoriaCatalogo | null>(null)
   const [deletandoCategoria, setDeletandoCategoria] = useState(false)
+
+  // --- Acabamentos ---
+  const [acabamentos, setAcabamentos] = useState<AcabamentoCatalogo[]>([])
+  const [loadingAcab, setLoadingAcab] = useState(false)
+  const [novoAcabamento, setNovoAcabamento] = useState('')
+  const [salvandoAcabamento, setSalvandoAcabamento] = useState(false)
+  const [confirmDeleteAcab, setConfirmDeleteAcab] = useState<AcabamentoCatalogo | null>(null)
+  const [deletandoAcabamento, setDeletandoAcabamento] = useState(false)
 
   // --- Descrição Geral ---
   const [config, setConfig] = useState<ConfigCatalogo>({ info_produto: '', voce_sabia: '', faq: [] })
@@ -90,6 +103,14 @@ export default function PortfolioPage() {
     setLoadingCats(false)
   }
 
+  async function loadAcabamentos() {
+    setLoadingAcab(true)
+    const { data, error } = await listarAcabamentosCatalogo()
+    if (error) alert.error('Erro', error)
+    else setAcabamentos(data ?? [])
+    setLoadingAcab(false)
+  }
+
   async function loadConfig() {
     setLoadingConfig(true)
     const { data, error } = await buscarConfigCatalogo()
@@ -102,6 +123,7 @@ export default function PortfolioPage() {
     const id = window.setTimeout(() => {
       void loadProdutos()
       void loadCategorias()
+      void loadAcabamentos()
       void loadConfig()
     }, 0)
     return () => window.clearTimeout(id)
@@ -133,6 +155,15 @@ export default function PortfolioPage() {
 
   const qtdCalculada = modoParcela === 'valor' && form.valor && valorParcela && Number(valorParcela) > 0
     ? Math.max(1, Math.round(Number(form.valor) / Number(valorParcela)))
+    : null
+
+  const totalManual = modoParcela === 'manual' && form.parcelas && valorParcela
+    && Number(form.parcelas) > 0 && Number(valorParcela) > 0
+    ? Number(form.parcelas) * Number(valorParcela)
+    : null
+
+  const jurosCalculado = temJuros && totalManual != null && form.valor && Number(form.valor) > 0
+    ? totalManual - Number(form.valor)
     : null
 
   // --- Ordenação ---
@@ -196,6 +227,7 @@ export default function PortfolioPage() {
     setImagens([])
     setModoParcela('quantidade')
     setValorParcela('')
+    setTemJuros(false)
     setModalOpen(true)
   }
 
@@ -230,9 +262,12 @@ export default function PortfolioPage() {
     if (p.valor_parcela != null) {
       setModoParcela('manual')
       setValorParcela(String(p.valor_parcela))
+      const totalP = (p.parcelas ?? 0) * p.valor_parcela
+      setTemJuros(totalP > p.valor + 0.01)
     } else {
       setModoParcela('quantidade')
       setValorParcela('')
+      setTemJuros(false)
     }
     setModalOpen(true)
   }
@@ -343,6 +378,59 @@ export default function PortfolioPage() {
     setConfirmDeleteCat(null)
   }
 
+  // --- Quick-add inline (categoria / acabamento dentro do modal de produto) ---
+  async function handleQuickAdd() {
+    if (!quickAddNome.trim()) { alert.error('Atenção', 'Nome é obrigatório.'); return }
+    setSalvandoQuickAdd(true)
+    if (modalQuickAdd === 'categoria') {
+      const { error } = await criarCategoriaCatalogo(quickAddNome.trim())
+      if (error) { alert.error('Erro', error) }
+      else {
+        await loadCategorias()
+        setField('categoria', quickAddNome.trim())
+        setModalQuickAdd(null)
+        setQuickAddNome('')
+      }
+    } else if (modalQuickAdd === 'acabamento') {
+      const { error } = await criarAcabamentoCatalogo(quickAddNome.trim())
+      if (error) { alert.error('Erro', error) }
+      else {
+        await loadAcabamentos()
+        setField('linha', quickAddNome.trim())
+        setModalQuickAdd(null)
+        setQuickAddNome('')
+      }
+    }
+    setSalvandoQuickAdd(false)
+  }
+
+  // --- Acabamentos handlers ---
+  async function handleCriarAcabamento() {
+    if (!novoAcabamento.trim()) { alert.error('Atenção', 'Nome do acabamento é obrigatório.'); return }
+    setSalvandoAcabamento(true)
+    const { error } = await criarAcabamentoCatalogo(novoAcabamento.trim())
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      setNovoAcabamento('')
+      void loadAcabamentos()
+    }
+    setSalvandoAcabamento(false)
+  }
+
+  async function handleDeleteAcabamento() {
+    if (!confirmDeleteAcab) return
+    setDeletandoAcabamento(true)
+    const { error } = await excluirAcabamentoCatalogo(confirmDeleteAcab.id)
+    if (error) {
+      alert.error('Erro', error)
+    } else {
+      setAcabamentos((prev) => prev.filter((a) => a.id !== confirmDeleteAcab.id))
+    }
+    setDeletandoAcabamento(false)
+    setConfirmDeleteAcab(null)
+  }
+
   // --- Config handlers ---
   function addFaqItem() {
     setConfig((prev) => ({ ...prev, faq: [...prev.faq, { pergunta: '', resposta: '' }] }))
@@ -423,6 +511,18 @@ export default function PortfolioPage() {
         >
           <Tag size={13} />
           Categorias
+        </button>
+        <button
+          onClick={() => { setModoOrdenar(false); setAba('acabamentos') }}
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            aba === 'acabamentos'
+              ? 'border-gold-500 text-gold-700'
+              : 'border-transparent text-dark-400 hover:text-dark-600',
+          )}
+        >
+          <Layers size={13} />
+          Acabamentos
         </button>
         <button
           onClick={() => { setModoOrdenar(false); setAba('descricao') }}
@@ -555,7 +655,18 @@ export default function PortfolioPage() {
                             </td>
                             <td className="px-5 py-3 text-dark-400 capitalize">{p.categoria}</td>
                             <td className="hidden md:table-cell px-5 py-3 text-dark-400">{p.material}</td>
-                            <td className="px-5 py-3 text-dark-700 font-medium">{formatMoney(p.valor)}</td>
+                            <td className="px-5 py-3">
+                              <p className="text-dark-700 font-medium">
+                                {formatMoney(p.valor)}
+                                <span className="ml-1 text-xs font-normal text-dark-300">à vista</span>
+                              </p>
+                              {p.valor_parcela != null && p.parcelas != null && (
+                                <p className="text-xs text-dark-400 mt-0.5">
+                                  {p.parcelas}x {formatMoney(p.valor_parcela)}
+                                  {p.parcelas * p.valor_parcela > p.valor + 0.01 ? ' (com juros)' : ' sem juros'}
+                                </p>
+                              )}
+                            </td>
                             <td className="hidden sm:table-cell px-5 py-3 text-dark-400">{formatDate(p.created_at)}</td>
                             <td className="px-5 py-3">
                               <div className="flex justify-end">
@@ -622,6 +733,58 @@ export default function PortfolioPage() {
                     onClick={() => setConfirmDeleteCat(cat)}
                     className="p-1.5 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                     title="Excluir categoria"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {/* --- ABA: ACABAMENTOS --- */}
+      {aba === 'acabamentos' && (
+        <Card padding="none">
+          <div className="p-4 border-b border-gold-100">
+            <p className="text-sm text-dark-500 mb-4">
+              Acabamentos disponíveis ao cadastrar produtos. Serão exibidos como opções no campo &quot;Acabamento / Linha&quot; do formulário.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={novoAcabamento}
+                onChange={(e) => setNovoAcabamento(e.target.value)}
+                placeholder="Nome do novo acabamento..."
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCriarAcabamento() }}
+                className="flex-1"
+              />
+              <Button
+                variant="primary"
+                leftIcon={<Plus size={14} />}
+                onClick={handleCriarAcabamento}
+                loading={salvandoAcabamento}
+              >
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          {loadingAcab ? (
+            <div className="flex justify-center py-12"><Spinner size={24} /></div>
+          ) : acabamentos.length === 0 ? (
+            <div className="py-12 text-center text-dark-300 text-sm">
+              Nenhum acabamento cadastrado.
+            </div>
+          ) : (
+            <ul className="divide-y divide-gold-50">
+              {acabamentos.map((acab) => (
+                <li key={acab.id} className="flex items-center justify-between px-5 py-3">
+                  <span className="text-sm text-dark-700">{acab.nome}</span>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteAcab(acab)}
+                    className="p-1.5 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    title="Excluir acabamento"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -759,6 +922,33 @@ export default function PortfolioPage() {
         </div>
       </Modal>
 
+      {/* Modal quick-add — nova categoria ou acabamento direto do formulário de produto */}
+      <Modal
+        open={!!modalQuickAdd}
+        onClose={() => { setModalQuickAdd(null); setQuickAddNome('') }}
+        title={modalQuickAdd === 'categoria' ? 'Nova Categoria' : 'Novo Acabamento'}
+        size="sm"
+        className="z-[60]"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setModalQuickAdd(null); setQuickAddNome('') }} disabled={salvandoQuickAdd}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={handleQuickAdd} loading={salvandoQuickAdd}>
+              Adicionar
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label={modalQuickAdd === 'categoria' ? 'Nome da categoria' : 'Nome do acabamento'}
+          value={quickAddNome}
+          onChange={(e) => setQuickAddNome(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void handleQuickAdd() }}
+          autoFocus
+        />
+      </Modal>
+
       {/* Modal de produto */}
       <Modal
         open={modalOpen}
@@ -775,15 +965,45 @@ export default function PortfolioPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Nome *" value={form.nome} onChange={(e) => setField('nome', e.target.value)} wrapperClassName="sm:col-span-2" />
 
-          <Select
-            label="Categoria *"
-            value={form.categoria}
-            onChange={(e) => setField('categoria', e.target.value)}
-            placeholder="Selecione"
-          >
-            {categorias.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-          </Select>
-          <Input label="Linha" hint='ex: "Aurora"' value={form.linha} onChange={(e) => setField('linha', e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="label-base">Categoria *</span>
+              <button
+                type="button"
+                onClick={() => { setModalQuickAdd('categoria'); setQuickAddNome('') }}
+                className="flex items-center gap-1 text-xs font-medium text-gold-600 hover:text-gold-700 transition-colors"
+              >
+                <Plus size={11} /> Nova categoria
+              </button>
+            </div>
+            <Select
+              value={form.categoria}
+              onChange={(e) => setField('categoria', e.target.value)}
+              placeholder="Selecione"
+            >
+              {categorias.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="label-base">Acabamento / Linha</span>
+              <button
+                type="button"
+                onClick={() => { setModalQuickAdd('acabamento'); setQuickAddNome('') }}
+                className="flex items-center gap-1 text-xs font-medium text-gold-600 hover:text-gold-700 transition-colors"
+              >
+                <Plus size={11} /> Novo acabamento
+              </button>
+            </div>
+            <Select
+              value={form.linha}
+              onChange={(e) => setField('linha', e.target.value)}
+              placeholder="— Nenhum —"
+            >
+              {acabamentos.map((a) => <option key={a.id} value={a.nome}>{a.nome}</option>)}
+            </Select>
+          </div>
 
           <Input label="Material *" hint='ex: "Prata"' value={form.material} onChange={(e) => setField('material', e.target.value)} />
           <Input label="Largura" hint='ex: "3mm"' value={form.largura} onChange={(e) => setField('largura', e.target.value)} />
@@ -873,19 +1093,53 @@ export default function PortfolioPage() {
                   value={valorParcela}
                   onChange={(e) => setValorParcela(e.target.value)}
                 />
-                <p className="col-span-2 text-xs text-dark-300">
-                  {form.parcelas && valorParcela && Number(form.parcelas) > 0 && Number(valorParcela) > 0 ? (
-                    <>
-                      Total parcelado: {formatMoney(Number(form.parcelas) * Number(valorParcela))}
-                      {form.valor && Number(form.valor) > 0 &&
-                        Math.abs(Number(form.parcelas) * Number(valorParcela) - Number(form.valor)) > 0.01 && (
-                          <> — difere do valor à vista ({formatMoney(Number(form.valor))})</>
-                        )}
-                    </>
-                  ) : (
-                    'Quantidade e valor da parcela definidos livremente, sem cálculo automático entre si.'
-                  )}
-                </p>
+
+                <label className="col-span-2 flex items-center gap-2 text-sm text-dark-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={temJuros}
+                    onChange={(e) => setTemJuros(e.target.checked)}
+                    className="w-4 h-4 rounded border-gold-300 text-gold-600 focus:ring-gold-500"
+                  />
+                  Este parcelamento tem juros
+                </label>
+
+                {totalManual != null && form.valor && Number(form.valor) > 0 ? (
+                  <div className={cn(
+                    'col-span-2 rounded-lg px-3 py-2.5 text-xs space-y-0.5',
+                    temJuros && jurosCalculado != null && jurosCalculado > 0.01
+                      ? 'bg-amber-50 text-amber-800'
+                      : 'bg-cream-50 text-dark-400',
+                  )}>
+                    {temJuros && jurosCalculado != null && jurosCalculado > 0.01 ? (
+                      <>
+                        <p>
+                          <span className="font-medium">À vista:</span>{' '}
+                          {formatMoney(Number(form.valor))}
+                          {'  ·  '}
+                          <span className="font-medium">Total com juros:</span>{' '}
+                          {formatMoney(totalManual)}
+                        </p>
+                        <p>
+                          <span className="font-medium">Juros:</span>{' '}
+                          {formatMoney(jurosCalculado)}{' '}
+                          ({((jurosCalculado / Number(form.valor)) * 100).toFixed(1)}% sobre o valor à vista)
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        Total parcelado: {formatMoney(totalManual)}
+                        {Math.abs(totalManual - Number(form.valor)) <= 0.01
+                          ? ' (igual ao valor à vista)'
+                          : ` — difere do valor à vista (${formatMoney(Number(form.valor))})`}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="col-span-2 text-xs text-dark-300">
+                    Preencha quantidade e valor da parcela. Marque &quot;Tem juros&quot; para sinalizar que o total parcelado supera o valor à vista.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -958,6 +1212,16 @@ export default function PortfolioPage() {
         description={`Deseja excluir a categoria "${confirmDeleteCat?.nome}"? Produtos já cadastrados com essa categoria não serão afetados.`}
         confirmLabel="Excluir"
         loading={deletandoCategoria}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteAcab}
+        onClose={() => setConfirmDeleteAcab(null)}
+        onConfirm={handleDeleteAcabamento}
+        title="Excluir acabamento"
+        description={`Deseja excluir o acabamento "${confirmDeleteAcab?.nome}"? Produtos já cadastrados com esse acabamento não serão afetados.`}
+        confirmLabel="Excluir"
+        loading={deletandoAcabamento}
       />
     </div>
   )

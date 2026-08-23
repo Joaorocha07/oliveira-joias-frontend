@@ -16,13 +16,14 @@ interface ModalProps {
   children: ReactNode
   footer?: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  className?: string
 }
 
-export function Modal({ open, onClose, title, children, footer, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, size = 'md', className }: ModalProps) {
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={cn('fixed inset-0 z-50 flex items-center justify-center p-4', className)}
       role="dialog"
       aria-modal="true"
       aria-label={title}
