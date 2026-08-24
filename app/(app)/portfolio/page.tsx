@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, FileText, Layers } from 'lucide-react'
+import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, Layers } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { cn } from '@/lib/cn'
 import {
@@ -15,8 +15,7 @@ import {
   excluirProdutoCatalogo, reordenarProdutosCatalogo,
   listarCategoriasCatalogo, criarCategoriaCatalogo, excluirCategoriaCatalogo,
   listarAcabamentosCatalogo, criarAcabamentoCatalogo, excluirAcabamentoCatalogo,
-  buscarConfigCatalogo, atualizarConfigCatalogo,
-  type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type ConfigCatalogo, type FaqItem,
+  type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type FaqItem,
 } from '@/services/catalogo'
 
 const EMPTY_FORM = {
@@ -31,7 +30,7 @@ const EMPTY_FORM = {
   destaque: false,
 }
 
-type Aba = 'produtos' | 'categorias' | 'acabamentos' | 'descricao'
+type Aba = 'produtos' | 'categorias' | 'acabamentos'
 
 export default function PortfolioPage() {
   const alert = useAlert()
@@ -81,11 +80,6 @@ export default function PortfolioPage() {
   const [formVoceSabia, setFormVoceSabia] = useState('')
   const [formFaq, setFormFaq] = useState<FaqItem[]>([])
 
-  // --- Descrição Padrão (fallback global) ---
-  const [config, setConfig] = useState<ConfigCatalogo>({ info_produto: '', voce_sabia: '', faq: [] })
-  const [loadingConfig, setLoadingConfig] = useState(false)
-  const [salvandoConfig, setSalvandoConfig] = useState(false)
-
   // --- Aviso de categoria não vinculada ---
   const [avisoCategoriaModal, setAvisoCategoriaModal] = useState<{
     tipo: 'sem_cadastro' | 'sem_vinculo'
@@ -116,20 +110,11 @@ export default function PortfolioPage() {
     setLoadingAcab(false)
   }
 
-  async function loadConfig() {
-    setLoadingConfig(true)
-    const { data, error } = await buscarConfigCatalogo()
-    if (error) alert.error('Erro', error)
-    else if (data) setConfig(data)
-    setLoadingConfig(false)
-  }
-
   useEffect(() => {
     const id = window.setTimeout(() => {
       void loadProdutos()
       void loadCategorias()
       void loadAcabamentos()
-      void loadConfig()
     }, 0)
     return () => window.clearTimeout(id)
   }, [])
@@ -458,30 +443,6 @@ export default function PortfolioPage() {
     setFormFaq((prev) => prev.filter((_, i) => i !== index))
   }
 
-  // --- Config handlers ---
-  function addFaqItem() {
-    setConfig((prev) => ({ ...prev, faq: [...prev.faq, { pergunta: '', resposta: '' }] }))
-  }
-
-  function updateFaqItem(index: number, field: keyof FaqItem, value: string) {
-    setConfig((prev) => {
-      const faq = prev.faq.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-      return { ...prev, faq }
-    })
-  }
-
-  function removeFaqItem(index: number) {
-    setConfig((prev) => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))
-  }
-
-  async function handleSaveConfig() {
-    setSalvandoConfig(true)
-    const { error } = await atualizarConfigCatalogo(config)
-    if (error) alert.error('Erro', error)
-    else alert.success('Salvo!', 'A descrição padrão foi atualizada.')
-    setSalvandoConfig(false)
-  }
-
   return (
     <div>
       <PageHeader
@@ -504,11 +465,6 @@ export default function PortfolioPage() {
                 <Button variant="secondary" onClick={sairModoOrdenar} disabled={salvandoOrdem}>Cancelar</Button>
                 <Button variant="primary" onClick={salvarOrdem} loading={salvandoOrdem}>Salvar Ordem</Button>
               </>
-            )}
-            {aba === 'descricao' && (
-              <Button variant="primary" onClick={handleSaveConfig} loading={salvandoConfig}>
-                Salvar Padrão
-              </Button>
             )}
           </div>
         }
@@ -550,18 +506,6 @@ export default function PortfolioPage() {
         >
           <Layers size={13} />
           Acabamentos
-        </button>
-        <button
-          onClick={() => { setModoOrdenar(false); setAba('descricao') }}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-            aba === 'descricao'
-              ? 'border-gold-500 text-gold-700'
-              : 'border-transparent text-dark-400 hover:text-dark-600',
-          )}
-        >
-          <FileText size={13} />
-          Descrição Padrão
         </button>
       </div>
 
@@ -820,89 +764,6 @@ export default function PortfolioPage() {
             </ul>
           )}
         </Card>
-      )}
-
-      {/* --- ABA: DESCRIÇÃO GERAL --- */}
-      {aba === 'descricao' && (
-        loadingConfig ? (
-          <div className="flex justify-center py-16"><Spinner size={24} /></div>
-        ) : (
-          <div className="space-y-6">
-            <Card>
-              <p className="text-sm text-dark-500 mb-5">
-                Descrição padrão exibida nos produtos que não têm descrição própria.
-                Cada produto pode sobrescrever essas informações na seção &ldquo;Descrição do Produto&rdquo; dentro do formulário de edição.
-              </p>
-
-              <div className="space-y-5">
-                <div>
-                  <label className="label-base mb-1.5 block">Seção &quot;Produto&quot;</label>
-                  <p className="text-xs text-dark-300 mb-2">Informações de prazo, composição do pedido e itens inclusos. Use linha em branco para separar parágrafos.</p>
-                  <Textarea
-                    value={config.info_produto}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, info_produto: e.target.value }))}
-                    rows={5}
-                  />
-                </div>
-
-                <div>
-                  <label className="label-base mb-1.5 block">Seção &quot;Você sabia?&quot;</label>
-                  <p className="text-xs text-dark-300 mb-2">Destaque sobre personalização e diferencial. Use linha em branco para separar parágrafos.</p>
-                  <Textarea
-                    value={config.voce_sabia}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, voce_sabia: e.target.value }))}
-                    rows={4}
-                  />
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-dark-700">Perguntas Frequentes (FAQ)</h3>
-                  <p className="text-xs text-dark-300 mt-0.5">Perguntas exibidas na página de cada produto.</p>
-                </div>
-                <Button variant="secondary" size="sm" leftIcon={<Plus size={13} />} onClick={addFaqItem}>
-                  Adicionar
-                </Button>
-              </div>
-
-              {config.faq.length === 0 ? (
-                <p className="text-sm text-dark-300 text-center py-6">Nenhuma pergunta cadastrada.</p>
-              ) : (
-                <div className="space-y-4">
-                  {config.faq.map((item, i) => (
-                    <div key={i} className="border border-gold-100 rounded-xl p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-xs font-medium text-gold-600 mt-0.5">Pergunta {i + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeFaqItem(i)}
-                          className="p-1 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                          title="Remover pergunta"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                      <Input
-                        placeholder="Pergunta..."
-                        value={item.pergunta}
-                        onChange={(e) => updateFaqItem(i, 'pergunta', e.target.value)}
-                      />
-                      <Textarea
-                        placeholder="Resposta... (use linha em branco para separar parágrafos)"
-                        value={item.resposta}
-                        onChange={(e) => updateFaqItem(i, 'resposta', e.target.value)}
-                        rows={4}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-        )
       )}
 
       {/* Modal de aviso — categoria não vinculada ou sem categorias */}
