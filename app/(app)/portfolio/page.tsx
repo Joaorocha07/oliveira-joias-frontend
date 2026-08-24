@@ -76,7 +76,12 @@ export default function PortfolioPage() {
   const [confirmDeleteAcab, setConfirmDeleteAcab] = useState<AcabamentoCatalogo | null>(null)
   const [deletandoAcabamento, setDeletandoAcabamento] = useState(false)
 
-  // --- Descrição Geral ---
+  // --- Descrição por produto ---
+  const [formInfoProduto, setFormInfoProduto] = useState('')
+  const [formVoceSabia, setFormVoceSabia] = useState('')
+  const [formFaq, setFormFaq] = useState<FaqItem[]>([])
+
+  // --- Descrição Padrão (fallback global) ---
   const [config, setConfig] = useState<ConfigCatalogo>({ info_produto: '', voce_sabia: '', faq: [] })
   const [loadingConfig, setLoadingConfig] = useState(false)
   const [salvandoConfig, setSalvandoConfig] = useState(false)
@@ -228,6 +233,9 @@ export default function PortfolioPage() {
     setModoParcela('quantidade')
     setValorParcela('')
     setTemJuros(false)
+    setFormInfoProduto('')
+    setFormVoceSabia('')
+    setFormFaq([])
     setModalOpen(true)
   }
 
@@ -259,6 +267,9 @@ export default function PortfolioPage() {
     })
     setImagensExistentes(p.imagens)
     setImagens([])
+    setFormInfoProduto(p.info_produto ?? '')
+    setFormVoceSabia(p.voce_sabia ?? '')
+    setFormFaq(p.faq ?? [])
     if (p.valor_parcela != null) {
       setModoParcela('manual')
       setValorParcela(String(p.valor_parcela))
@@ -314,6 +325,9 @@ export default function PortfolioPage() {
     } else if (editando) {
       data.append('valor_parcela', '')
     }
+    data.append('info_produto', formInfoProduto)
+    data.append('voce_sabia', formVoceSabia)
+    data.append('faq', JSON.stringify(formFaq))
     imagens.forEach((file) => data.append('imagens', file))
 
     let error: string | null
@@ -431,6 +445,19 @@ export default function PortfolioPage() {
     setConfirmDeleteAcab(null)
   }
 
+  // --- Per-product description helpers ---
+  function addFormFaqItem() {
+    setFormFaq((prev) => [...prev, { pergunta: '', resposta: '' }])
+  }
+
+  function updateFormFaqItem(index: number, field: keyof FaqItem, value: string) {
+    setFormFaq((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+  }
+
+  function removeFormFaqItem(index: number) {
+    setFormFaq((prev) => prev.filter((_, i) => i !== index))
+  }
+
   // --- Config handlers ---
   function addFaqItem() {
     setConfig((prev) => ({ ...prev, faq: [...prev.faq, { pergunta: '', resposta: '' }] }))
@@ -451,7 +478,7 @@ export default function PortfolioPage() {
     setSalvandoConfig(true)
     const { error } = await atualizarConfigCatalogo(config)
     if (error) alert.error('Erro', error)
-    else alert.success('Salvo!', 'A descrição geral foi atualizada.')
+    else alert.success('Salvo!', 'A descrição padrão foi atualizada.')
     setSalvandoConfig(false)
   }
 
@@ -480,7 +507,7 @@ export default function PortfolioPage() {
             )}
             {aba === 'descricao' && (
               <Button variant="primary" onClick={handleSaveConfig} loading={salvandoConfig}>
-                Salvar Descrição
+                Salvar Padrão
               </Button>
             )}
           </div>
@@ -534,7 +561,7 @@ export default function PortfolioPage() {
           )}
         >
           <FileText size={13} />
-          Descrição Geral
+          Descrição Padrão
         </button>
       </div>
 
@@ -803,8 +830,8 @@ export default function PortfolioPage() {
           <div className="space-y-6">
             <Card>
               <p className="text-sm text-dark-500 mb-5">
-                Este conteúdo aparece na página de cada produto do portfólio, abaixo das especificações.
-                Edite e clique em <strong>Salvar Descrição</strong> para aplicar a todos os produtos.
+                Descrição padrão exibida nos produtos que não têm descrição própria.
+                Cada produto pode sobrescrever essas informações na seção &ldquo;Descrição do Produto&rdquo; dentro do formulário de edição.
               </p>
 
               <div className="space-y-5">
@@ -1180,6 +1207,81 @@ export default function PortfolioPage() {
             {imagens.length > 0 && (
               <p className="text-xs text-dark-300">{imagens.length} imagem(ns) selecionada(s)</p>
             )}
+          </div>
+
+          {/* Descrição específica do produto */}
+          <div className="sm:col-span-2 border-t border-gold-100 pt-4 mt-2 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-dark-700">Descrição do Produto</h3>
+              <p className="text-xs text-dark-300 mt-0.5">
+                Exibida na página deste produto. Se em branco, usa a &ldquo;Descrição Padrão&rdquo; da aba correspondente.
+              </p>
+            </div>
+
+            <div>
+              <label className="label-base mb-1.5 block">Seção &quot;Produto&quot;</label>
+              <Textarea
+                value={formInfoProduto}
+                onChange={(e) => setFormInfoProduto(e.target.value)}
+                rows={4}
+                placeholder="Prazo de fabricação, composição do pedido, itens inclusos..."
+              />
+            </div>
+
+            <div>
+              <label className="label-base mb-1.5 block">Seção &quot;Você sabia?&quot;</label>
+              <Textarea
+                value={formVoceSabia}
+                onChange={(e) => setFormVoceSabia(e.target.value)}
+                rows={3}
+                placeholder="Diferencial, personalização, curiosidades sobre este produto..."
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="label-base">Perguntas Frequentes</label>
+                <button
+                  type="button"
+                  onClick={addFormFaqItem}
+                  className="flex items-center gap-1 text-xs font-medium text-gold-600 hover:text-gold-700 transition-colors"
+                >
+                  <Plus size={11} /> Adicionar
+                </button>
+              </div>
+              {formFaq.length === 0 ? (
+                <p className="text-xs text-dark-300 py-2">Nenhuma pergunta. Clique em &ldquo;Adicionar&rdquo; para incluir ou deixe vazio para usar o padrão.</p>
+              ) : (
+                <div className="space-y-3">
+                  {formFaq.map((item, i) => (
+                    <div key={i} className="border border-gold-100 rounded-xl p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-medium text-gold-600 mt-0.5">Pergunta {i + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFormFaqItem(i)}
+                          className="p-1 rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                          title="Remover"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                      <Input
+                        placeholder="Pergunta..."
+                        value={item.pergunta}
+                        onChange={(e) => updateFormFaqItem(i, 'pergunta', e.target.value)}
+                      />
+                      <Textarea
+                        placeholder="Resposta..."
+                        value={item.resposta}
+                        onChange={(e) => updateFormFaqItem(i, 'resposta', e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <label className="sm:col-span-2 flex items-center gap-2 text-sm text-dark-600 cursor-pointer select-none">

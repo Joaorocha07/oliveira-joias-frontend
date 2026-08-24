@@ -16,6 +16,9 @@ export type ProdutoCatalogo = {
   destaque: boolean
   ativo: boolean
   ordem: number | null
+  info_produto: string | null
+  voce_sabia: string | null
+  faq: FaqItem[] | null
   created_at: string
 }
 
