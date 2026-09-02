@@ -523,6 +523,75 @@ export interface Orcamento {
 export type OrcamentoInsert = Omit<Orcamento, 'id' | 'numero' | 'created_at' | 'updated_at'>
 export type OrcamentoUpdate = Partial<OrcamentoInsert>
 
+// ── CERTIFICADOS DE GARANTIA ───────────────────────────────────
+export interface CertificadoModelo {
+  id: string
+  nome: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CertificadoMaterial {
+  id: string
+  nome: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CertificadoConfiguracao {
+  id: string
+  nome_empresa: string
+  subtitulo: string
+  endereco: string | null
+  whatsapp: string | null
+  telefone_secundario: string | null
+  instagram: string | null
+  cor_principal: string
+  texto_introducao: string | null
+  termos_garantia: string[]
+  beneficios: string[]
+  nao_cobre: string[]
+  recomendacoes: string[]
+  texto_declaracao: string | null
+  texto_agradecimento: string | null
+  texto_validade: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CertificadoConfiguracaoInsert = Omit<CertificadoConfiguracao, 'id' | 'created_at' | 'updated_at'>
+
+export interface Certificado {
+  id: string
+  numero: string
+  venda_id: string | null
+  cliente_id: string | null
+  cliente_nome: string | null
+  cliente_cpf: string | null
+  cliente_telefone: string | null
+  data_compra: string | null
+  modelo: string | null
+  material: string | null
+  largura: string | null
+  gramas: string | null
+  numeracao: string | null
+  pedido_os: string | null
+  valor: number | null
+  vendedor_id: string | null
+  vendedor_nome: string | null
+  observacoes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CertificadoInsert = Omit<Certificado, 'id' | 'numero' | 'created_at' | 'updated_at'>
+export type CertificadoUpdate = Partial<CertificadoInsert>
+
 // ── DASHBOARD / RELATÓRIOS ─────────────────────────────────────
 export interface DashboardData {
   faturamento_mes: number
