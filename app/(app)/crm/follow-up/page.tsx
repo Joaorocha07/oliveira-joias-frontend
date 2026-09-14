@@ -27,7 +27,7 @@ export default function FollowUpPage() {
   const [concluindo, setConcluindo] = useState<ClienteFollowUp | null>(null)
   const [whatsappFollowUp, setWhatsappFollowUp] = useState<ClienteFollowUp | null>(null)
 
-  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
+  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
 
   async function carregar() {
     setLoading(true)

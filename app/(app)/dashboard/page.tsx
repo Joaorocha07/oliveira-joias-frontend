@@ -15,6 +15,9 @@ import {
   formatMoney, formatDate, vendaStatusVariant, VENDA_STATUS_LABEL, today,
 } from '@/utils'
 import { listarContasPagar } from '@/services/contas-pagar'
+import { listarMetasMensais } from '@/services/metas'
+import { useAuth } from '@/context/auth-context'
+import { FuncionarioDashboard } from './funcionario-dashboard'
 import type { VendaComCliente, VwEstoqueAtual, ContaPagar } from '@/types'
 
 interface PeriodStat {
@@ -159,6 +162,16 @@ function buildFaturamentoSeries(recebimentos: DashboardRecebimento[], dataInicio
 }
 
 export default function DashboardPage() {
+  const { profile } = useAuth()
+
+  if (profile?.role === 'funcionario') {
+    return <FuncionarioDashboard profile={profile} />
+  }
+
+  return <AdminDashboard />
+}
+
+function AdminDashboard() {
   const initialPeriod = getPeriodRange('mes')
   const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
   const [dataFim, setDataFim] = useState(initialPeriod.fim)
@@ -745,6 +758,101 @@ export default function DashboardPage() {
           />
         </Card>
       )}
+
+      <MetasFuncionariosCard />
     </div>
+  )
+}
+
+interface MetaItem {
+  id: string
+  nome: string
+  metaMes: number
+  totalVendido: number
+}
+
+function MetasFuncionariosCard() {
+  const [items, setItems] = useState<MetaItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const inicioMes = format(new Date(), 'yyyy-MM-01')
+    const fimMes = format(new Date(), 'yyyy-MM-dd')
+
+    async function load() {
+      const [profilesRes, metasRes, vendasRes] = await Promise.all([
+        supabase.from('profiles').select('id, nome').in('role', ['funcionario', 'vendedor']).eq('ativo', true).order('nome'),
+        listarMetasMensais(inicioMes),
+        supabase.from('vendas')
+          .select('vendedor_id, total, forma_pagamento')
+          .neq('status', 'cancelado')
+          .gte('data_venda', inicioMes)
+          .lte('data_venda', fimMes)
+          .not('vendedor_id', 'is', null),
+      ])
+
+      const profilesList = (profilesRes.data ?? []) as { id: string; nome: string }[]
+      const metasList = metasRes.data ?? []
+
+      const totalPorVendedor = new Map<string, number>()
+      for (const v of ((vendasRes.data ?? []) as { vendedor_id: string; total: number; forma_pagamento: string }[])) {
+        if (v.forma_pagamento === 'crediario') continue
+        totalPorVendedor.set(v.vendedor_id, (totalPorVendedor.get(v.vendedor_id) ?? 0) + v.total)
+      }
+
+      const result: MetaItem[] = []
+      for (const profile of profilesList) {
+        const meta = metasList.find((m) => m.vendedor_id === profile.id)
+        if (!meta) continue
+        result.push({
+          id: profile.id,
+          nome: profile.nome,
+          metaMes: meta.valor_meta,
+          totalVendido: totalPorVendedor.get(profile.id) ?? 0,
+        })
+      }
+
+      setItems(result)
+      setLoading(false)
+    }
+
+    void load()
+  }, [])
+
+  if (loading || items.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader
+        title="Metas da Equipe"
+        subtitle={`Progresso do mês de ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`}
+      />
+      <div className="space-y-4 mt-2">
+        {items.map((item) => {
+          const pct = Math.min(100, item.metaMes > 0 ? (item.totalVendido / item.metaMes) * 100 : 0)
+          return (
+            <div key={item.id}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium text-dark-700">{item.nome}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-dark-400">
+                    {formatMoney(item.totalVendido)} <span className="text-dark-300">/ {formatMoney(item.metaMes)}</span>
+                  </p>
+                  <p className={`text-sm font-bold ${pct >= 100 ? 'text-green-600' : 'text-gold-600'}`}>
+                    {pct.toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+              <div className="h-2 bg-gold-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${pct >= 100 ? 'bg-green-500' : 'bg-gold-500'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }

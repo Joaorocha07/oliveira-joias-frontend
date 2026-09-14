@@ -66,7 +66,7 @@ export default function CrmRelatoriosPage() {
   const [vendedores, setVendedores] = useState<{ id: string; nome: string; comissao_percentual: number }[]>([])
   const [exportando, setExportando] = useState(false)
 
-  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
+  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
 
   async function handleExportarPdf() {
     const element = document.getElementById('crm-relatorios-print-area')
@@ -123,7 +123,7 @@ export default function CrmRelatoriosPage() {
     const [leadsRes, vendasRes, vendedoresRes] = await Promise.all([
       leadsQuery,
       vendasQuery,
-      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'admin']),
+      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'funcionario', 'admin']),
     ])
 
     if (leadsRes.error || vendasRes.error) alert.error('Erro', 'Erro ao carregar relatórios do CRM.')

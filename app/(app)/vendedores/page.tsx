@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Users, Pencil, ToggleLeft, ToggleRight, ShieldCheck, User } from 'lucide-react'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import { Plus, Pencil, ToggleLeft, ToggleRight, ShieldCheck, User, LayoutGrid } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
+import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
@@ -10,11 +13,14 @@ import {
 } from '@/components/ui'
 import { MaskedInput } from '@/components/forms/masked-input'
 import { formatPhone } from '@/utils'
+import { listarMetasMensais, upsertMetaMensal } from '@/services/metas'
+import { MENUS_FUNCIONARIO_CONFIG, FUNCIONARIO_DEFAULT_MENUS } from '@/lib/menus-config'
 import type { Profile, UserRole } from '@/types'
 
 const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
   vendedor: 'Vendedor',
+  funcionario: 'Funcionário',
   caixa: 'Caixa',
   visualizador: 'Visualizador',
 }
@@ -22,7 +28,8 @@ const ROLE_LABEL: Record<UserRole, string> = {
 const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
   admin: 'gold',
   vendedor: 'success',
-  caixa: 'info',
+  funcionario: 'info',
+  caixa: 'warning',
   visualizador: 'gray',
 }
 
@@ -34,13 +41,28 @@ interface VendedorForm {
   telefone: string
   role: UserRole
   comissao_percentual: string
+  menus_permitidos: string[] | null
+  meta_mes: string
 }
+
+const MES_ATUAL = format(new Date(), 'yyyy-MM-01')
 
 const EMPTY_FORM: VendedorForm = {
-  nome: '', email: '', senha: '', cpf: '', telefone: '', role: 'vendedor', comissao_percentual: '0',
+  nome: '', email: '', senha: '', cpf: '', telefone: '',
+  role: 'funcionario', comissao_percentual: '0', menus_permitidos: null, meta_mes: '',
 }
 
+const MENUS_POR_SECAO = MENUS_FUNCIONARIO_CONFIG.reduce<Record<string, typeof MENUS_FUNCIONARIO_CONFIG>>(
+  (acc, menu) => {
+    if (!acc[menu.section]) acc[menu.section] = []
+    acc[menu.section].push(menu)
+    return acc
+  },
+  {}
+)
+
 export default function VendedoresPage() {
+  const { user } = useAuth()
   const alert = useAlert()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,12 +73,10 @@ export default function VendedoresPage() {
   const [salvando, setSalvando] = useState(false)
   const [confirmToggle, setConfirmToggle] = useState<Profile | null>(null)
   const [toggling, setToggling] = useState(false)
+  const [loadingMeta, setLoadingMeta] = useState(false)
 
   async function loadProfiles() {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('nome')
+    const { data, error } = await supabase.from('profiles').select('*').order('nome')
     if (error) {
       alert.error('Erro', 'Erro ao carregar equipe.')
     } else {
@@ -84,13 +104,33 @@ export default function VendedoresPage() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  function handleRoleChange(novoRole: UserRole) {
+    setForm((prev) => ({
+      ...prev,
+      role: novoRole,
+      menus_permitidos: novoRole === 'funcionario'
+        ? (prev.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS)
+        : null,
+    }))
+  }
+
+  function toggleMenu(key: string) {
+    setForm((prev) => {
+      const current = prev.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS
+      const next = current.includes(key)
+        ? current.filter((k) => k !== key)
+        : [...current, key]
+      return { ...prev, menus_permitidos: next }
+    })
+  }
+
   function openCreate() {
     setEditando(null)
     setForm(EMPTY_FORM)
     setModalOpen(true)
   }
 
-  function openEdit(p: Profile) {
+  async function openEdit(p: Profile) {
     setEditando(p)
     setForm({
       nome: p.nome,
@@ -100,8 +140,18 @@ export default function VendedoresPage() {
       telefone: p.telefone ?? '',
       role: p.role,
       comissao_percentual: String(p.comissao_percentual ?? 0),
+      menus_permitidos: p.menus_permitidos ?? null,
+      meta_mes: '',
     })
     setModalOpen(true)
+
+    if (p.role === 'vendedor' || p.role === 'funcionario') {
+      setLoadingMeta(true)
+      const { data: metas } = await listarMetasMensais(MES_ATUAL)
+      const meta = metas?.find((m) => m.vendedor_id === p.id)
+      if (meta) setForm((prev) => ({ ...prev, meta_mes: String(meta.valor_meta) }))
+      setLoadingMeta(false)
+    }
   }
 
   async function handleSave() {
@@ -112,8 +162,9 @@ export default function VendedoresPage() {
 
     setSalvando(true)
 
+    const comissao = parseFloat(form.comissao_percentual.replace(',', '.')) || 0
+
     if (editando) {
-      const comissao = parseFloat(form.comissao_percentual.replace(',', '.')) || 0
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -122,21 +173,37 @@ export default function VendedoresPage() {
           telefone: form.telefone.trim() || null,
           role: form.role,
           comissao_percentual: comissao,
+          menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
         })
         .eq('id', editando.id)
 
       if (error) {
         alert.error('Erro', `Erro ao atualizar: ${error.message}`)
-      } else {
-        setProfiles((prev) => prev.map((p) =>
-          p.id === editando.id
-            ? { ...p, nome: form.nome.trim(), cpf: form.cpf.trim() || null, telefone: form.telefone.trim() || null, role: form.role, comissao_percentual: comissao }
-            : p
-        ))
-        alert.success('Perfil Atualizado!', 'As informações foram salvas com sucesso.', {
-          onConfirm: () => setModalOpen(false),
-        })
+        setSalvando(false)
+        return
       }
+
+      if ((form.role === 'vendedor' || form.role === 'funcionario') && form.meta_mes.trim() && user) {
+        const valorMeta = parseFloat(form.meta_mes.replace(',', '.')) || 0
+        if (valorMeta > 0) await upsertMetaMensal(MES_ATUAL, editando.id, valorMeta, user.id)
+      }
+
+      setProfiles((prev) => prev.map((p) =>
+        p.id === editando.id
+          ? {
+              ...p,
+              nome: form.nome.trim(),
+              cpf: form.cpf.trim() || null,
+              telefone: form.telefone.trim() || null,
+              role: form.role,
+              comissao_percentual: comissao,
+              menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
+            }
+          : p
+      ))
+      alert.success('Perfil Atualizado!', 'As informações foram salvas com sucesso.', {
+        onConfirm: () => setModalOpen(false),
+      })
     } else {
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: form.email.trim(),
@@ -164,13 +231,18 @@ export default function VendedoresPage() {
             telefone: form.telefone.trim() || null,
             role: form.role,
             ativo: true,
+            menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
           })
 
         if (profileError) {
           alert.error('Atenção', `Usuário criado, mas erro ao salvar perfil: ${profileError.message}`)
         } else {
+          if ((form.role === 'vendedor' || form.role === 'funcionario') && form.meta_mes.trim() && user) {
+            const valorMeta = parseFloat(form.meta_mes.replace(',', '.')) || 0
+            if (valorMeta > 0) await upsertMetaMensal(MES_ATUAL, authData.user.id, valorMeta, user.id)
+          }
           await loadProfiles()
-          alert.success('Vendedor Cadastrado!', 'Um e-mail de confirmação foi enviado ao novo usuário.', {
+          alert.success('Cadastrado!', 'Um e-mail de confirmação foi enviado ao novo usuário.', {
             onConfirm: () => setModalOpen(false),
           })
         }
@@ -203,14 +275,16 @@ export default function VendedoresPage() {
     setToggling(false)
   }
 
+  const menusPermitidosAtual = form.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS
+
   return (
     <div>
       <PageHeader
         title="Equipe de Vendas"
-        subtitle="Gerenciamento de vendedores e administradores"
+        subtitle="Gerenciamento de funcionários e administradores"
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
-            Novo Vendedor
+            Novo Membro
           </Button>
         }
       />
@@ -231,10 +305,10 @@ export default function VendedoresPage() {
           <EmptyState
             imageSrc="/images/Team goals-rafiki.svg"
             title="Nenhum membro encontrado"
-            description={search ? 'Tente outro termo.' : 'Cadastre o primeiro vendedor.'}
+            description={search ? 'Tente outro termo.' : 'Cadastre o primeiro membro da equipe.'}
             action={!search && (
               <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>
-                Novo Vendedor
+                Novo Membro
               </Button>
             )}
           />
@@ -253,12 +327,10 @@ export default function VendedoresPage() {
                       <p className="text-xs text-dark-400 truncate">{p.email}</p>
                       {p.telefone && <p className="text-xs text-dark-300 mt-0.5">{formatPhone(p.telefone)}</p>}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <Badge variant={ROLE_VARIANT[p.role]}>{ROLE_LABEL[p.role]}</Badge>
-                    </div>
+                    <Badge variant={ROLE_VARIANT[p.role]}>{ROLE_LABEL[p.role]}</Badge>
                   </div>
                   <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gold-50">
-                    <Button size="sm" variant="secondary" leftIcon={<Pencil size={12} />} onClick={() => openEdit(p)}>
+                    <Button size="sm" variant="secondary" leftIcon={<Pencil size={12} />} onClick={() => void openEdit(p)}>
                       Editar
                     </Button>
                     <Button
@@ -321,7 +393,7 @@ export default function VendedoresPage() {
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             type="button"
-                            onClick={() => openEdit(p)}
+                            onClick={() => void openEdit(p)}
                             className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                             title="Editar"
                           >
@@ -349,8 +421,8 @@ export default function VendedoresPage() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editando ? 'Editar Vendedor' : 'Novo Vendedor'}
-        size="sm"
+        title={editando ? 'Editar Membro' : 'Novo Membro'}
+        size="md"
         footer={
           <>
             <Button variant="secondary" onClick={() => setModalOpen(false)} disabled={salvando}>Cancelar</Button>
@@ -383,7 +455,7 @@ export default function VendedoresPage() {
               value={form.senha}
               onChange={(e) => setField('senha', e.target.value)}
               placeholder="Mínimo 6 caracteres"
-              hint="O vendedor receberá um e-mail para confirmar o acesso."
+              hint="O usuário receberá um e-mail para confirmar o acesso."
             />
           )}
           <MaskedInput
@@ -403,14 +475,16 @@ export default function VendedoresPage() {
           <Select
             label="Perfil de acesso"
             value={form.role}
-            onChange={(e) => setField('role', e.target.value as UserRole)}
+            onChange={(e) => handleRoleChange(e.target.value as UserRole)}
           >
+            <option value="funcionario">Funcionário</option>
             <option value="vendedor">Vendedor</option>
             <option value="admin">Administrador</option>
             <option value="caixa">Caixa</option>
             <option value="visualizador">Visualizador</option>
           </Select>
-          {form.role === 'vendedor' && (
+
+          {(form.role === 'vendedor' || form.role === 'funcionario') && (
             <Input
               label="Comissão (%)"
               type="number"
@@ -419,8 +493,55 @@ export default function VendedoresPage() {
               max="100"
               value={form.comissao_percentual}
               onChange={(e) => setField('comissao_percentual', e.target.value)}
-              hint="Usada no cálculo de comissão do CRM (dashboard e relatórios)."
+              hint="Usada no cálculo de comissão do CRM."
             />
+          )}
+
+          {(form.role === 'vendedor' || form.role === 'funcionario') && (
+            <Input
+              label={`Meta do mês — ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`}
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.meta_mes}
+              onChange={(e) => setField('meta_mes', e.target.value)}
+              placeholder="Ex: 5000.00"
+              hint={loadingMeta ? 'Carregando meta atual...' : 'Deixe em branco para não definir meta mensal.'}
+            />
+          )}
+
+          {form.role === 'funcionario' && (
+            <div>
+              <p className="text-xs font-medium text-dark-600 mb-2 flex items-center gap-1.5">
+                <LayoutGrid size={13} className="text-gold-500" />
+                Menus disponíveis para este funcionário
+              </p>
+              <div className="border border-gold-100 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                {Object.entries(MENUS_POR_SECAO).map(([secao, menus]) => (
+                  <div key={secao} className="px-3 py-2 border-b border-gold-50 last:border-0">
+                    <p className="text-[10px] uppercase tracking-[1px] text-dark-400 font-semibold mb-2">{secao}</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {menus.map((menu) => (
+                        <label key={menu.key} className="flex items-center gap-2 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={menusPermitidosAtual.includes(menu.key)}
+                            onChange={() => toggleMenu(menu.key)}
+                            className="w-3.5 h-3.5 accent-gold-500 cursor-pointer flex-shrink-0"
+                          />
+                          <span className="text-xs text-dark-600 group-hover:text-dark-800 transition-colors leading-tight">
+                            {menu.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-dark-300 mt-1.5">
+                Sempre bloqueados: Caixa & Financeiro, Contas a Pagar, Equipe de Vendas.
+              </p>
+            </div>
           )}
         </div>
       </Modal>

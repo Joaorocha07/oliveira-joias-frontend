@@ -52,7 +52,7 @@ export default function CrmPage() {
   useEffect(() => {
     supabase.from('origens_cliente').select('id, nome, ativo, created_at').eq('ativo', true).order('nome')
       .then(({ data }) => setOrigens((data as OrigemCliente[]) ?? []))
-    supabase.from('profiles').select('id, nome').eq('ativo', true).in('role', ['vendedor', 'admin']).order('nome')
+    supabase.from('profiles').select('id, nome').eq('ativo', true).in('role', ['vendedor', 'funcionario', 'admin']).order('nome')
       .then(({ data }) => setVendedores(data ?? []))
   }, [])
 

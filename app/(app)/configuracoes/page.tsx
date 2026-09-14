@@ -10,6 +10,7 @@ import { getInitials } from '@/utils'
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Administrador',
   vendedor: 'Vendedor',
+  funcionario: 'Funcionário',
   caixa: 'Caixa',
   visualizador: 'Visualizador',
 }

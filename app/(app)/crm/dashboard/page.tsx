@@ -68,7 +68,7 @@ export default function CrmDashboardPage() {
   const [followUpsHoje, setFollowUpsHoje] = useState(0)
   const [valorEmNegociacao, setValorEmNegociacao] = useState(0)
 
-  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
+  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -126,7 +126,7 @@ export default function CrmDashboardPage() {
       leadsQuery,
       vendasQuery,
       timelineQuery,
-      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'admin']),
+      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'funcionario', 'admin']),
       supabase.from('metas_mensais').select('valor_meta, vendedor_id').eq('mes', inicioMes),
       vendasMesQuery,
       vendasHojeQuery,

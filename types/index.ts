@@ -2,7 +2,7 @@
 // OLIVEIRA JOIAS — TypeScript Types
 // ============================================================
 
-export type UserRole = 'admin' | 'vendedor' | 'caixa' | 'visualizador'
+export type UserRole = 'admin' | 'vendedor' | 'funcionario' | 'caixa' | 'visualizador'
 export type VendaTipo = 'normal' | 'livre'
 export type VendaStatus = 'orcamento' | 'pendente' | 'pago' | 'crediario' | 'cancelado'
 export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'crediario' | 'transferencia' | 'cheque' | 'misto'
@@ -34,6 +34,7 @@ export interface Profile {
   telefone: string | null
   cpf: string | null
   comissao_percentual: number
+  menus_permitidos: string[] | null
   created_at: string
   updated_at: string
 }
