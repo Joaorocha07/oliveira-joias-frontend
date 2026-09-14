@@ -25,7 +25,6 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-<<<<<<< HEAD
   { sectionLabel: 'Principal',   href: '/dashboard',         icon: <LayoutDashboard size={18} />,     label: 'Painel Geral' },
   { sectionLabel: 'Principal',   href: '/vendas',            icon: <ShoppingCart size={18} />,        label: 'Vendas',              menuKey: 'vendas' },
   { sectionLabel: 'Principal',   href: '/crediario',         icon: <CreditCard size={18} />,          label: 'Crediário',           menuKey: 'crediario' },
@@ -48,30 +47,6 @@ const navItems: NavItem[] = [
   { sectionLabel: 'Financeiro',  href: '/caixa',             icon: <Wallet size={18} />,              label: 'Caixa & Financeiro',  menuKey: 'caixa' },
   { sectionLabel: 'Financeiro',  href: '/contas-pagar',      icon: <Receipt size={18} />,             label: 'Contas a Pagar',      menuKey: 'contas_pagar' },
   { sectionLabel: 'Financeiro',  href: '/relatorios',        icon: <BarChart3 size={18} />,           label: 'Relatórios',          menuKey: 'relatorios' },
-=======
-  { section: 'Principal', href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Painel Geral' },
-  { href: '/vendas',       icon: <ShoppingCart size={18} />, label: 'Vendas' },
-  { href: '/crediario',    icon: <CreditCard size={18} />,   label: 'Crediário' },
-  { section: 'Cadastros', href: '/estoque',  icon: <Diamond size={18} />,  label: 'Estoque' },
-  { href: '/servicos',     icon: <Wrench size={18} />,       label: 'Serviços' },
-  { href: '/orcamentos',   icon: <FileText size={18} />,     label: 'Orçamentos' },
-  { href: '/clientes',     icon: <Users size={18} />,        label: 'Clientes' },
-  { href: '/fornecedores', icon: <Truck size={18} />,        label: 'Fornecedores' },
-  { href: '/vendedores',   icon: <UserCog size={18} />,      label: 'Equipe de Vendas' },
-  { href: '/certificados', icon: <Award size={18} />,        label: 'Certificados' },
-  { section: 'CRM', href: '/crm/dashboard', icon: <Gauge size={18} />, label: 'Dashboard' },
-  { href: '/crm',            icon: <Kanban size={18} />,       label: 'Funil de Vendas' },
-  { href: '/crm/follow-up',  icon: <CalendarClock size={18} />, label: 'Follow-up' },
-  { href: '/crm/calendario', icon: <Calendar size={18} />,     label: 'Calendário' },
-  { href: '/crm/pos-venda',  icon: <Gift size={18} />,         label: 'Pós-venda' },
-  { href: '/crm/mensagens',  icon: <MessageSquareText size={18} />, label: 'Mensagens' },
-  { href: '/crm/relatorios', icon: <LineChart size={18} />,    label: 'Relatórios CRM' },
-  { section: 'Site', href: '/portfolio', icon: <Globe size={18} />, label: 'Produtos do Portfólio' },
-  { href: '/popups', icon: <Layers size={18} />, label: 'Pop-ups do Site' },
-  { section: 'Financeiro', href: '/caixa',       icon: <Wallet size={18} />,   label: 'Caixa & Financeiro' },
-  { href: '/contas-pagar', icon: <Receipt size={18} />,  label: 'Contas a Pagar' },
-  { href: '/relatorios',   icon: <BarChart3 size={18} />, label: 'Relatórios' },
->>>>>>> ec952e1de75a1119746246bc4c8f82ec10342547
 ]
 
 function isItemVisible(item: NavItem, role: UserRole, menusPerm: string[] | null | undefined): boolean {
