@@ -17,7 +17,7 @@ import {
 import { listarContasPagar } from '@/services/contas-pagar'
 import { listarMetasMensais } from '@/services/metas'
 import { useAuth } from '@/context/auth-context'
-import { FuncionarioDashboard } from './funcionario-dashboard'
+import { VendedorDashboard } from './vendedor-dashboard'
 import type { VendaComCliente, VwEstoqueAtual, ContaPagar } from '@/types'
 
 interface PeriodStat {
@@ -164,8 +164,8 @@ function buildFaturamentoSeries(recebimentos: DashboardRecebimento[], dataInicio
 export default function DashboardPage() {
   const { profile } = useAuth()
 
-  if (profile?.role === 'funcionario') {
-    return <FuncionarioDashboard profile={profile} />
+  if (profile?.role === 'vendedor') {
+    return <VendedorDashboard profile={profile} />
   }
 
   return <AdminDashboard />
@@ -759,7 +759,7 @@ function AdminDashboard() {
         </Card>
       )}
 
-      <MetasFuncionariosCard />
+      <MetasEquipeCard />
     </div>
   )
 }
@@ -771,7 +771,7 @@ interface MetaItem {
   totalVendido: number
 }
 
-function MetasFuncionariosCard() {
+function MetasEquipeCard() {
   const [items, setItems] = useState<MetaItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -781,7 +781,7 @@ function MetasFuncionariosCard() {
 
     async function load() {
       const [profilesRes, metasRes, vendasRes] = await Promise.all([
-        supabase.from('profiles').select('id, nome').in('role', ['funcionario', 'vendedor']).eq('ativo', true).order('nome'),
+        supabase.from('profiles').select('id, nome').in('role', ['vendedor']).eq('ativo', true).order('nome'),
         listarMetasMensais(inicioMes),
         supabase.from('vendas')
           .select('vendedor_id, total, forma_pagamento')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Mail, Phone, Shield } from 'lucide-react'
+import { User, Mail, Phone, Shield, Lock } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
 import { PageHeader, Card, CardHeader, Button, Input, Divider } from '@/components/ui'
@@ -10,15 +10,45 @@ import { getInitials } from '@/utils'
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Administrador',
   vendedor: 'Vendedor',
-  funcionario: 'Funcionário',
   caixa: 'Caixa',
   visualizador: 'Visualizador',
 }
 
 export default function ConfiguracoesPage() {
-  const { profile, updateProfile, user } = useAuth()
+  const { profile, updateProfile, user, updatePassword } = useAuth()
   const alert = useAlert()
   const [salvando, setSalvando] = useState(false)
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmarSenha, setConfirmarSenha] = useState('')
+  const [erroSenha, setErroSenha] = useState('')
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+
+  async function handleSaveSenha(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setErroSenha('')
+
+    if (novaSenha.length < 6) {
+      setErroSenha('A senha deve ter ao menos 6 caracteres.')
+      return
+    }
+    if (novaSenha !== confirmarSenha) {
+      setErroSenha('As senhas não conferem.')
+      return
+    }
+
+    setSalvandoSenha(true)
+    const { error } = await updatePassword(novaSenha)
+    setSalvandoSenha(false)
+
+    if (error) {
+      setErroSenha(error)
+      return
+    }
+
+    setNovaSenha('')
+    setConfirmarSenha('')
+    alert.success('Senha Atualizada!', 'Sua senha foi alterada com sucesso.')
+  }
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -122,6 +152,43 @@ export default function ConfiguracoesPage() {
           </form>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader title="Alterar Senha" subtitle="Defina uma nova senha de acesso ao sistema" />
+
+        <form onSubmit={handleSaveSenha} className="max-w-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Nova senha"
+              type="password"
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              leftAddon={<Lock size={16} />}
+            />
+            <Input
+              label="Confirmar nova senha"
+              type="password"
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+              placeholder="••••••••"
+              leftAddon={<Lock size={16} />}
+            />
+          </div>
+
+          {erroSenha && (
+            <div className="flex items-start gap-2 text-sm text-[#C75B5B] bg-[rgba(199,91,91,0.06)] border border-[rgba(199,91,91,0.15)] rounded-lg px-3 py-2.5 mt-4">
+              <span>{erroSenha}</span>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-5 mt-2 border-t border-gold-50">
+            <Button type="submit" variant="primary" loading={salvandoSenha}>
+              Alterar Senha
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   )
 }

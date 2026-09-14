@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
+import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner, EmptyState,
@@ -43,6 +44,8 @@ function threeMonthsStart() {
 
 export default function ServicosPage() {
   const alert = useAlert()
+  const { profile } = useAuth()
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
   const [servicos, setServicos] = useState<ServicoComCliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -58,12 +61,16 @@ export default function ServicosPage() {
 
   const loadServicos = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    let query = supabase
       .from('servicos')
       .select('*, cliente:clientes(nome, telefone), origem:origens_cliente(id, nome), responsavel:profiles!servicos_responsavel_id_fkey(nome)')
       .gte('data_entrada', dataInicio)
       .lte('data_entrada', dataFim)
       .order('created_at', { ascending: false })
+
+    if (escopoVendedor) query = query.eq('responsavel_id', escopoVendedor)
+
+    const { data, error } = await query
 
     if (error) {
       alert.error('Erro', 'Erro ao carregar serviços.')
@@ -71,7 +78,7 @@ export default function ServicosPage() {
       setServicos((data as ServicoComCliente[]) ?? [])
     }
     setLoading(false)
-  }, [dataInicio, dataFim])
+  }, [dataInicio, dataFim, escopoVendedor])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadServicos(), 0)

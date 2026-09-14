@@ -37,7 +37,7 @@ const INITIAL: State = {
   loading: true,
 }
 
-export function FuncionarioDashboard({ profile }: Props) {
+export function VendedorDashboard({ profile }: Props) {
   const mesAtual = format(new Date(), 'yyyy-MM-01')
   const initialPeriod = getPeriodRange('mes')
   const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)

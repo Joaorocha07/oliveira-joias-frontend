@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAlert } from '@/hooks/use-alert'
+import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, SearchInput, Select, Spinner, EmptyState,
@@ -76,6 +77,8 @@ function ParcelasBadge({ c }: { c: CrediarioRow }) {
 
 export default function CrediarioPage() {
   const alert = useAlert()
+  const { profile } = useAuth()
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
   const [crediarios, setCrediarios] = useState<CrediarioRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -96,7 +99,7 @@ export default function CrediarioPage() {
   const loadCrediarios = useCallback(async () => {
     const { data, error } = await supabase
       .from('crediario')
-      .select('*, cliente:clientes(nome, telefone), parcelas:crediario_parcelas(*), venda:vendas(numero, data_venda, forma_pagamento)')
+      .select('*, cliente:clientes(nome, telefone), parcelas:crediario_parcelas(*), venda:vendas(numero, data_venda, forma_pagamento, vendedor_id)')
       .gte('created_at', `${dataInicio}T00:00:00`)
       .lte('created_at', `${dataFim}T23:59:59`)
       .order('created_at', { ascending: false })
@@ -106,11 +109,12 @@ export default function CrediarioPage() {
       setLoading(false)
       return null
     }
-    const rows = (data as CrediarioRow[]) ?? []
+    const allRows = (data as CrediarioRow[]) ?? []
+    const rows = escopoVendedor ? allRows.filter((c) => c.venda?.vendedor_id === escopoVendedor) : allRows
     setCrediarios(rows)
     setLoading(false)
     return rows
-  }, [alert, dataFim, dataInicio])
+  }, [alert, dataFim, dataInicio, escopoVendedor])
 
   useEffect(() => {
     const id = window.setTimeout(() => void loadCrediarios(), 0)

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
@@ -126,6 +127,15 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 leftAddon={<Lock size={16} />}
               />
+
+              <div className="flex justify-end -mt-1">
+                <Link
+                  href="/esqueci-senha"
+                  className="text-xs text-dark-300 hover:text-gold-600 transition-colors"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
 
               {error && (
                 <div className="flex items-start gap-2 text-sm text-[#C75B5B] bg-[rgba(199,91,91,0.06)] border border-[rgba(199,91,91,0.15)] rounded-lg px-3 py-2.5">

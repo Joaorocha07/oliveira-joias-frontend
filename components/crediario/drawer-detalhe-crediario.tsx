@@ -11,7 +11,7 @@ import {
 import type { CrediarioComRelacoes, CrediarioParcela, CrediarioStatus, Venda } from '@/types'
 
 export type CrediarioRow = CrediarioComRelacoes & {
-  venda?: Pick<Venda, 'numero' | 'data_venda' | 'forma_pagamento'> | null
+  venda?: Pick<Venda, 'numero' | 'data_venda' | 'forma_pagamento' | 'vendedor_id'> | null
 }
 
 interface DrawerDetalheCrediarioProps {

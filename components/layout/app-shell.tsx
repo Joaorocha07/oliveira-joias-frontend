@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Diamond, Menu } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { Sidebar } from './sidebar'
 import { cn } from '@/lib/cn'
+import { canAccessMenu, getMenuKeyForPath } from '@/lib/menus-config'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -34,6 +36,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace('/login')
     }
   }, [session, loading, router])
+
+  useEffect(() => {
+    if (loading || !session || !profile) return
+    const menuKey = getMenuKeyForPath(pathname)
+    if (!canAccessMenu(profile.role, profile.menus_permitidos, menuKey)) {
+      router.replace('/dashboard')
+    }
+  }, [pathname, profile, session, loading, router])
 
   if (loading) {
     return <InitialLoadingScreen />

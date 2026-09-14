@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts'
+import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, CardHeader, MetricCard, Spinner, EmptyState,
@@ -36,6 +37,10 @@ const REPORT_SECTIONS: { key: ReportSection; label: string; subtitle: string }[]
   { key: 'contas', label: 'Contas a Pagar', subtitle: 'Vencimentos e pagamentos' },
   { key: 'clientes', label: 'Clientes', subtitle: 'LTV e top compradores' },
 ]
+
+// Seções que fazem sentido para um vendedor ver com os próprios resultados —
+// o resto (visão geral da empresa, caixa, leads, contas a pagar, LTV de clientes) é admin-only.
+const VENDEDOR_SECTIONS: ReportSection[] = ['vendas', 'servicos', 'estoque', 'crediario']
 
 interface CategoriaData { name: string; value: number }
 interface SerieData { periodo: string; entradas: number; despesas: number }
@@ -121,6 +126,7 @@ interface ServicoRelatorio {
   data_entrada: string
   origem_id: string | null
   origem_outro: string | null
+  responsavel_id: string | null
 }
 
 interface MovimentoEstoqueRelatorio {
@@ -136,6 +142,7 @@ interface CrediarioRow {
   entrada: number
   saldo: number
   parcelas?: { valor_pago: number; status: string }[] | null
+  venda?: { vendedor_id: string | null } | { vendedor_id: string | null }[] | null
 }
 
 interface CrediarioParcelaPaga {
@@ -179,6 +186,11 @@ function getParcelaVenda(parcela: CrediarioParcelaPaga) {
   return Array.isArray(venda) ? venda[0] : venda
 }
 
+function getCrediarioVendedorId(c: CrediarioRow) {
+  const venda = Array.isArray(c.venda) ? c.venda[0] : c.venda
+  return venda?.vendedor_id ?? null
+}
+
 function getVendaVendedorNome(venda: VendaRelatorio) {
   const vendedor = Array.isArray(venda.vendedor) ? venda.vendedor[0] : venda.vendedor
   return vendedor?.nome ?? 'Sem vendedor'
@@ -207,11 +219,23 @@ function ReportBlock({ children }: { children: ReactNode }) {
 }
 
 export default function RelatoriosPage() {
+  const { profile } = useAuth()
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
+  const visibleSections = escopoVendedor
+    ? REPORT_SECTIONS.filter((s) => VENDEDOR_SECTIONS.includes(s.key))
+    : REPORT_SECTIONS
+
   const initialPeriod = getPeriodRange('mes')
   const [dataInicio, setDataInicio] = useState(initialPeriod.inicio)
   const [dataFim, setDataFim] = useState(initialPeriod.fim)
   const [activePreset, setActivePreset] = useState<PeriodPreset>('mes')
   const [activeSection, setActiveSection] = useState<ReportSection>('geral')
+
+  useEffect(() => {
+    if (escopoVendedor && !VENDEDOR_SECTIONS.includes(activeSection)) {
+      setActiveSection('vendas')
+    }
+  }, [escopoVendedor, activeSection])
   const [caixaChartMode, setCaixaChartMode] = useState<CaixaChartMode>('evolucao')
   const [vendasSubTab, setVendasSubTab] = useState<VendasSubTab>('todas')
   const [vendedorFiltro, setVendedorFiltro] = useState('todos')
@@ -261,18 +285,24 @@ export default function RelatoriosPage() {
       return { data: all }
     })()
 
+    let vendasQuery = supabase
+      .from('vendas')
+      .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+      .gte('data_venda', dataInicio)
+      .lte('data_venda', dataFim)
+      .not('status', 'eq', 'cancelado')
+    if (escopoVendedor) vendasQuery = vendasQuery.eq('vendedor_id', escopoVendedor)
+
+    let servicosQuery = supabase
+      .from('servicos')
+      .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro, responsavel_id')
+      .gte('data_entrada', dataInicio)
+      .lte('data_entrada', dataFim)
+    if (escopoVendedor) servicosQuery = servicosQuery.eq('responsavel_id', escopoVendedor)
+
     const [vendasResult, servicosResult, movimentosResult, crediariosResult, parcelasResult, estoqueResult, origensResult, ltvResult, clientesResult] = await Promise.all([
-      supabase
-        .from('vendas')
-        .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
-        .gte('data_venda', dataInicio)
-        .lte('data_venda', dataFim)
-        .not('status', 'eq', 'cancelado'),
-      supabase
-        .from('servicos')
-        .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro')
-        .gte('data_entrada', dataInicio)
-        .lte('data_entrada', dataFim),
+      vendasQuery,
+      servicosQuery,
       supabase
         .from('estoque_movimentacoes')
         .select('tipo, quantidade, created_at, produto:produtos(categoria)')
@@ -280,7 +310,7 @@ export default function RelatoriosPage() {
         .lte('created_at', fimCompleto),
       supabase
         .from('crediario')
-        .select('venda_id, total, entrada, saldo, parcelas:crediario_parcelas(valor_pago, status)')
+        .select('venda_id, total, entrada, saldo, parcelas:crediario_parcelas(valor_pago, status), venda:vendas(vendedor_id)')
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('crediario_parcelas')
@@ -308,8 +338,20 @@ export default function RelatoriosPage() {
     setLancamentos((lancamentosResult.data as LancamentoRelatorio[]) ?? [])
     setServicos((servicosResult.data as ServicoRelatorio[]) ?? [])
     setMovimentosEstoque(((movimentosResult.data ?? []) as unknown) as MovimentoEstoqueRelatorio[])
-    setCrediariosData(((crediariosResult.data ?? []) as unknown) as CrediarioRow[])
-    setCrediarioParcelasPagas(((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[])
+
+    const crediariosRows = ((crediariosResult.data ?? []) as unknown) as CrediarioRow[]
+    setCrediariosData(
+      escopoVendedor
+        ? crediariosRows.filter((c) => getCrediarioVendedorId(c) === escopoVendedor)
+        : crediariosRows
+    )
+
+    const parcelasRows = ((parcelasResult.data ?? []) as unknown) as CrediarioParcelaPaga[]
+    setCrediarioParcelasPagas(
+      escopoVendedor
+        ? parcelasRows.filter((p) => getParcelaVenda(p)?.vendedor_id === escopoVendedor)
+        : parcelasRows
+    )
     setOrigensCliente((origensResult.data ?? []) as OrigemCliente[])
     setClienteLtvData(((ltvResult.data ?? []) as unknown) as VendaLtvRow[])
     setTodosClientes((clientesResult.data ?? []) as ClienteCadastro[])
@@ -327,7 +369,7 @@ export default function RelatoriosPage() {
     setEstoqueDetalhado(estoqueRows)
 
     setLoading(false)
-  }, [dataFim, dataInicio])
+  }, [dataFim, dataInicio, escopoVendedor])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadRelatorios(), 0)
@@ -1094,7 +1136,7 @@ export default function RelatoriosPage() {
 
           <div className="border-t border-gold-100 pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2">
-              {REPORT_SECTIONS.map((section) => (
+              {visibleSections.map((section) => (
                 <button
                   key={section.key}
                   type="button"
@@ -1428,7 +1470,9 @@ export default function RelatoriosPage() {
               {vendasSubTab === 'todas' && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <MetricCard label="Vendas Recebidas" value={formatMoney(metrics.faturamento)} changeType="up" accent />
-                  <MetricCard label="Lucro Bruto" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
+                  {!escopoVendedor && (
+                    <MetricCard label="Lucro Bruto" value={formatMoney(metrics.lucroBruto)} changeType={metrics.lucroBruto >= 0 ? 'up' : 'down'} />
+                  )}
                   <MetricCard label="Ticket Medio" value={metrics.vendasQtd > 0 ? formatMoney(metrics.ticketMedio) : '-'} changeType="neutral" />
                   <MetricCard label="Vendas" value={String(metrics.vendasQtd)} changeType="neutral" />
                 </div>
@@ -1438,7 +1482,9 @@ export default function RelatoriosPage() {
               {vendasSubTab === 'normal' && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <MetricCard label="Faturamento Normal" value={formatMoney(vendasPorTipo.faturamentoNormal)} changeType="up" accent />
-                  <MetricCard label="Lucro Bruto" value={formatMoney(vendasPorTipo.lucroNormal)} changeType={vendasPorTipo.lucroNormal >= 0 ? 'up' : 'down'} />
+                  {!escopoVendedor && (
+                    <MetricCard label="Lucro Bruto" value={formatMoney(vendasPorTipo.lucroNormal)} changeType={vendasPorTipo.lucroNormal >= 0 ? 'up' : 'down'} />
+                  )}
                   <MetricCard label="Ticket Medio" value={vendasPorTipo.qtdNormal > 0 ? formatMoney(vendasPorTipo.tickMedioNormal) : '-'} changeType="neutral" />
                   <MetricCard label="Quantidade" value={String(vendasPorTipo.qtdNormal)} changeType="neutral" />
                 </div>
@@ -1571,22 +1617,24 @@ export default function RelatoriosPage() {
                       <ProductSalesReport data={charts.vendasProduto} />
                     )}
                   </Card>
-                  <Card>
-                    <CardHeader title="Comparativo de Resultado" />
-                    <BarCompareReport
-                      data={vendasSubTab === 'normal'
-                        ? [
-                            { name: 'Faturamento', value: vendasPorTipo.faturamentoNormal },
-                            { name: 'Lucro bruto', value: vendasPorTipo.lucroNormal },
-                            { name: 'Lucro liquido', value: vendasPorTipo.lucroNormal - metrics.despesas },
-                          ]
-                        : [
-                            { name: 'Faturamento', value: metrics.faturamento },
-                            { name: 'Lucro bruto', value: metrics.lucroBruto },
-                            { name: 'Lucro liquido', value: metrics.lucroLiquido },
-                          ]}
-                    />
-                  </Card>
+                  {!escopoVendedor && (
+                    <Card>
+                      <CardHeader title="Comparativo de Resultado" />
+                      <BarCompareReport
+                        data={vendasSubTab === 'normal'
+                          ? [
+                              { name: 'Faturamento', value: vendasPorTipo.faturamentoNormal },
+                              { name: 'Lucro bruto', value: vendasPorTipo.lucroNormal },
+                              { name: 'Lucro liquido', value: vendasPorTipo.lucroNormal - metrics.despesas },
+                            ]
+                          : [
+                              { name: 'Faturamento', value: metrics.faturamento },
+                              { name: 'Lucro bruto', value: metrics.lucroBruto },
+                              { name: 'Lucro liquido', value: metrics.lucroLiquido },
+                            ]}
+                      />
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -1690,8 +1738,12 @@ export default function RelatoriosPage() {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard label="Recebido" value={formatMoney(metrics.servicoRecebido)} changeType="up" accent />
-                <MetricCard label="Custos" value={formatMoney(metrics.servicoSaidas)} changeType={metrics.servicoSaidas > 0 ? 'down' : 'neutral'} />
-                <MetricCard label="Lucro" value={formatMoney(metrics.servicoLucro)} changeType={metrics.servicoLucro >= 0 ? 'up' : 'down'} />
+                {!escopoVendedor && (
+                  <>
+                    <MetricCard label="Custos" value={formatMoney(metrics.servicoSaidas)} changeType={metrics.servicoSaidas > 0 ? 'down' : 'neutral'} />
+                    <MetricCard label="Lucro" value={formatMoney(metrics.servicoLucro)} changeType={metrics.servicoLucro >= 0 ? 'up' : 'down'} />
+                  </>
+                )}
                 <MetricCard label="Ordens no Periodo" value={String(metrics.servicosQtd)} changeType="neutral" />
               </div>
 
@@ -1721,7 +1773,7 @@ export default function RelatoriosPage() {
                 </Card>
               </div>
 
-              {metrics.servicoValorTotal > 0 && (
+              {!escopoVendedor && metrics.servicoValorTotal > 0 && (
                 <Card>
                   <CardHeader title="Resultado dos Servicos" />
                   <BarCompareReport
@@ -1749,12 +1801,14 @@ export default function RelatoriosPage() {
                 <MetricCard label="Alertas Atuais" value={String(estoqueAtual.alertas)} changeType={estoqueAtual.alertas > 0 ? 'down' : 'neutral'} accent={estoqueAtual.alertas > 0} />
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard label="Total Investido" value={formatMoney(investimentoData.totalInvestido)} changeType="neutral" />
-                <MetricCard label="Retorno Total" value={formatMoney(investimentoData.totalRetorno)} changeType="up" accent />
-                <MetricCard label="Arrecadado no Periodo" value={formatMoney(investimentoData.totalVendido)} changeType="up" />
-                <MetricCard label="Realizado" value={`${investimentoData.pctRealizado.toFixed(0)}%`} changeType={investimentoData.pctRealizado >= 50 ? 'up' : 'neutral'} />
-              </div>
+              {!escopoVendedor && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <MetricCard label="Total Investido" value={formatMoney(investimentoData.totalInvestido)} changeType="neutral" />
+                  <MetricCard label="Retorno Total" value={formatMoney(investimentoData.totalRetorno)} changeType="up" accent />
+                  <MetricCard label="Arrecadado no Periodo" value={formatMoney(investimentoData.totalVendido)} changeType="up" />
+                  <MetricCard label="Realizado" value={`${investimentoData.pctRealizado.toFixed(0)}%`} changeType={investimentoData.pctRealizado >= 50 ? 'up' : 'neutral'} />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <Card>
@@ -1775,6 +1829,7 @@ export default function RelatoriosPage() {
                 </Card>
               </div>
 
+              {!escopoVendedor && (
               <Card padding="none">
                 <div className="p-5 border-b border-gold-100">
                   <h3 className="text-sm font-semibold text-dark-700">Investimento vs Retorno Potencial por Produto</h3>
@@ -1889,6 +1944,7 @@ export default function RelatoriosPage() {
                   </div>
                 )}
               </Card>
+              )}
             </ReportBlock>
           )}
 

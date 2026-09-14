@@ -1,6 +1,7 @@
 'use client'
 
 import { X, Pencil, Trash2 } from 'lucide-react'
+import { useAuth } from '@/context/auth-context'
 import { Badge } from '@/components/ui'
 import {
   formatMoney, formatDate, formatDateTime,
@@ -25,6 +26,9 @@ export function DrawerDetalheServico({
   onEditar,
   onExcluir,
 }: DrawerDetalheServicoProps) {
+  const { profile } = useAuth()
+  const isVendedor = profile?.role === 'vendedor'
+
   if (!open || !servico) return null
 
   return (
@@ -82,17 +86,19 @@ export function DrawerDetalheServico({
         </div>
 
         {/* Financial summary */}
-        <div className="grid grid-cols-2 divide-x divide-gold-100 border-b border-gold-100 flex-shrink-0">
+        <div className={`${isVendedor ? '' : 'grid grid-cols-2 divide-x'} divide-gold-100 border-b border-gold-100 flex-shrink-0`}>
           <div className="px-4 py-3 text-center">
             <p className="text-[10px] text-dark-300 uppercase tracking-wide">Valor</p>
             <p className="font-display text-base font-medium text-dark-700 mt-0.5">{formatMoney(servico.valor)}</p>
           </div>
-          <div className="px-4 py-3 text-center">
-            <p className="text-[10px] text-dark-300 uppercase tracking-wide">Custo estimado</p>
-            <p className="font-display text-base font-medium text-dark-700 mt-0.5">
-              {servico.custo_estimado ? formatMoney(servico.custo_estimado) : '—'}
-            </p>
-          </div>
+          {!isVendedor && (
+            <div className="px-4 py-3 text-center">
+              <p className="text-[10px] text-dark-300 uppercase tracking-wide">Custo estimado</p>
+              <p className="font-display text-base font-medium text-dark-700 mt-0.5">
+                {servico.custo_estimado ? formatMoney(servico.custo_estimado) : '—'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Details */}

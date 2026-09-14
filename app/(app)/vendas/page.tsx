@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Plus, ShoppingCart, Pencil, Trash2 } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
+import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Badge, Button, SearchInput, Select, Spinner,
@@ -45,6 +46,8 @@ export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> 
 
 export default function VendasPage() {
   const alert = useAlert()
+  const { profile } = useAuth()
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
   const [vendas, setVendas] = useState<VendaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -63,7 +66,7 @@ export default function VendasPage() {
 
   const loadVendas = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    let query = supabase
       .from('vendas')
       .select(`
         *, tipo, descricao_livre, custo_livre,
@@ -80,13 +83,17 @@ export default function VendasPage() {
       .lte('data_venda', dataFim)
       .order('created_at', { ascending: false })
 
+    if (escopoVendedor) query = query.eq('vendedor_id', escopoVendedor)
+
+    const { data, error } = await query
+
     if (error) {
       alert.error('Erro', 'Erro ao carregar vendas.')
     } else {
       setVendas((data as VendaRow[]) ?? [])
     }
     setLoading(false)
-  }, [dataInicio, dataFim])
+  }, [dataInicio, dataFim, escopoVendedor])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadVendas(), 0)

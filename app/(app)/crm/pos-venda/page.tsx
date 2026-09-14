@@ -65,7 +65,7 @@ export default function PosVendaPage() {
   const [datasComemorativas, setDatasComemorativas] = useState<DataComemorativa[]>([])
   const [whatsappCliente, setWhatsappCliente] = useState<Pick<Cliente, 'id' | 'nome' | 'telefone' | 'produto_interesse'> | null>(null)
 
-  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void carregar(), 0)

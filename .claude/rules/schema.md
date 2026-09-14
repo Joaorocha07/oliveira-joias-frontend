@@ -174,10 +174,22 @@ categoria, observacoes, ativo, created_by, created_at, updated_at
 ### `profiles`
 ```
 id, nome, email, role, ativo, avatar_url, telefone, created_at, updated_at, cpf,
-comissao_percentual  ← numeric(5,2), editável em /vendedores; usado no cálculo de
-                        comissão do CRM (dashboard e relatórios)
+comissao_percentual,  ← numeric(5,2), editável em /vendedores; usado no cálculo de
+                         comissão do CRM (dashboard e relatórios)
+menus_permitidos      ← text[] nullable, só usado quando role='vendedor'
 ```
 > Vendedores = `profiles` com `role = 'vendedor'`. Não existe tabela `vendedores` separada.
+>
+> `role` é `'admin' | 'vendedor' | 'caixa' | 'visualizador'` (`UserRole` em `types/index.ts`).
+> Só existiu um perfil `'funcionario'` no passado — foi unificado em `'vendedor'`, não usar mais.
+> `menus_permitidos` guarda as chaves (`menuKey`) dos itens de menu liberados para aquele vendedor
+> especificamente, configurado pelo admin em `/vendedores`; quando `null`, cai no conjunto padrão
+> `VENDEDOR_DEFAULT_MENUS` (`lib/menus-config.ts`). Um pequeno conjunto (`caixa`, `contas_pagar`,
+> `equipe`) fica sempre bloqueado para `vendedor` independente de `menus_permitidos`
+> (`VENDEDOR_ALWAYS_BLOCKED`). `admin` sempre vê tudo; `caixa`/`visualizador` têm listas fixas, sem
+> tela de configuração. Essa regra (`canAccessMenu()`) é usada tanto para esconder itens no menu
+> lateral (`components/layout/sidebar.tsx`) quanto para bloquear acesso direto por URL
+> (`components/layout/app-shell.tsx`, via `getMenuKeyForPath()`).
 
 ### `estoque_movimentacoes` (write-only via anon — RLS bloqueia leitura direta)
 Campos inferidos do service:

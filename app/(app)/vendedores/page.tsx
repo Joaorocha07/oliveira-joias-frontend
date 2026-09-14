@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Plus, Pencil, ToggleLeft, ToggleRight, ShieldCheck, User, LayoutGrid } from 'lucide-react'
+import { Plus, Pencil, ToggleLeft, ToggleRight, ShieldCheck, User, LayoutGrid, KeyRound } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
@@ -14,13 +14,12 @@ import {
 import { MaskedInput } from '@/components/forms/masked-input'
 import { formatPhone } from '@/utils'
 import { listarMetasMensais, upsertMetaMensal } from '@/services/metas'
-import { MENUS_FUNCIONARIO_CONFIG, FUNCIONARIO_DEFAULT_MENUS } from '@/lib/menus-config'
+import { MENUS_VENDEDOR_CONFIG, VENDEDOR_DEFAULT_MENUS } from '@/lib/menus-config'
 import type { Profile, UserRole } from '@/types'
 
 const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
   vendedor: 'Vendedor',
-  funcionario: 'Funcionário',
   caixa: 'Caixa',
   visualizador: 'Visualizador',
 }
@@ -28,7 +27,6 @@ const ROLE_LABEL: Record<UserRole, string> = {
 const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
   admin: 'gold',
   vendedor: 'success',
-  funcionario: 'info',
   caixa: 'warning',
   visualizador: 'gray',
 }
@@ -36,7 +34,6 @@ const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
 interface VendedorForm {
   nome: string
   email: string
-  senha: string
   cpf: string
   telefone: string
   role: UserRole
@@ -48,11 +45,11 @@ interface VendedorForm {
 const MES_ATUAL = format(new Date(), 'yyyy-MM-01')
 
 const EMPTY_FORM: VendedorForm = {
-  nome: '', email: '', senha: '', cpf: '', telefone: '',
-  role: 'funcionario', comissao_percentual: '0', menus_permitidos: null, meta_mes: '',
+  nome: '', email: '', cpf: '', telefone: '',
+  role: 'vendedor', comissao_percentual: '0', menus_permitidos: null, meta_mes: '',
 }
 
-const MENUS_POR_SECAO = MENUS_FUNCIONARIO_CONFIG.reduce<Record<string, typeof MENUS_FUNCIONARIO_CONFIG>>(
+const MENUS_POR_SECAO = MENUS_VENDEDOR_CONFIG.reduce<Record<string, typeof MENUS_VENDEDOR_CONFIG>>(
   (acc, menu) => {
     if (!acc[menu.section]) acc[menu.section] = []
     acc[menu.section].push(menu)
@@ -62,7 +59,7 @@ const MENUS_POR_SECAO = MENUS_FUNCIONARIO_CONFIG.reduce<Record<string, typeof ME
 )
 
 export default function VendedoresPage() {
-  const { user } = useAuth()
+  const { user, sendPasswordResetEmail } = useAuth()
   const alert = useAlert()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,6 +71,7 @@ export default function VendedoresPage() {
   const [confirmToggle, setConfirmToggle] = useState<Profile | null>(null)
   const [toggling, setToggling] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
+  const [enviandoReset, setEnviandoReset] = useState<string | null>(null)
 
   async function loadProfiles() {
     const { data, error } = await supabase.from('profiles').select('*').order('nome')
@@ -108,15 +106,15 @@ export default function VendedoresPage() {
     setForm((prev) => ({
       ...prev,
       role: novoRole,
-      menus_permitidos: novoRole === 'funcionario'
-        ? (prev.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS)
+      menus_permitidos: novoRole === 'vendedor'
+        ? (prev.menus_permitidos ?? VENDEDOR_DEFAULT_MENUS)
         : null,
     }))
   }
 
   function toggleMenu(key: string) {
     setForm((prev) => {
-      const current = prev.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS
+      const current = prev.menus_permitidos ?? VENDEDOR_DEFAULT_MENUS
       const next = current.includes(key)
         ? current.filter((k) => k !== key)
         : [...current, key]
@@ -135,7 +133,6 @@ export default function VendedoresPage() {
     setForm({
       nome: p.nome,
       email: p.email,
-      senha: '',
       cpf: p.cpf ?? '',
       telefone: p.telefone ?? '',
       role: p.role,
@@ -145,7 +142,7 @@ export default function VendedoresPage() {
     })
     setModalOpen(true)
 
-    if (p.role === 'vendedor' || p.role === 'funcionario') {
+    if (p.role === 'vendedor') {
       setLoadingMeta(true)
       const { data: metas } = await listarMetasMensais(MES_ATUAL)
       const meta = metas?.find((m) => m.vendedor_id === p.id)
@@ -157,8 +154,6 @@ export default function VendedoresPage() {
   async function handleSave() {
     if (!form.nome.trim()) { alert.error('Atenção', 'Nome é obrigatório.'); return }
     if (!form.email.trim()) { alert.error('Atenção', 'E-mail é obrigatório.'); return }
-    if (!editando && !form.senha.trim()) { alert.error('Atenção', 'Senha é obrigatória.'); return }
-    if (!editando && form.senha.length < 6) { alert.error('Atenção', 'Senha deve ter ao menos 6 caracteres.'); return }
 
     setSalvando(true)
 
@@ -173,7 +168,7 @@ export default function VendedoresPage() {
           telefone: form.telefone.trim() || null,
           role: form.role,
           comissao_percentual: comissao,
-          menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
+          menus_permitidos: form.role === 'vendedor' ? form.menus_permitidos : null,
         })
         .eq('id', editando.id)
 
@@ -183,7 +178,7 @@ export default function VendedoresPage() {
         return
       }
 
-      if ((form.role === 'vendedor' || form.role === 'funcionario') && form.meta_mes.trim() && user) {
+      if (form.role === 'vendedor' && form.meta_mes.trim() && user) {
         const valorMeta = parseFloat(form.meta_mes.replace(',', '.')) || 0
         if (valorMeta > 0) await upsertMetaMensal(MES_ATUAL, editando.id, valorMeta, user.id)
       }
@@ -197,7 +192,7 @@ export default function VendedoresPage() {
               telefone: form.telefone.trim() || null,
               role: form.role,
               comissao_percentual: comissao,
-              menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
+              menus_permitidos: form.role === 'vendedor' ? form.menus_permitidos : null,
             }
           : p
       ))
@@ -205,9 +200,13 @@ export default function VendedoresPage() {
         onConfirm: () => setModalOpen(false),
       })
     } else {
+      // Senha descartável e aleatória: o admin nunca precisa criar/comunicar uma senha —
+      // o vendedor define a própria em seguida pelo link de redefinição enviado por e-mail.
+      const senhaTemporaria = crypto.randomUUID() + crypto.randomUUID()
+
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: form.email.trim(),
-        password: form.senha,
+        password: senhaTemporaria,
         options: {
           data: { nome: form.nome.trim() },
           emailRedirectTo: window.location.origin,
@@ -231,18 +230,19 @@ export default function VendedoresPage() {
             telefone: form.telefone.trim() || null,
             role: form.role,
             ativo: true,
-            menus_permitidos: form.role === 'funcionario' ? form.menus_permitidos : null,
+            menus_permitidos: form.role === 'vendedor' ? form.menus_permitidos : null,
           })
 
         if (profileError) {
           alert.error('Atenção', `Usuário criado, mas erro ao salvar perfil: ${profileError.message}`)
         } else {
-          if ((form.role === 'vendedor' || form.role === 'funcionario') && form.meta_mes.trim() && user) {
+          if (form.role === 'vendedor' && form.meta_mes.trim() && user) {
             const valorMeta = parseFloat(form.meta_mes.replace(',', '.')) || 0
             if (valorMeta > 0) await upsertMetaMensal(MES_ATUAL, authData.user.id, valorMeta, user.id)
           }
+          await sendPasswordResetEmail(form.email.trim())
           await loadProfiles()
-          alert.success('Cadastrado!', 'Um e-mail de confirmação foi enviado ao novo usuário.', {
+          alert.success('Cadastrado!', 'Um e-mail foi enviado para o novo usuário definir a senha de acesso.', {
             onConfirm: () => setModalOpen(false),
           })
         }
@@ -275,13 +275,24 @@ export default function VendedoresPage() {
     setToggling(false)
   }
 
-  const menusPermitidosAtual = form.menus_permitidos ?? FUNCIONARIO_DEFAULT_MENUS
+  async function handleEnviarReset(p: Profile) {
+    setEnviandoReset(p.id)
+    const { error } = await sendPasswordResetEmail(p.email)
+    setEnviandoReset(null)
+    if (error) {
+      alert.error('Erro', `Erro ao enviar o link: ${error}`)
+    } else {
+      alert.success('Link enviado!', `Um e-mail de redefinição de senha foi enviado para ${p.email}.`)
+    }
+  }
+
+  const menusPermitidosAtual = form.menus_permitidos ?? VENDEDOR_DEFAULT_MENUS
 
   return (
     <div>
       <PageHeader
         title="Equipe de Vendas"
-        subtitle="Gerenciamento de funcionários e administradores"
+        subtitle="Gerenciamento de vendedores e administradores"
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
             Novo Membro
@@ -335,6 +346,15 @@ export default function VendedoresPage() {
                     </Button>
                     <Button
                       size="sm"
+                      variant="ghost"
+                      leftIcon={<KeyRound size={12} />}
+                      loading={enviandoReset === p.id}
+                      onClick={() => void handleEnviarReset(p)}
+                    >
+                      Redefinir senha
+                    </Button>
+                    <Button
+                      size="sm"
                       variant={p.ativo ? 'danger-ghost' : 'ghost'}
                       onClick={() => setConfirmToggle(p)}
                     >
@@ -355,7 +375,7 @@ export default function VendedoresPage() {
                     <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Telefone</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Perfil</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Status</th>
-                    <th className="px-5 py-3 w-24" />
+                    <th className="px-5 py-3 w-28" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gold-50">
@@ -398,6 +418,15 @@ export default function VendedoresPage() {
                             title="Editar"
                           >
                             <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleEnviarReset(p)}
+                            disabled={enviandoReset === p.id}
+                            className="p-1.5 rounded-lg text-gold-500 hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                            title="Enviar link de redefinição de senha"
+                          >
+                            {enviandoReset === p.id ? <Spinner size={14} /> : <KeyRound size={14} />}
                           </button>
                           <button
                             type="button"
@@ -449,14 +478,10 @@ export default function VendedoresPage() {
             hint={editando ? 'O e-mail não pode ser alterado.' : undefined}
           />
           {!editando && (
-            <Input
-              label="Senha *"
-              type="password"
-              value={form.senha}
-              onChange={(e) => setField('senha', e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              hint="O usuário receberá um e-mail para confirmar o acesso."
-            />
+            <p className="text-xs text-dark-300 -mt-2">
+              O acesso é liberado por e-mail: assim que cadastrar, enviamos um link para o
+              próprio usuário definir a senha.
+            </p>
           )}
           <MaskedInput
             mask="cpf"
@@ -477,14 +502,13 @@ export default function VendedoresPage() {
             value={form.role}
             onChange={(e) => handleRoleChange(e.target.value as UserRole)}
           >
-            <option value="funcionario">Funcionário</option>
             <option value="vendedor">Vendedor</option>
             <option value="admin">Administrador</option>
             <option value="caixa">Caixa</option>
             <option value="visualizador">Visualizador</option>
           </Select>
 
-          {(form.role === 'vendedor' || form.role === 'funcionario') && (
+          {form.role === 'vendedor' && (
             <Input
               label="Comissão (%)"
               type="number"
@@ -497,7 +521,7 @@ export default function VendedoresPage() {
             />
           )}
 
-          {(form.role === 'vendedor' || form.role === 'funcionario') && (
+          {form.role === 'vendedor' && (
             <Input
               label={`Meta do mês — ${format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}`}
               type="number"
@@ -510,11 +534,11 @@ export default function VendedoresPage() {
             />
           )}
 
-          {form.role === 'funcionario' && (
+          {form.role === 'vendedor' && (
             <div>
               <p className="text-xs font-medium text-dark-600 mb-2 flex items-center gap-1.5">
                 <LayoutGrid size={13} className="text-gold-500" />
-                Menus disponíveis para este funcionário
+                Menus disponíveis para este vendedor
               </p>
               <div className="border border-gold-100 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
                 {Object.entries(MENUS_POR_SECAO).map(([secao, menus]) => (

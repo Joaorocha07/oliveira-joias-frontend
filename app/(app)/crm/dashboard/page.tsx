@@ -68,7 +68,7 @@ export default function CrmDashboardPage() {
   const [followUpsHoje, setFollowUpsHoje] = useState(0)
   const [valorEmNegociacao, setValorEmNegociacao] = useState(0)
 
-  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -126,7 +126,7 @@ export default function CrmDashboardPage() {
       leadsQuery,
       vendasQuery,
       timelineQuery,
-      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'funcionario', 'admin']),
+      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', escopoVendedor ? ['vendedor'] : ['vendedor', 'admin']),
       supabase.from('metas_mensais').select('valor_meta, vendedor_id').eq('mes', inicioMes),
       vendasMesQuery,
       vendasHojeQuery,
@@ -344,50 +344,52 @@ export default function CrmDashboardPage() {
         </Card>
       </div>
 
-      <Card padding="none">
-        <div className="p-5 pb-0">
-          <CardHeader title="Ranking dos Vendedores" />
-        </div>
-        {rankingVendedores.length === 0 ? (
-          <div className="px-5 pb-5">
-            <EmptyState imageSrc="/images/Profile Interface-rafiki.svg" title="Nenhum vendedor cadastrado" />
+      {!escopoVendedor && (
+        <Card padding="none">
+          <div className="p-5 pb-0">
+            <CardHeader title="Ranking dos Vendedores" />
           </div>
-        ) : (
-          <div className="overflow-x-auto pb-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gold-100 bg-cream-50/50">
-                  <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Nome</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Leads</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendas</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Conversão</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Ticket Médio</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Valor Vendido</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Comissão</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gold-50">
-                {rankingVendedores.map((v) => {
-                  const conversao = v.leads > 0 ? (v.vendas / v.leads) * 100 : 0
-                  const ticketMedioVendedor = v.vendas > 0 ? v.valorVendido / v.vendas : 0
-                  const comissao = v.valorVendido * (v.comissaoPercentual / 100)
-                  return (
-                    <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
-                      <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
-                      <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
-                      <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>
-                      <td className="px-5 py-3 text-right text-dark-400">{conversao.toFixed(0)}%</td>
-                      <td className="px-5 py-3 text-right text-dark-400">{formatMoney(ticketMedioVendedor)}</td>
-                      <td className="px-5 py-3 text-right font-medium text-dark-700">{formatMoney(v.valorVendido)}</td>
-                      <td className="px-5 py-3 text-right text-green-700">{formatMoney(comissao)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+          {rankingVendedores.length === 0 ? (
+            <div className="px-5 pb-5">
+              <EmptyState imageSrc="/images/Profile Interface-rafiki.svg" title="Nenhum vendedor cadastrado" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto pb-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gold-100 bg-cream-50/50">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Nome</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Leads</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendas</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Conversão</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Ticket Médio</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Valor Vendido</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Comissão</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gold-50">
+                  {rankingVendedores.map((v) => {
+                    const conversao = v.leads > 0 ? (v.vendas / v.leads) * 100 : 0
+                    const ticketMedioVendedor = v.vendas > 0 ? v.valorVendido / v.vendas : 0
+                    const comissao = v.valorVendido * (v.comissaoPercentual / 100)
+                    return (
+                      <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
+                        <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
+                        <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
+                        <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>
+                        <td className="px-5 py-3 text-right text-dark-400">{conversao.toFixed(0)}%</td>
+                        <td className="px-5 py-3 text-right text-dark-400">{formatMoney(ticketMedioVendedor)}</td>
+                        <td className="px-5 py-3 text-right font-medium text-dark-700">{formatMoney(v.valorVendido)}</td>
+                        <td className="px-5 py-3 text-right text-green-700">{formatMoney(comissao)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="flex items-center gap-3">

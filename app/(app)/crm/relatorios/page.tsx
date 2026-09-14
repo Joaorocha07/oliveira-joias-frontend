@@ -66,7 +66,7 @@ export default function CrmRelatoriosPage() {
   const [vendedores, setVendedores] = useState<{ id: string; nome: string; comissao_percentual: number }[]>([])
   const [exportando, setExportando] = useState(false)
 
-  const escopoVendedor = (profile?.role === 'vendedor' || profile?.role === 'funcionario') ? profile.id : undefined
+  const escopoVendedor = profile?.role === 'vendedor' ? profile.id : undefined
 
   async function handleExportarPdf() {
     const element = document.getElementById('crm-relatorios-print-area')
@@ -123,7 +123,7 @@ export default function CrmRelatoriosPage() {
     const [leadsRes, vendasRes, vendedoresRes] = await Promise.all([
       leadsQuery,
       vendasQuery,
-      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', ['vendedor', 'funcionario', 'admin']),
+      supabase.from('profiles').select('id, nome, comissao_percentual').eq('ativo', true).in('role', escopoVendedor ? ['vendedor'] : ['vendedor', 'admin']),
     ])
 
     if (leadsRes.error || vendasRes.error) alert.error('Erro', 'Erro ao carregar relatórios do CRM.')
@@ -350,45 +350,47 @@ export default function CrmRelatoriosPage() {
         </Card>
       </div>
 
-      <Card padding="none">
-        <div className="p-5 pb-0"><CardHeader title="Relatório por Vendedor" /></div>
-        {porVendedor.length === 0 ? (
-          <div className="px-5 pb-5"><EmptyState imageSrc="/images/Profile Interface-rafiki.svg" title="Nenhum vendedor cadastrado" /></div>
-        ) : (
-          <div className="overflow-x-auto pb-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gold-100 bg-cream-50/50">
-                  <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendedor</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Leads</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendas</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Conversão</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Ticket Médio</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Comissão</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Motivos de Perda</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gold-50">
-                {porVendedor.map((v) => (
-                  <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
-                    <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
-                    <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
-                    <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>
-                    <td className="px-5 py-3 text-right text-dark-400">{v.conversao.toFixed(0)}%</td>
-                    <td className="px-5 py-3 text-right text-dark-400">{formatMoney(v.ticketMedio)}</td>
-                    <td className="px-5 py-3 text-right text-green-700">{formatMoney(v.comissao)}</td>
-                    <td className="px-5 py-3 text-dark-400 max-w-[220px]">
-                      {v.motivos.length > 0
-                        ? <span className="text-xs line-clamp-2">{v.motivos.slice(0, 2).join('; ')}{v.motivos.length > 2 ? `… (+${v.motivos.length - 2})` : ''}</span>
-                        : <span className="text-xs text-dark-200">—</span>}
-                    </td>
+      {!escopoVendedor && (
+        <Card padding="none">
+          <div className="p-5 pb-0"><CardHeader title="Relatório por Vendedor" /></div>
+          {porVendedor.length === 0 ? (
+            <div className="px-5 pb-5"><EmptyState imageSrc="/images/Profile Interface-rafiki.svg" title="Nenhum vendedor cadastrado" /></div>
+          ) : (
+            <div className="overflow-x-auto pb-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gold-100 bg-cream-50/50">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendedor</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Leads</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Vendas</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Conversão</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Ticket Médio</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Comissão</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Motivos de Perda</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </thead>
+                <tbody className="divide-y divide-gold-50">
+                  {porVendedor.map((v) => (
+                    <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
+                      <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
+                      <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
+                      <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>
+                      <td className="px-5 py-3 text-right text-dark-400">{v.conversao.toFixed(0)}%</td>
+                      <td className="px-5 py-3 text-right text-dark-400">{formatMoney(v.ticketMedio)}</td>
+                      <td className="px-5 py-3 text-right text-green-700">{formatMoney(v.comissao)}</td>
+                      <td className="px-5 py-3 text-dark-400 max-w-[220px]">
+                        {v.motivos.length > 0
+                          ? <span className="text-xs line-clamp-2">{v.motivos.slice(0, 2).join('; ')}{v.motivos.length > 2 ? `… (+${v.motivos.length - 2})` : ''}</span>
+                          : <span className="text-xs text-dark-200">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
       </div>
     </div>
   )

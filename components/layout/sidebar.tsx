@@ -12,7 +12,7 @@ import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
 import { getInitials } from '@/utils'
 import { cn } from '@/lib/cn'
-import { FUNCIONARIO_DEFAULT_MENUS, FUNCIONARIO_ALWAYS_BLOCKED } from '@/lib/menus-config'
+import { canAccessMenu } from '@/lib/menus-config'
 import type { UserRole } from '@/types'
 
 interface NavItem {
@@ -50,38 +50,12 @@ const navItems: NavItem[] = [
 ]
 
 function isItemVisible(item: NavItem, role: UserRole, menusPerm: string[] | null | undefined): boolean {
-  if (role === 'admin') return true
-
-  if (role === 'funcionario') {
-    if (item.menuKey && FUNCIONARIO_ALWAYS_BLOCKED.includes(item.menuKey)) return false
-    if (!item.menuKey) return true
-    const allowed = menusPerm ?? FUNCIONARIO_DEFAULT_MENUS
-    return allowed.includes(item.menuKey)
-  }
-
-  if (role === 'vendedor') {
-    const vendedorBlocked = ['caixa', 'contas_pagar', 'equipe']
-    if (item.menuKey && vendedorBlocked.includes(item.menuKey)) return false
-    return true
-  }
-
-  if (role === 'caixa') {
-    const caixaAllowed = ['vendas', 'crediario', 'caixa', 'contas_pagar']
-    if (!item.menuKey) return true
-    return caixaAllowed.includes(item.menuKey)
-  }
-
-  if (role === 'visualizador') {
-    return !item.menuKey
-  }
-
-  return true
+  return canAccessMenu(role, menusPerm, item.menuKey)
 }
 
 const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
   vendedor: 'Vendedor',
-  funcionario: 'Funcionário',
   caixa: 'Caixa',
   visualizador: 'Visualizador',
 }
