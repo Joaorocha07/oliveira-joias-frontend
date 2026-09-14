@@ -239,6 +239,40 @@ id, nome_empresa, contato, endereco, whatsapp, instagram, texto_rodape, cor_prin
 ```
 > Tabela singleton — sempre uma única linha com `id = '00000000-0000-0000-0000-000000000001'` (constante `ORCAMENTO_CONFIG_ID` em `services/orcamentos.ts`). Dados de marca usados no documento impresso do orçamento.
 
+### `certificados`
+```
+id, numero (text, ex 'GAR-2026-0014', unique), venda_id (FK vendas), cliente_id, cliente_nome,
+cliente_cpf, cliente_telefone, data_compra (date), modelo, material, largura, gramas, numeracao,
+pedido_os, valor, vendedor_id (FK profiles), vendedor_nome, observacoes,
+created_by, created_at, updated_at
+```
+> `venda_id` é opcional: ao vincular uma venda no formulário, `pedido_os` recebe o `vendas.numero`
+> e cliente/valor são preenchidos se estiverem vazios. `pedido_os` continua editável à mão.
+> Certificados de garantia vitalícia emitidos (tela `/cadastros` → `Certificados`, `services/certificados.ts`).
+> `numero` é calculado pelo app: `GAR-<ano>-<seq4>`, onde seq = contagem de certificados daquele ano + 1
+> (mesma corrida aceita dos orçamentos). `cliente_id`/`vendedor_id` são snapshots opcionais — o nome
+> também é gravado (`cliente_nome`/`vendedor_nome`) para o PDF não depender de joins. O PDF (2 páginas,
+> jsPDF programático + QR Code do WhatsApp) é gerado client-side em `utils/certificado-pdf.ts`.
+
+### `certificado_modelos` / `certificado_materiais`
+```
+id, nome, ativo, created_by, created_at, updated_at
+```
+> Catálogos de sugestão para os selects "Modelo" e "Material" do formulário de certificado
+> (com cadastro rápido via modal). Mesma estrutura de `orcamento_modelos`/`orcamento_materiais`.
+
+### `certificado_configuracoes`
+```
+id, nome_empresa, subtitulo, endereco, whatsapp, telefone_secundario, instagram, cor_principal,
+texto_introducao, termos_garantia (text[]), beneficios (text[]), nao_cobre (text[]),
+recomendacoes (text[]), texto_declaracao, texto_agradecimento, texto_validade,
+created_at, updated_at
+```
+> Tabela singleton — `id = '00000000-0000-0000-0000-000000000001'` (constante `CERTIFICADO_CONFIG_ID`
+> em `services/certificados.ts`). Controla TODO o conteúdo textual do certificado em PDF, incluindo as
+> listas de bullets. Placeholder `{empresa}` nos textos é trocado pelo `nome_empresa` na geração.
+> Migration: `.claude/migrations/certificados.sql`.
+
 ---
 
 ### `catalogo_produtos` (Supabase, mas fora do domínio do frontend)
