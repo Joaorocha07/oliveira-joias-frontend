@@ -16,7 +16,8 @@ interface AuthContextType {
   sendPasswordResetEmail: (email: string) => Promise<{ error: string | null }>
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>
   enviarCodigoConfirmacao: () => Promise<{ error: string | null }>
-  personificarVendedor: (vendedorId: string, codigo: string) => Promise<{ error: string | null }>
+  confirmarCodigoAdmin: (codigo: string) => Promise<{ error: string | null }>
+  entrarComoVendedor: (vendedorId: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -213,22 +214,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { error } = await supabase.auth.signInWithOtp({
       email: user.email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        // Forca o link (caso o template de e-mail ainda mostre um) a apontar
+        // para a origem atual, em vez do Site URL padrao configurado no
+        // Supabase (que costuma ser localhost em dev).
+        emailRedirectTo: `${window.location.origin}/login/personificar`,
+      },
     })
     if (error) return { error: translateAuthErrorMessage(error.message) }
     return { error: null }
   }
 
-  async function personificarVendedor(vendedorId: string, codigo: string) {
+  async function confirmarCodigoAdmin(codigo: string) {
     if (!user?.email) return { error: 'Nao autenticado.' }
 
-    const { error: otpError } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       email: user.email,
       token: codigo,
       type: 'email',
     })
-    if (otpError) return { error: 'Codigo invalido ou expirado.' }
+    if (error) return { error: 'Codigo invalido ou expirado.' }
+    return { error: null }
+  }
 
+  async function entrarComoVendedor(vendedorId: string) {
     const { data: { session: currentSession } } = await supabase.auth.getSession()
     const accessToken = currentSession?.access_token
     if (!accessToken) return { error: 'Sessao invalida. Faca login novamente.' }
@@ -261,7 +271,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       session, user, profile, loading, signIn, signOut, updateProfile,
-      sendPasswordResetEmail, updatePassword, enviarCodigoConfirmacao, personificarVendedor,
+      sendPasswordResetEmail, updatePassword, enviarCodigoConfirmacao,
+      confirmarCodigoAdmin, entrarComoVendedor,
     }}>
       {children}
     </AuthContext.Provider>

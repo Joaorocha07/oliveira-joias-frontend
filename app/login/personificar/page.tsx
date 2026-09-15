@@ -12,16 +12,19 @@ import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import type { Profile } from '@/types'
 
-type Etapa = 'escolha' | 'lista' | 'codigo'
+type Etapa = 'escolha' | 'codigo' | 'lista'
 
 export default function PersonificarPage() {
-  const { session, profile, loading, user, enviarCodigoConfirmacao, personificarVendedor } = useAuth()
+  const {
+    session, profile, loading, user,
+    enviarCodigoConfirmacao, confirmarCodigoAdmin, entrarComoVendedor,
+  } = useAuth()
   const router = useRouter()
 
   const [etapa, setEtapa] = useState<Etapa>('escolha')
   const [vendedores, setVendedores] = useState<Profile[]>([])
   const [carregandoVendedores, setCarregandoVendedores] = useState(false)
-  const [vendedorSelecionado, setVendedorSelecionado] = useState<Profile | null>(null)
+  const [entrandoVendedorId, setEntrandoVendedorId] = useState<string | null>(null)
   const [codigo, setCodigo] = useState('')
   const [enviandoCodigo, setEnviandoCodigo] = useState(false)
   const [reenviado, setReenviado] = useState(false)
@@ -47,23 +50,10 @@ export default function PersonificarPage() {
     )
   }
 
-  async function abrirListaVendedores() {
-    setEtapa('lista')
-    if (vendedores.length > 0) return
-    setCarregandoVendedores(true)
-    const { data, error: err } = await listarVendedoresAtivos()
-    setCarregandoVendedores(false)
-    if (err) {
-      setError(err)
-      return
-    }
-    setVendedores(data ?? [])
-  }
-
-  async function selecionarVendedor(vendedor: Profile) {
-    setVendedorSelecionado(vendedor)
-    setCodigo('')
+  async function iniciarOutroUsuario() {
     setError('')
+    setCodigo('')
+    setReenviado(false)
     setEtapa('codigo')
     setEnviandoCodigo(true)
     const { error: err } = await enviarCodigoConfirmacao()
@@ -84,13 +74,36 @@ export default function PersonificarPage() {
     setReenviado(true)
   }
 
-  async function handleConfirmar(e: React.FormEvent) {
+  async function carregarVendedores() {
+    setCarregandoVendedores(true)
+    const { data, error: err } = await listarVendedoresAtivos()
+    setCarregandoVendedores(false)
+    if (err) {
+      setError(err)
+      return
+    }
+    setVendedores(data ?? [])
+  }
+
+  async function handleConfirmarCodigo(e: React.FormEvent) {
     e.preventDefault()
-    if (!vendedorSelecionado) return
     setError('')
     setConfirmando(true)
-    const { error: err } = await personificarVendedor(vendedorSelecionado.id, codigo)
+    const { error: err } = await confirmarCodigoAdmin(codigo)
     setConfirmando(false)
+    if (err) {
+      setError(err)
+      return
+    }
+    setEtapa('lista')
+    void carregarVendedores()
+  }
+
+  async function selecionarVendedor(vendedor: Profile) {
+    setError('')
+    setEntrandoVendedorId(vendedor.id)
+    const { error: err } = await entrarComoVendedor(vendedor.id)
+    setEntrandoVendedorId(null)
     if (err) {
       setError(err)
       return
@@ -176,7 +189,7 @@ export default function PersonificarPage() {
 
                   <button
                     type="button"
-                    onClick={() => void abrirListaVendedores()}
+                    onClick={() => void iniciarOutroUsuario()}
                     className="w-full flex items-center gap-3 rounded-xl border border-gold-100 px-4 py-3.5 text-left hover:bg-gold-50 hover:border-gold-200 transition-colors cursor-pointer"
                   >
                     <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gold-50 border border-gold-200 flex items-center justify-center text-gold-600">
@@ -191,72 +204,12 @@ export default function PersonificarPage() {
               </>
             )}
 
-            {/* ── Etapa 2: escolher vendedor ──────────────────────── */}
-            {etapa === 'lista' && (
+            {/* ── Etapa 2: código de confirmação ──────────────────── */}
+            {etapa === 'codigo' && (
               <>
                 <button
                   type="button"
-                  onClick={() => { setEtapa('escolha'); setError('') }}
-                  className="flex items-center gap-1.5 text-xs text-dark-300 hover:text-gold-600 transition-colors mb-5"
-                >
-                  <ArrowLeft size={13} />
-                  Voltar
-                </button>
-
-                <div className="mb-5">
-                  <h2 className="font-display text-2xl font-semibold text-dark-500">
-                    Entrar como quem?
-                  </h2>
-                  <p className="text-sm text-dark-300 mt-1">
-                    Escolha o vendedor que você quer acessar.
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="flex items-start gap-2 text-sm text-[#C75B5B] bg-[rgba(199,91,91,0.06)] border border-[rgba(199,91,91,0.15)] rounded-lg px-3 py-2.5 mb-4">
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                {carregandoVendedores ? (
-                  <div className="flex items-center justify-center py-10">
-                    <Spinner size={22} />
-                  </div>
-                ) : vendedores.length === 0 ? (
-                  <EmptyState
-                    icon={<Users />}
-                    title="Nenhum vendedor ativo"
-                    description="Cadastre vendedores em Equipe para poder acessar como eles."
-                  />
-                ) : (
-                  <div className="max-h-[320px] overflow-y-auto -mx-1 px-1 space-y-2">
-                    {vendedores.map((vendedor) => (
-                      <button
-                        key={vendedor.id}
-                        type="button"
-                        onClick={() => void selecionarVendedor(vendedor)}
-                        className="w-full flex items-center gap-3 rounded-xl border border-gold-100 px-3.5 py-3 text-left hover:bg-gold-50 hover:border-gold-200 transition-colors cursor-pointer"
-                      >
-                        <span className="flex-shrink-0 w-9 h-9 rounded-full bg-dark-800 text-gold-400 text-xs font-medium flex items-center justify-center uppercase">
-                          {vendedor.nome.slice(0, 2)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium text-dark-500 truncate">{vendedor.nome}</span>
-                          <span className="block text-xs text-dark-300 truncate">{vendedor.email}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ── Etapa 3: código de confirmação ──────────────────── */}
-            {etapa === 'codigo' && vendedorSelecionado && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { setEtapa('lista'); setCodigo(''); setError('') }}
+                  onClick={() => { setEtapa('escolha'); setCodigo(''); setError('') }}
                   className="flex items-center gap-1.5 text-xs text-dark-300 hover:text-gold-600 transition-colors mb-5"
                 >
                   <ArrowLeft size={13} />
@@ -270,11 +223,11 @@ export default function PersonificarPage() {
                   <p className="text-sm text-dark-300 mt-1">
                     {enviandoCodigo
                       ? 'Enviando código de confirmação...'
-                      : <>Enviamos um código para <span className="text-dark-500 font-medium">{user?.email}</span>. Digite abaixo para entrar como <span className="text-dark-500 font-medium">{vendedorSelecionado.nome}</span>.</>}
+                      : <>Enviamos um código para <span className="text-dark-500 font-medium">{user?.email}</span>. Digite abaixo para continuar.</>}
                   </p>
                 </div>
 
-                <form onSubmit={handleConfirmar} className="space-y-4">
+                <form onSubmit={handleConfirmarCodigo} className="space-y-4">
                   <Input
                     label="Código de confirmação"
                     type="text"
@@ -308,7 +261,7 @@ export default function PersonificarPage() {
                     disabled={enviandoCodigo || codigo.length < 6}
                     className="w-full mt-2"
                   >
-                    Confirmar e entrar
+                    Confirmar código
                   </Button>
 
                   <button
@@ -321,6 +274,73 @@ export default function PersonificarPage() {
                     Reenviar código
                   </button>
                 </form>
+              </>
+            )}
+
+            {/* ── Etapa 3: escolher vendedor ──────────────────────── */}
+            {etapa === 'lista' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setEtapa('codigo'); setError('') }}
+                  className="flex items-center gap-1.5 text-xs text-dark-300 hover:text-gold-600 transition-colors mb-5"
+                >
+                  <ArrowLeft size={13} />
+                  Voltar
+                </button>
+
+                <div className="mb-5">
+                  <h2 className="font-display text-2xl font-semibold text-dark-500">
+                    Entrar como quem?
+                  </h2>
+                  <p className="text-sm text-dark-300 mt-1">
+                    Identidade confirmada. Escolha o vendedor que você quer acessar.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="flex items-start gap-2 text-sm text-[#C75B5B] bg-[rgba(199,91,91,0.06)] border border-[rgba(199,91,91,0.15)] rounded-lg px-3 py-2.5 mb-4">
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {carregandoVendedores ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Spinner size={22} />
+                  </div>
+                ) : vendedores.length === 0 ? (
+                  <EmptyState
+                    icon={<Users />}
+                    title="Nenhum vendedor ativo"
+                    description="Cadastre vendedores em Equipe para poder acessar como eles."
+                  />
+                ) : (
+                  <div className="max-h-[320px] overflow-y-auto -mx-1 px-1 space-y-2">
+                    {vendedores.map((vendedor) => (
+                      <button
+                        key={vendedor.id}
+                        type="button"
+                        onClick={() => void selecionarVendedor(vendedor)}
+                        disabled={entrandoVendedorId !== null}
+                        className="w-full flex items-center gap-3 rounded-xl border border-gold-100 px-3.5 py-3 text-left hover:bg-gold-50 hover:border-gold-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {entrandoVendedorId === vendedor.id ? (
+                          <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center">
+                            <Spinner size={16} />
+                          </span>
+                        ) : (
+                          <span className="flex-shrink-0 w-9 h-9 rounded-full bg-dark-800 text-gold-400 text-xs font-medium flex items-center justify-center uppercase">
+                            {vendedor.nome.slice(0, 2)}
+                          </span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-dark-500 truncate">{vendedor.nome}</span>
+                          <span className="block text-xs text-dark-300 truncate">{vendedor.email}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
