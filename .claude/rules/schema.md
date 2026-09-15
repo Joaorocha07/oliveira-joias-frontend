@@ -307,6 +307,16 @@ valor, parcelas, valor_parcela, imagens (text[]), destaque, ativo, created_at, u
 > `oliveira-joias-backend` aceite/retorne esse campo em `POST/PUT /api/produtos` — mudança fora deste
 > repositório.
 
+### `admin_impersonacoes`
+```
+id, admin_id, admin_nome, vendedor_id, vendedor_nome, created_at
+```
+> Log de auditoria do fluxo "logar como vendedor" (admin personificando um vendedor —
+> `app/login/personificar/page.tsx`). Só é escrita/lida pela rota server-side
+> `app/api/admin/personificar/route.ts` via `lib/supabase-admin.ts` (service_role key) — RLS
+> habilitada sem nenhuma policy para `anon`/`authenticated`, então o cliente nunca acessa essa
+> tabela diretamente. Migration: `.claude/migrations/admin_impersonacoes.sql`.
+
 ## Relacionamentos principais
 
 ```
