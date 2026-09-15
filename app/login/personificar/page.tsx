@@ -234,9 +234,9 @@ export default function PersonificarPage() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     value={codigo}
-                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 12))}
                     required
-                    placeholder="000000"
+                    placeholder="Digite o código recebido"
                     leftAddon={<KeyRound size={16} />}
                     disabled={enviandoCodigo}
                   />
@@ -258,7 +258,7 @@ export default function PersonificarPage() {
                     variant="primary"
                     size="lg"
                     loading={confirmando}
-                    disabled={enviandoCodigo || codigo.length < 6}
+                    disabled={enviandoCodigo || codigo.length === 0}
                     className="w-full mt-2"
                   >
                     Confirmar código

@@ -1,4 +1,7 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
+'use client'
+
+import { forwardRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -11,8 +14,26 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, hint, leftAddon, rightAddon, wrapperClassName, className, id, ...props }, ref) => {
+  ({ label, error, hint, leftAddon, rightAddon, wrapperClassName, className, id, type, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+    const [senhaVisivel, setSenhaVisivel] = useState(false)
+    const isPassword = type === 'password'
+    const resolvedType = isPassword ? (senhaVisivel ? 'text' : 'password') : type
+
+    // Campos de senha ganham automaticamente o "olhinho" de mostrar/ocultar,
+    // a menos que a tela já esteja usando o rightAddon para outra coisa.
+    const resolvedRightAddon = rightAddon ?? (isPassword ? (
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setSenhaVisivel((prev) => !prev)}
+        className="pointer-events-auto text-dark-300 hover:text-gold-600 transition-colors"
+        aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+      >
+        {senhaVisivel ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    ) : undefined)
+
     return (
       <div className={cn('flex flex-col gap-1.5', wrapperClassName)}>
         {label && (
@@ -29,18 +50,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
+            type={resolvedType}
             className={cn(
               'input-base',
               !!leftAddon && 'pl-10',
-              !!rightAddon && 'pr-10',
+              !!resolvedRightAddon && 'pr-10',
               !!error && 'input-error',
               className
             )}
             {...props}
           />
-          {rightAddon && (
+          {resolvedRightAddon && (
             <span className="absolute right-3 text-gold-600 pointer-events-none select-none flex items-center">
-              {rightAddon}
+              {resolvedRightAddon}
             </span>
           )}
         </div>
