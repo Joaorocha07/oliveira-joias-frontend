@@ -6,6 +6,7 @@ import { SearchableSelect, type SelectOption } from '@/components/forms/searchab
 import { useAuth } from '@/context/auth-context'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
+import { buscarClientes } from '@/services/busca'
 import { getOrcamentoConfiguracoes } from '@/services/orcamentos'
 import { criarNotaTimeline } from '@/services/clientes'
 import { preencherMensagem } from '@/services/mensagens'
@@ -26,13 +27,7 @@ export function ModalEnviarMensagem({ open, onClose, mensagem }: Props) {
   const [enviando, setEnviando] = useState(false)
 
   async function searchClientes(q: string): Promise<SelectOption[]> {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone')
-      .eq('ativo', true)
-      .not('telefone', 'is', null)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20, somenteComTelefone: true })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,

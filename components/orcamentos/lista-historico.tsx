@@ -13,6 +13,7 @@ import { usePagination } from '@/hooks/use-pagination'
 import { formatMoney, formatDate } from '@/utils'
 import { deleteOrcamento } from '@/services/orcamentos'
 import type { Orcamento } from '@/types'
+import { correspondeBusca } from '@/utils/search'
 
 interface ListaHistoricoProps {
   refreshKey: number
@@ -57,13 +58,7 @@ export function ListaHistorico({ refreshKey, onEditar, onDuplicar, onVisualizar 
 
   const filtered = useMemo(() => {
     return orcamentos.filter((o) => {
-      if (!search) return true
-      const q = search.toLowerCase()
-      return (
-        o.cliente_nome?.toLowerCase().includes(q) ||
-        o.modelo_nome?.toLowerCase().includes(q) ||
-        String(o.numero).includes(q)
-      )
+      return correspondeBusca(search, [o.cliente_nome, o.cliente_telefone, o.numero, o.modelo_nome, o.material])
     })
   }, [orcamentos, search])
 

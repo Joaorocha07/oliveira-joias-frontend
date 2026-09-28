@@ -17,6 +17,7 @@ import {
 import { updateServicoStatus, deleteServico } from '@/services/servicos'
 import { DrawerDetalheServico } from '@/components/servicos/drawer-detalhe-servico'
 import type { ServicoComCliente, ServicoStatus } from '@/types'
+import { correspondeBusca } from '@/utils/search'
 
 const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'cancelado']
 
@@ -92,14 +93,13 @@ export default function ServicosPage() {
 
   const filtered = useMemo(() => {
     return servicos.filter((s) => {
-      const matchSearch = !search ||
-        s.tipo.toLowerCase().includes(search.toLowerCase()) ||
-        s.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
-        String(s.numero).includes(search)
+      const matchSearch = correspondeBusca(search, [
+        s.cliente?.nome, s.cliente?.telefone, displayNumMap.get(s.id), s.numero, s.tipo, s.descricao,
+      ])
       const matchStatus = !filtroStatus || s.status === filtroStatus
       return matchSearch && matchStatus
     })
-  }, [servicos, search, filtroStatus])
+  }, [servicos, search, filtroStatus, displayNumMap])
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 

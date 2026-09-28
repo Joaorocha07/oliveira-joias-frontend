@@ -10,6 +10,7 @@ import { SearchableSelect, type SelectOption } from '@/components/forms/searchab
 import { clienteLeadSchema, clienteToLeadFormData, type ClienteLeadFormData } from '@/schemas/cliente'
 import { updateLead } from '@/services/clientes'
 import { supabase } from '@/lib/supabase'
+import { buscarProfiles } from '@/services/busca'
 import { PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL } from '@/utils'
 import type { Cliente, OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
 
@@ -61,13 +62,7 @@ export function ModalEditarLead({ open, onClose, onSuccess, cliente }: Props) {
   }, [open, cliente, reset])
 
   const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('ativo', true)
-      .in('role', ['vendedor', 'admin'])
-      .ilike('nome', `%${q}%`)
-      .limit(10)
+    const { data } = await buscarProfiles(q, { limit: 10, roles: ['vendedor', 'admin'] })
     return (data ?? []).map((p: { id: string; nome: string }) => ({ id: p.id, label: p.nome }))
   }, [])
 

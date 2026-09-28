@@ -22,6 +22,7 @@ import {
   VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
 } from '@/utils'
 import type { Venda, VendaTipo, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
+import { correspondeBusca } from '@/utils/search'
 
 export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> & {
   tipo: VendaTipo
@@ -107,15 +108,15 @@ export default function VendasPage() {
 
   const filtered = useMemo(() => {
     return vendas.filter((v) => {
-      const matchSearch = !search ||
-        v.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
-        String(v.numero).includes(search) ||
-        v.descricao_livre?.toLowerCase().includes(search.toLowerCase()) ||
-        v.itens?.some((i) =>
-          i.nome_produto.toLowerCase().includes(search.toLowerCase()) ||
-          i.produto?.codigo.toLowerCase().includes(search.toLowerCase()) ||
-          i.variacao?.valor.toLowerCase().includes(search.toLowerCase()),
-        )
+      const matchSearch = correspondeBusca(search, [
+        v.cliente?.nome,
+        v.cliente?.telefone,
+        displayNumMap.get(v.id),
+        v.numero,
+        v.vendedor?.nome,
+        v.descricao_livre,
+        ...(v.itens ?? []).flatMap((i) => [i.nome_produto, i.produto?.codigo, i.variacao?.valor]),
+      ])
       const matchStatus = !filtroStatus || v.status === filtroStatus
       return matchSearch && matchStatus
     })

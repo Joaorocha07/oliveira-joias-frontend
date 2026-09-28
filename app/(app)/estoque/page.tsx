@@ -13,6 +13,7 @@ import { ModalMovimentacaoEstoque } from '@/components/modals/modal-movimentacao
 import { formatMoney, PRODUTO_CATEGORIA_LABEL } from '@/utils'
 import { deleteProduto, desativarProduto } from '@/services/produtos'
 import type { Produto, ProdutoCategoria } from '@/types'
+import { correspondeBusca } from '@/utils/search'
 
 interface ProdutoComEstoque extends Produto {
   total_estoque: number
@@ -76,10 +77,7 @@ export default function EstoquePage() {
 
   const filtered = useMemo(() => {
     return produtos.filter((p) => {
-      const matchSearch = !search ||
-        p.nome.toLowerCase().includes(search.toLowerCase()) ||
-        p.codigo.toLowerCase().includes(search.toLowerCase()) ||
-        (p.material ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchSearch = correspondeBusca(search, [p.nome, p.codigo, p.material, p.descricao])
       const matchCategoria = !filtroCategoria || p.categoria === filtroCategoria
       const matchAtivo = !filtroAtivo || String(p.ativo) === filtroAtivo
       return matchSearch && matchCategoria && matchAtivo

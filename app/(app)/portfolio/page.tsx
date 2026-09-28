@@ -17,6 +17,7 @@ import {
   listarAcabamentosCatalogo, criarAcabamentoCatalogo, excluirAcabamentoCatalogo,
   type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type FaqItem,
 } from '@/services/catalogo'
+import { correspondeBusca } from '@/utils/search'
 
 const EMPTY_FORM = {
   nome: '',
@@ -126,11 +127,7 @@ export default function PortfolioPage() {
 
   const filtered = useMemo(() => {
     return produtos.filter((p) => {
-      const q = search.toLowerCase()
-      const matchSearch = !q ||
-        p.nome.toLowerCase().includes(q) ||
-        (p.linha ?? '').toLowerCase().includes(q) ||
-        p.material.toLowerCase().includes(q)
+      const matchSearch = correspondeBusca(search, [p.nome, p.linha, p.material, p.categoria, p.largura])
       let matchCategoria = true
       if (filtroCategoria === '__sem_categoria__') {
         matchCategoria = !nomesCategoriasSet.has(p.categoria)

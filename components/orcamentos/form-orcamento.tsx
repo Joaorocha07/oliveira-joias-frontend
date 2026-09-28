@@ -5,7 +5,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
-import { supabase } from '@/lib/supabase'
+import { buscarClientes } from '@/services/busca'
 import { Card, CardHeader, Button, Input, Textarea } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { MaskedInput } from '@/components/forms/masked-input'
@@ -15,6 +15,7 @@ import { ModalQuickCatalogoItem } from '@/components/modals/modal-quick-catalogo
 import { orcamentoSchema, ORCAMENTO_ITENS_PADRAO, type OrcamentoFormData } from '@/schemas/orcamento'
 import { createOrcamento, updateOrcamento, createOrcamentoModelo, createOrcamentoMaterial } from '@/services/orcamentos'
 import { calcularCondicaoOrcamento, formatMoney } from '@/utils'
+import { ordenarPorRelevancia } from '@/utils/search'
 import type { Orcamento, OrcamentoModelo, OrcamentoMaterial } from '@/types'
 
 interface FormOrcamentoProps {
@@ -97,12 +98,7 @@ export function FormOrcamento({
   })
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20 })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,
@@ -125,9 +121,7 @@ export function FormOrcamento({
   }
 
   const searchModelos = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const query = q.trim().toLowerCase()
-    return modelos
-      .filter((m) => !query || m.nome.toLowerCase().includes(query))
+    return ordenarPorRelevancia(modelos, q, (m) => [m.nome])
       .map((m) => ({ id: m.id, label: m.nome }))
   }, [modelos])
 
@@ -145,9 +139,7 @@ export function FormOrcamento({
   }
 
   const searchMateriais = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const query = q.trim().toLowerCase()
-    return materiais
-      .filter((m) => !query || m.nome.toLowerCase().includes(query))
+    return ordenarPorRelevancia(materiais, q, (m) => [m.nome])
       .map((m) => ({ id: m.id, label: m.nome }))
   }, [materiais])
 

@@ -19,6 +19,7 @@ import { formatMoney, formatDate, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL
 import { Search, ChevronUp, ChevronDown } from 'lucide-react'
 import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
 import { listarContasPagar } from '@/services/contas-pagar'
+import { ordenarPorRelevancia, filtrarBusca } from '@/utils/search'
 
 const CHART_COLORS = ['#B8962E', '#C49A35', '#D4AF5A', '#EBD9A4', '#9A7B22', '#7A5C10', '#5C4208', '#3D2B05']
 
@@ -836,7 +837,6 @@ export default function RelatoriosPage() {
     : vendasEquipe.vendedores.find((vendedor) => vendedor.id === vendedorFiltro)?.nome ?? 'Todos os vendedores'
 
   const searchVendedoresRanking = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const term = q.trim().toLowerCase()
     const options = [
       { id: 'todos', label: 'Todos os vendedores', sublabel: 'Ranking geral' },
       ...vendasEquipe.vendedores.map((vendedor) => ({
@@ -845,7 +845,7 @@ export default function RelatoriosPage() {
         sublabel: vendedor.id === 'sem-vendedor' ? 'Sem vendedor' : 'Vendedor',
       })),
     ]
-    return options.filter((option) => !term || option.label.toLowerCase().includes(term))
+    return ordenarPorRelevancia(options, q, (option) => [option.label])
   }, [vendasEquipe.vendedores])
 
   const analiseLeads = useMemo(() => {
@@ -1091,13 +1091,7 @@ export default function RelatoriosPage() {
   }, [])
 
   const clientesFiltrados = useMemo(() => {
-    const term = clienteSearch.trim().toLowerCase()
-    let lista = clientesLtv
-    if (term) {
-      lista = lista.filter(
-        (c) => c.nome.toLowerCase().includes(term) || (c.telefone ?? '').toLowerCase().includes(term),
-      )
-    }
+    let lista = filtrarBusca(clientesLtv, clienteSearch, (c) => [c.nome, c.telefone])
     if (ltvStatusFiltro !== 'todos') {
       lista = lista.filter((c) => c.status === ltvStatusFiltro)
     }

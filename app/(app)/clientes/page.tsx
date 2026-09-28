@@ -14,6 +14,7 @@ import type { Cliente, ClienteInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
 import { deleteVenda } from '@/services/vendas'
 import { ModalHistoricoCliente } from '@/components/modals/modal-historico-cliente'
+import { ordenarPorRelevancia } from '@/utils/search'
 
 const EMPTY_FORM: ClienteInsert = {
   nome: '', cpf: null, rg: null, email: null, telefone: null, whatsapp: null,
@@ -61,16 +62,12 @@ export default function ClientesPage() {
     return () => window.clearTimeout(timeoutId)
   }, [])
 
-  const filtered = useMemo(() => {
-    if (!search) return clientes
-    const q = search.toLowerCase()
-    return clientes.filter((c) =>
-      c.nome.toLowerCase().includes(q) ||
-      c.telefone?.includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.cpf?.includes(q)
-    )
-  }, [clientes, search])
+  const filtered = useMemo(
+    () => ordenarPorRelevancia(clientes, search, (c) => [
+      c.nome, c.telefone, c.whatsapp, c.cpf, c.email, c.cidade, c.bairro, c.instagram,
+    ]),
+    [clientes, search],
+  )
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 

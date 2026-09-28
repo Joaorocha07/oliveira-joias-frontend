@@ -19,6 +19,7 @@ import {
   STATUS_FUNIL_LABEL, STATUS_QUALIFICACAO_LABEL, PRODUTO_INTERESSE_LABEL,
 } from '@/utils'
 import type { Cliente, StatusFunil, OrigemCliente } from '@/types'
+import { filtrarBusca } from '@/utils/search'
 
 export default function CrmPage() {
   const { user } = useAuth()
@@ -60,13 +61,11 @@ export default function CrmPage() {
 
   const filtrados = useMemo(() => {
     let result = clientes
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter((c) => c.nome.toLowerCase().includes(q) || c.telefone?.includes(q))
-    }
+    result = filtrarBusca(result, search, (c) => [
+      c.nome, c.telefone, c.whatsapp, c.instagram, c.email, c.cpf, c.parceiro_nome, c.parceiro_telefone, c.cidade,
+    ])
     if (filtros.cidade) {
-      const q = filtros.cidade.toLowerCase()
-      result = result.filter((c) => c.cidade?.toLowerCase().includes(q))
+      result = filtrarBusca(result, filtros.cidade, (c) => [c.cidade])
     }
     if (filtros.produtoInteresse) {
       result = result.filter((c) => c.produto_interesse === filtros.produtoInteresse)

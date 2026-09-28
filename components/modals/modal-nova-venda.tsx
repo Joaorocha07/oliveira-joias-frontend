@@ -14,6 +14,7 @@ import { vendaSchema, type VendaFormData } from '@/schemas/venda'
 import { createVenda } from '@/services/vendas'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
+import { buscarClientes, buscarProdutos, buscarProfiles } from '@/services/busca'
 import { today, formatMoney, FORMA_PAGAMENTO_LABEL, gerarDatasParcelas, formatDate } from '@/utils'
 import type { FormaPagamento, Produto, ProdutoVariacao, OrigemCliente } from '@/types'
 
@@ -146,12 +147,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   const isOrigemOutro = origemSelecionada?.nome === 'Outro'
 
   const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, nome, role')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarProfiles(q, { limit: 20 })
     return (data ?? []).map((v: { id: string; nome: string; role: string }) => ({
       id: v.id,
       label: v.nome,
@@ -160,12 +156,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   }, [])
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20 })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,
@@ -174,12 +165,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   }, [])
 
   const searchProdutos = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('produtos')
-      .select('id, nome, codigo, preco_venda, variacoes:produto_variacoes(ativo, estoque_atual)')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarProdutos(q, { limit: 20 })
     return (data ?? []).map((p: {
       id: string
       nome: string

@@ -16,6 +16,7 @@ import { formatPhone } from '@/utils'
 import { listarMetasMensais, upsertMetaMensal } from '@/services/metas'
 import { MENUS_VENDEDOR_CONFIG, VENDEDOR_DEFAULT_MENUS } from '@/lib/menus-config'
 import type { Profile, UserRole } from '@/types'
+import { ordenarPorRelevancia } from '@/utils/search'
 
 const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Administrador',
@@ -88,15 +89,10 @@ export default function VendedoresPage() {
     return () => window.clearTimeout(id)
   }, [])
 
-  const filtered = useMemo(() => {
-    if (!search) return profiles
-    const q = search.toLowerCase()
-    return profiles.filter((p) =>
-      p.nome.toLowerCase().includes(q) ||
-      p.email.toLowerCase().includes(q) ||
-      p.telefone?.includes(q)
-    )
-  }, [profiles, search])
+  const filtered = useMemo(
+    () => ordenarPorRelevancia(profiles, search, (p) => [p.nome, p.email, p.telefone, p.cpf, ROLE_LABEL[p.role]]),
+    [profiles, search],
+  )
 
   function setField<K extends keyof VendedorForm>(key: K, value: VendedorForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))

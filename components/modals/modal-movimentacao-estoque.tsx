@@ -10,6 +10,7 @@ import { estoqueSchema, type EstoqueFormData } from '@/schemas/estoque'
 import { createMovimentacao } from '@/services/estoque'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
+import { buscarProdutos } from '@/services/busca'
 import type { ProdutoVariacao } from '@/types'
 
 interface ModalMovimentacaoEstoqueProps {
@@ -98,12 +99,7 @@ export function ModalMovimentacaoEstoque({
   }, [watchedVariacaoId, variacoes])
 
   const searchProdutos = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('produtos')
-      .select('id, nome, codigo')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarProdutos(q, { limit: 20 })
     return (data ?? []).map((p: { id: string; nome: string; codigo: string }) => ({
       id: p.id,
       label: p.nome,

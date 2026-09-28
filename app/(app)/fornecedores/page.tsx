@@ -12,6 +12,7 @@ import { usePagination } from '@/hooks/use-pagination'
 import { formatPhone, formatCNPJ } from '@/utils'
 import type { Fornecedor, FornecedorInsert } from '@/types'
 import { useAuth } from '@/context/auth-context'
+import { ordenarPorRelevancia } from '@/utils/search'
 
 const EMPTY_FORM: FornecedorInsert = {
   nome: '', razao_social: null, cnpj: null, cpf: null,
@@ -48,16 +49,12 @@ export default function FornecedoresPage() {
     return () => window.clearTimeout(timeoutId)
   }, [])
 
-  const filtered = useMemo(() => {
-    if (!search) return fornecedores
-    const q = search.toLowerCase()
-    return fornecedores.filter((f) =>
-      f.nome.toLowerCase().includes(q) ||
-      f.cnpj?.includes(q) ||
-      f.email?.toLowerCase().includes(q) ||
-      f.categoria?.toLowerCase().includes(q)
-    )
-  }, [fornecedores, search])
+  const filtered = useMemo(
+    () => ordenarPorRelevancia(fornecedores, search, (f) => [
+      f.nome, f.razao_social, f.contato_nome, f.telefone, f.cnpj, f.cpf, f.email, f.categoria, f.cidade,
+    ]),
+    [fornecedores, search],
+  )
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 

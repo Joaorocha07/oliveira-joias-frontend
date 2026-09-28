@@ -17,6 +17,7 @@ import {
   formatMoney, formatDate, crediarioStatusVariant, CREDIARIO_STATUS_LABEL, today, parcelaVencida,
 } from '@/utils'
 import type { CrediarioParcela, CrediarioStatus } from '@/types'
+import { correspondeBusca } from '@/utils/search'
 
 // ── Computed helpers ──────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ export default function CrediarioPage() {
 
   const filtered = useMemo(() => {
     return crediarios.filter((c) => {
-      const matchSearch = !search || c.cliente?.nome?.toLowerCase().includes(search.toLowerCase())
+      const matchSearch = correspondeBusca(search, [c.cliente?.nome, c.cliente?.telefone])
       const matchStatus = !filtroStatus || computeStatus(c) === filtroStatus
       return matchSearch && matchStatus
     })

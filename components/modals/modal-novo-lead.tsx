@@ -11,6 +11,7 @@ import { clienteLeadSchema, clienteToLeadFormData, type ClienteLeadFormData } fr
 import { createLead, vincularClienteExistenteAoFunil } from '@/services/clientes'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
+import { buscarClientes, buscarProfiles } from '@/services/busca'
 import { PRODUTO_INTERESSE_LABEL, STATUS_QUALIFICACAO_LABEL } from '@/utils'
 import type { Cliente, OrigemCliente, ProdutoInteresse, StatusQualificacao } from '@/types'
 
@@ -98,23 +99,12 @@ export function ModalNovoLead({ open, onClose, onSuccess }: Props) {
   }, [open, reset, profile])
 
   const searchVendedores = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('ativo', true)
-      .in('role', ['vendedor', 'admin'])
-      .ilike('nome', `%${q}%`)
-      .limit(10)
+    const { data } = await buscarProfiles(q, { limit: 10, roles: ['vendedor', 'admin'] })
     return (data ?? []).map((p: { id: string; nome: string }) => ({ id: p.id, label: p.nome }))
   }, [])
 
   const searchClientesExistentes = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20 })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,

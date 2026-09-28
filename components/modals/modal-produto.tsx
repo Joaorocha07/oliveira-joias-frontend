@@ -11,7 +11,7 @@ import { SearchableSelect, type SelectOption } from '@/components/forms/searchab
 import { produtoSchema, type ProdutoFormData } from '@/schemas/produto'
 import { createProduto, updateProduto, generateCodigo } from '@/services/produtos'
 import { useAuth } from '@/context/auth-context'
-import { supabase } from '@/lib/supabase'
+import { buscarFornecedores } from '@/services/busca'
 import { PRODUTO_CATEGORIA_LABEL } from '@/utils'
 import { cn } from '@/lib/cn'
 import type { Produto, ProdutoCategoria } from '@/types'
@@ -121,12 +121,7 @@ export function ModalProduto({ open, onClose, onSuccess, produto }: ModalProduto
   }, [setValue, isEditing])
 
   const searchFornecedores = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('fornecedores')
-      .select('id, nome')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(15)
+    const { data } = await buscarFornecedores(q, { limit: 15 })
     return (data ?? []).map((f: { id: string; nome: string }) => ({ id: f.id, label: f.nome }))
   }, [])
 

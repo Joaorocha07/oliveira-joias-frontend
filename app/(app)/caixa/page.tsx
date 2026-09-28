@@ -14,6 +14,7 @@ import { CurrencyInput } from '@/components/forms/currency-input'
 import { formatMoney, formatDate, today } from '@/utils'
 import type { Lancamento, LancamentoInsert, LancamentoTipo } from '@/types'
 import { useAuth } from '@/context/auth-context'
+import { correspondeBusca } from '@/utils/search'
 
 interface CategoriaLancamento {
   id: string
@@ -111,7 +112,7 @@ export default function CaixaPage() {
 
   const filtered = useMemo(() => {
     return lancamentos.filter((l) => {
-      const matchSearch = !search || l.descricao.toLowerCase().includes(search.toLowerCase())
+      const matchSearch = correspondeBusca(search, [l.descricao, l.categoria_nome, l.observacoes, l.valor])
       const matchTipo = !filtroTipo || l.tipo === filtroTipo
       const matchCat = !filtroCategoria || l.categoria_nome === filtroCategoria
       return matchSearch && matchTipo && matchCat

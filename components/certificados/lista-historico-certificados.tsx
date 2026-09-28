@@ -13,6 +13,7 @@ import { formatMoney, formatDate } from '@/utils'
 import { listarCertificados, excluirCertificado } from '@/services/certificados'
 import { baixarCertificadoPdf } from '@/utils/certificado-pdf'
 import type { Certificado, CertificadoConfiguracao } from '@/types'
+import { filtrarBusca } from '@/utils/search'
 
 interface Props {
   refreshKey: number
@@ -48,13 +49,9 @@ export function ListaHistoricoCertificados({ refreshKey, configuracao, onEditar,
   }, [load, refreshKey])
 
   const filtered = useMemo(() => {
-    if (!search) return certificados
-    const q = search.toLowerCase()
-    return certificados.filter((c) =>
-      c.numero.toLowerCase().includes(q) ||
-      c.cliente_nome?.toLowerCase().includes(q) ||
-      c.modelo?.toLowerCase().includes(q),
-    )
+    return filtrarBusca(certificados, search, (c) => [
+      c.cliente_nome, c.cliente_telefone, c.cliente_cpf, c.numero, c.pedido_os, c.modelo, c.material, c.vendedor_nome,
+    ])
   }, [certificados, search])
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)

@@ -13,6 +13,7 @@ import { servicoSchema, type ServicoFormData } from '@/schemas/servico'
 import { createServico, updateServico } from '@/services/servicos'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
+import { buscarClientes, buscarProfiles } from '@/services/busca'
 import { today, SERVICO_STATUS_LABEL, FORMA_PAGAMENTO_LABEL, toInputDate, formatMoney } from '@/utils'
 import type { ServicoComCliente, ServicoStatus, FormaPagamento, OrigemCliente } from '@/types'
 
@@ -122,12 +123,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
   }, [open, servico, reset])
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20 })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,
@@ -136,12 +132,7 @@ export function ModalNovoServico({ open, onClose, onSuccess, servico, displayNum
   }, [])
 
   const searchResponsaveis = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(10)
+    const { data } = await buscarProfiles(q, { limit: 10 })
     return (data ?? []).map((p: { id: string; nome: string }) => ({
       id: p.id,
       label: p.nome,

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
+import { buscarClientes } from '@/services/busca'
 import { Card, CardHeader, Button, Input, Select, Textarea } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
 import { MaskedInput } from '@/components/forms/masked-input'
@@ -14,6 +15,7 @@ import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
 import { ModalQuickCatalogoItem } from '@/components/modals/modal-quick-catalogo-item'
 import { certificadoSchema, type CertificadoFormData } from '@/schemas/certificado'
 import { formatMoney, formatDate } from '@/utils'
+import { filtrarBusca, ordenarPorRelevancia } from '@/utils/search'
 import {
   criarCertificado,
   atualizarCertificado,
@@ -90,17 +92,16 @@ export function FormCertificado({
   })
 
   const searchVendas = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const query = q.trim().toLowerCase()
     const { data } = await supabase
       .from('vendas')
-      .select('id, numero, total, data_venda, cliente:clientes(nome)')
+      .select('id, numero, total, data_venda, cliente:clientes(nome, telefone)')
       .order('data_venda', { ascending: false })
-      .limit(30)
+      .limit(q.trim() ? 500 : 30)
     const vendas = (data ?? []) as unknown as {
-      id: string; numero: number; total: number; data_venda: string; cliente: { nome: string } | null
+      id: string; numero: number; total: number; data_venda: string; cliente: { nome: string; telefone: string | null } | null
     }[]
-    return vendas
-      .filter((v) => !query || String(v.numero).includes(query) || (v.cliente?.nome ?? '').toLowerCase().includes(query))
+    return filtrarBusca(vendas, q, (v) => [v.numero, v.cliente?.nome, v.cliente?.telefone])
+      .slice(0, 30)
       .map((v) => ({
         id: v.id,
         label: `Venda nº ${v.numero}${v.cliente?.nome ? ` · ${v.cliente.nome}` : ''}`,
@@ -138,12 +139,7 @@ export function FormCertificado({
   }
 
   const searchClientes = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const { data } = await supabase
-      .from('clientes')
-      .select('id, nome, telefone, cpf')
-      .eq('ativo', true)
-      .ilike('nome', `%${q}%`)
-      .limit(20)
+    const { data } = await buscarClientes(q, { limit: 20 })
     return (data ?? []).map((c: { id: string; nome: string; telefone: string | null }) => ({
       id: c.id,
       label: c.nome,
@@ -176,13 +172,11 @@ export function FormCertificado({
   }
 
   const searchModelos = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const query = q.trim().toLowerCase()
-    return modelos.filter((m) => !query || m.nome.toLowerCase().includes(query)).map((m) => ({ id: m.id, label: m.nome }))
+    return ordenarPorRelevancia(modelos, q, (m) => [m.nome]).map((m) => ({ id: m.id, label: m.nome }))
   }, [modelos])
 
   const searchMateriais = useCallback(async (q: string): Promise<SelectOption[]> => {
-    const query = q.trim().toLowerCase()
-    return materiais.filter((m) => !query || m.nome.toLowerCase().includes(query)).map((m) => ({ id: m.id, label: m.nome }))
+    return ordenarPorRelevancia(materiais, q, (m) => [m.nome]).map((m) => ({ id: m.id, label: m.nome }))
   }, [materiais])
 
   function handleModeloChange(id: string | null, option?: SelectOption) {
