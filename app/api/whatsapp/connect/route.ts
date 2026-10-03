@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { connectWhatsApp, getWhatsAppState } from '@/lib/whatsapp-client'
 
 export const dynamic = 'force-dynamic'
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -32,8 +33,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Apenas administradores.' }, { status: 403 })
   }
 
-  // Sem await — conexão roda em background; frontend detecta mudanças via polling
-  connectWhatsApp(profile.id, token)
+  const body = await req.json().catch(() => ({}))
 
-  return NextResponse.json(getWhatsAppState())
+  const res = await fetch(`${BACKEND}/api/whatsapp/connect`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-id': profile.id,
+      ...(process.env.WHATSAPP_SECRET ? { 'x-whatsapp-secret': process.env.WHATSAPP_SECRET } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data = await res.json()
+  return NextResponse.json(data, { status: res.status })
 }

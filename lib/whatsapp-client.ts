@@ -3,75 +3,85 @@ import { createClient } from '@supabase/supabase-js'
 
 // Server-only — importado apenas por Route Handlers.
 
-const SESSION_DIR = path.join(process.cwd(), '.whatsapp-session')
+const SLOT_COUNT = 2
+const SESSION_BASE = path.join(process.cwd(), '.whatsapp-session')
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'waiting_qr' | 'connected'
 
-interface WhatsAppState {
+export interface SlotState {
   status: ConnectionStatus
   qrBase64: string | null
+  phone: string | null
   adminUserId: string | null
   adminToken: string | null
-  phone: string | null
   originId: string | null
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var __waState: WhatsAppState | undefined
+  var __waSlots: SlotState[] | undefined
   // eslint-disable-next-line no-var
-  var __waSocket: unknown
+  var __waSockets: unknown[]
 }
 
-if (!global.__waState) {
-  global.__waState = {
-    status: 'disconnected',
+if (!global.__waSlots) {
+  global.__waSlots = Array.from({ length: SLOT_COUNT }, () => ({
+    status: 'disconnected' as ConnectionStatus,
     qrBase64: null,
+    phone: null,
     adminUserId: null,
     adminToken: null,
-    phone: null,
     originId: null,
-  }
+  }))
+}
+if (!global.__waSockets) {
+  global.__waSockets = Array(SLOT_COUNT).fill(null)
 }
 
-const state = global.__waState!
-
-export function getWhatsAppState() {
-  return {
-    status: state.status,
-    qrBase64: state.qrBase64,
-    phone: state.phone,
-  }
+function slot(index: number): SlotState {
+  return global.__waSlots![index]
 }
 
-function getSupabase() {
+function sessionDir(index: number): string {
+  return path.join(SESSION_BASE, `slot-${index}`)
+}
+
+export function getSlotStatus(index: number) {
+  const s = slot(index)
+  return { status: s.status, qrBase64: s.qrBase64, phone: s.phone }
+}
+
+export function getAllSlotsStatus() {
+  return Array.from({ length: SLOT_COUNT }, (_, i) => getSlotStatus(i))
+}
+
+function getSupabase(s: SlotState) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  const opts = {
+  return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
-    ...(state.adminToken
-      ? { global: { headers: { Authorization: `Bearer ${state.adminToken}` } } }
+    ...(s.adminToken
+      ? { global: { headers: { Authorization: `Bearer ${s.adminToken}` } } }
       : {}),
-  }
-  return createClient(url, key, opts)
+  })
 }
 
-async function resolveWhatsAppOriginId(): Promise<string | null> {
-  if (state.originId) return state.originId
-  const sb = getSupabase()
+async function resolveOriginId(s: SlotState): Promise<string | null> {
+  if (s.originId) return s.originId
+  const sb = getSupabase(s)
   const { data } = await sb
     .from('origens_cliente')
     .select('id')
     .ilike('nome', 'whatsapp')
     .maybeSingle()
-  state.originId = data?.id ?? null
-  return state.originId
+  s.originId = data?.id ?? null
+  return s.originId
 }
 
-async function saveContact(rawPhone: string, pushName: string | null) {
+async function saveContact(s: SlotState, rawPhone: string, pushName: string | null) {
   const phone = rawPhone.replace(/\D/g, '')
   const whatsappNumber = `+${phone}`
-  const sb = getSupabase()
+  const sb = getSupabase(s)
 
   const { data: existing } = await sb
     .from('clientes')
@@ -81,7 +91,7 @@ async function saveContact(rawPhone: string, pushName: string | null) {
 
   if (existing) return
 
-  const originId = await resolveWhatsAppOriginId()
+  const originId = await resolveOriginId(s)
 
   await sb.from('clientes').insert({
     nome: pushName?.trim() || `WhatsApp ${whatsappNumber}`,
@@ -92,7 +102,7 @@ async function saveContact(rawPhone: string, pushName: string | null) {
     lead_score: 1,
     ativo: true,
     origem_id: originId,
-    ...(state.adminUserId ? { created_by: state.adminUserId } : {}),
+    ...(s.adminUserId ? { created_by: s.adminUserId } : {}),
   })
 }
 
@@ -106,25 +116,27 @@ const noopLogger = {
   child: () => noopLogger,
 }
 
-// Inicia conexão em background — retorna imediatamente para não bloquear a API route.
-// O frontend detecta mudanças de estado via polling em /api/whatsapp/status.
-export function connectWhatsApp(adminUserId?: string, adminToken?: string): void {
-  if (state.status === 'connected' || state.status === 'connecting') return
+export function connectWhatsApp(index: number, adminUserId?: string, adminToken?: string): void {
+  const s = slot(index)
+  if (s.status === 'connected' || s.status === 'connecting') return
 
-  if (adminUserId) state.adminUserId = adminUserId
-  if (adminToken) state.adminToken = adminToken
+  if (adminUserId) s.adminUserId = adminUserId
+  if (adminToken) s.adminToken = adminToken
 
-  state.status = 'connecting'
-  state.qrBase64 = null
+  s.status = 'connecting'
+  s.qrBase64 = null
 
-  doConnect().catch((err) => {
-    console.error('[WhatsApp] Erro ao iniciar conexão:', err)
-    state.status = 'disconnected'
-    state.qrBase64 = null
+  doConnect(index).catch((err) => {
+    console.error(`[WhatsApp slot-${index}] Erro:`, err)
+    const st = slot(index)
+    st.status = 'disconnected'
+    st.qrBase64 = null
   })
 }
 
-async function doConnect(): Promise<void> {
+async function doConnect(index: number): Promise<void> {
+  const s = slot(index)
+
   const baileys = await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ '@whiskeysockets/baileys' as string)
   const makeWASocket = baileys.default ?? (baileys as unknown as { default: typeof baileys.default }).default
   const { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = baileys as unknown as {
@@ -134,7 +146,7 @@ async function doConnect(): Promise<void> {
   }
   const { toDataURL } = await import(/* turbopackIgnore: true */ /* webpackIgnore: true */ 'qrcode' as string)
 
-  const { state: authState, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+  const { state: authState, saveCreds } = await useMultiFileAuthState(sessionDir(index))
 
   let version: [number, number, number]
   try {
@@ -154,18 +166,19 @@ async function doConnect(): Promise<void> {
     syncFullHistory: false,
   })
 
-  global.__waSocket = sock
+  global.__waSockets[index] = sock
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sock.ev.on('connection.update', async (update: any) => {
+    const st = slot(index)
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
-      state.status = 'waiting_qr'
+      st.status = 'waiting_qr'
       try {
-        state.qrBase64 = await toDataURL(qr, { width: 280, margin: 2 })
+        st.qrBase64 = await toDataURL(qr, { width: 280, margin: 2 })
       } catch {
-        state.qrBase64 = null
+        st.qrBase64 = null
       }
     }
 
@@ -173,22 +186,22 @@ async function doConnect(): Promise<void> {
       const code = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode
       const shouldReconnect = code !== DisconnectReason.loggedOut
 
-      state.status = 'disconnected'
-      state.qrBase64 = null
-      state.phone = null
-      global.__waSocket = null
+      st.status = 'disconnected'
+      st.qrBase64 = null
+      st.phone = null
+      global.__waSockets[index] = null
 
       if (shouldReconnect) {
-        setTimeout(() => connectWhatsApp(), 3000)
+        setTimeout(() => connectWhatsApp(index), 3000)
       }
     } else if (connection === 'open') {
-      state.status = 'connected'
-      state.qrBase64 = null
+      st.status = 'connected'
+      st.qrBase64 = null
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const jid: string = (sock as any).user?.id ?? ''
         const cleaned = jid.split(':')[0].replace(/\D/g, '')
-        if (cleaned) state.phone = `+${cleaned}`
+        if (cleaned) st.phone = `+${cleaned}`
       } catch {}
     }
   })
@@ -197,6 +210,7 @@ async function doConnect(): Promise<void> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sock.ev.on('messages.upsert', async ({ messages }: any) => {
+    const st = slot(index)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const msg of messages as any[]) {
       if (msg.key?.fromMe) continue
@@ -207,31 +221,31 @@ async function doConnect(): Promise<void> {
       const name: string | null = msg.pushName ?? null
 
       try {
-        await saveContact(phone, name)
+        await saveContact(st, phone, name)
       } catch (err) {
-        console.error('[WhatsApp] Erro ao salvar contato:', err)
+        console.error(`[WhatsApp slot-${index}] Erro ao salvar contato:`, err)
       }
     }
   })
 }
 
-export async function disconnectWhatsApp(): Promise<void> {
+export async function disconnectWhatsApp(index: number): Promise<void> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sock = global.__waSocket as any
+    const sock = global.__waSockets[index] as any
     if (sock) {
       await sock.logout().catch(() => {})
-      global.__waSocket = null
+      global.__waSockets[index] = null
     }
   } catch {}
 
-  state.status = 'disconnected'
-  state.qrBase64 = null
-  state.phone = null
+  const s = slot(index)
+  s.status = 'disconnected'
+  s.qrBase64 = null
+  s.phone = null
 
-  // Remove session files so next connect shows QR again
   try {
     const { rm } = await import('fs/promises')
-    await rm(SESSION_DIR, { recursive: true, force: true })
+    await rm(sessionDir(index), { recursive: true, force: true })
   } catch {}
 }

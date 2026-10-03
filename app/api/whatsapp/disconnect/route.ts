@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { disconnectWhatsApp, getWhatsAppState } from '@/lib/whatsapp-client'
 
 export const dynamic = 'force-dynamic'
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -32,7 +33,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Apenas administradores.' }, { status: 403 })
   }
 
-  await disconnectWhatsApp()
+  const body = await req.json().catch(() => ({}))
 
-  return NextResponse.json(getWhatsAppState())
+  const res = await fetch(`${BACKEND}/api/whatsapp/disconnect`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(process.env.WHATSAPP_SECRET ? { 'x-whatsapp-secret': process.env.WHATSAPP_SECRET } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data = await res.json()
+  return NextResponse.json(data, { status: res.status })
 }
