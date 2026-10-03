@@ -53,19 +53,23 @@ export async function desconectarSlot(slot: 0 | 1): Promise<WhatsAppAllStatus> {
 }
 
 export async function listarContatosWhatsApp(): Promise<{ data: Cliente[] | null; error: string | null }> {
+  // Busca o id da origem WhatsApp primeiro
+  const { data: origem } = await supabase
+    .from('origens_cliente')
+    .select('id')
+    .ilike('nome', 'whatsapp')
+    .maybeSingle()
+
+  if (!origem) return { data: [], error: null }
+
   const { data, error } = await supabase
     .from('clientes')
-    .select('*, origem:origens_cliente(id, nome)')
+    .select('*')
     .eq('ativo', true)
+    .eq('origem_id', (origem as { id: string }).id)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(100)
 
   if (error) return { data: null, error: error.message }
-
-  const filtered = (data as Cliente[]).filter((c) => {
-    const o = (c as unknown as { origem?: { nome?: string } }).origem
-    return o?.nome?.toLowerCase() === 'whatsapp'
-  })
-
-  return { data: filtered, error: null }
+  return { data: data as Cliente[], error: null }
 }
