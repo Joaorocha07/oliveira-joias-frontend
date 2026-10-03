@@ -256,7 +256,7 @@ export default function WhatsAppPage() {
           <Smartphone size={20} className="text-[#25D366]" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">WhatsApp</h1>
+          <h1 className="text-xl font-semibold text-black">WhatsApp</h1>
           <p className="text-sm text-dark-300">Conecte até 2 números e receba contatos automaticamente</p>
         </div>
       </div>
