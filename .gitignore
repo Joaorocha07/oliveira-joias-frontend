@@ -43,3 +43,6 @@ next-env.d.ts
 
 # MCP config (contém tokens sensíveis)
 .mcp.json
+
+# WhatsApp session (credenciais do dispositivo vinculado)
+.whatsapp-session/

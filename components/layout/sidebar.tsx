@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
   Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText,
-  Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe, Layers, Award,
+  Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe, Layers, Award, Smartphone,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog } from '@/components/ui'
@@ -44,6 +44,7 @@ const navItems: NavItem[] = [
   { sectionLabel: 'Site',        href: '/portfolio',         icon: <Globe size={18} />,               label: 'Produtos do Portfólio', menuKey: 'portfolio' },
   { sectionLabel: 'Site',        href: '/popups',            icon: <Layers size={18} />,              label: 'Pop-ups do Site',     menuKey: 'popups' },
   { sectionLabel: 'Site',        href: 'https://oliveirajoias.vercel.app/certificados', icon: <Award size={18} />, label: 'Certificados', menuKey: 'certificados', external: true },
+  { sectionLabel: 'Administração', href: '/whatsapp',          icon: <Smartphone size={18} />,          label: 'WhatsApp',            menuKey: 'whatsapp' },
   { sectionLabel: 'Financeiro',  href: '/caixa',             icon: <Wallet size={18} />,              label: 'Caixa & Financeiro',  menuKey: 'caixa' },
   { sectionLabel: 'Financeiro',  href: '/contas-pagar',      icon: <Receipt size={18} />,             label: 'Contas a Pagar',      menuKey: 'contas_pagar' },
   { sectionLabel: 'Financeiro',  href: '/relatorios',        icon: <BarChart3 size={18} />,           label: 'Relatórios',          menuKey: 'relatorios' },

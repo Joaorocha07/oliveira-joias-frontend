@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: [
+    '@whiskeysockets/baileys',
+  ],
 }
 
 export default nextConfig
