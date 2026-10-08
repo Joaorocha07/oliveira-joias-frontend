@@ -436,7 +436,7 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
                         <p className="mt-2 text-xs text-dark-400">Estoque disponivel: {estoqueDisponivel} un.</p>
                       )}
 
-                      <div className="mt-3 grid grid-cols-3 gap-3">
+                      <div className={`mt-3 grid gap-3 ${podeVerLucro ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                         <Input
                           label="Qtd"
                           type="number"
@@ -475,7 +475,23 @@ export function ModalEditarVenda({ open, onClose, onSuccess, venda, displayNum }
                             />
                           )}
                         />
+                        {podeVerLucro && (
+                          <Controller
+                            name={`itens.${idx}.custo_unitario`}
+                            control={control}
+                            render={({ field }) => (
+                              <CurrencyInput label="Custo unit." value={field.value} onChange={field.onChange} />
+                            )}
+                          />
+                        )}
                       </div>
+
+                      {podeVerLucro && !!item.produto_id && !(item.custo_unitario > 0) && (
+                        <p className="mt-2 text-xs text-amber-700">
+                          Item sem custo. Informe o custo unitário para o lucro ficar correto
+                          (e atualize o custo no cadastro do produto em Estoque).
+                        </p>
+                      )}
 
                       <div className="mt-2 text-right text-sm text-dark-500">
                         Subtotal: <strong className="text-dark-700">{formatMoney(itemSubtotal(item))}</strong>

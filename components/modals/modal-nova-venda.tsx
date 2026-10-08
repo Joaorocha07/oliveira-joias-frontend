@@ -530,7 +530,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
                       <p className="text-xs text-dark-400">Estoque disponível: {estoqueDisponivel} un.</p>
                     )}
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className={`grid gap-3 ${podeVerLucro ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                       <Input
                         label="Qtd"
                         type="number"
@@ -559,7 +559,23 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
                           <CurrencyInput label="Desconto" value={f.value} onChange={f.onChange} />
                         )}
                       />
+                      {podeVerLucro && (
+                        <Controller
+                          name={`itens.${index}.custo_unitario`}
+                          control={control}
+                          render={({ field: f }) => (
+                            <CurrencyInput label="Custo unit." value={f.value} onChange={f.onChange} />
+                          )}
+                        />
+                      )}
                     </div>
+
+                    {podeVerLucro && !!produtoId && !(item?.custo_unitario > 0) && (
+                      <p className="text-xs text-amber-700">
+                        Produto sem custo cadastrado. Informe o custo unitário para o lucro ficar correto
+                        (e atualize o custo no cadastro do produto em Estoque).
+                      </p>
+                    )}
 
                     {(() => {
                       if (!item) return null
