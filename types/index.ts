@@ -406,6 +406,43 @@ export interface Servico {
 export type ServicoInsert = Omit<Servico, 'id' | 'numero' | 'created_at' | 'updated_at' | 'cliente' | 'responsavel'>
 export type ServicoUpdate = Partial<ServicoInsert>
 
+// ── CUSTOS ADICIONAIS (análise de lucro) ───────────────────────
+export interface CustoTipo {
+  id: string
+  nome: string
+  ativo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface VendaCusto {
+  id: string
+  venda_id: string | null
+  servico_id: string | null
+  tipo_id: string | null
+  tipo_nome: string | null
+  descricao: string | null
+  valor: number
+  data_custo: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type VendaCustoComRelacoes = VendaCusto & {
+  venda?: { id: string; numero: number; total: number; data_venda: string; cliente?: { nome: string } | null } | null
+  servico?: { id: string; numero: number; tipo: string; cliente?: { nome: string } | null } | null
+}
+
+export interface AnaliseLucroVenda {
+  faturamento: number
+  custoProdutos: number
+  custosAdicionais: number
+  lucro: number
+  margem: number
+}
+
 // ── FINANCEIRO ─────────────────────────────────────────────────
 export interface CategoriaFinanceira {
   id: string

@@ -2,14 +2,19 @@
 
 import { X, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui'
-import { formatMoney, formatDate, formatDateTime, vendaStatusVariant, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL } from '@/utils'
+import {
+  formatMoney, formatDate, formatDateTime, vendaStatusVariant, VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
+  analisarLucroVenda,
+} from '@/utils'
 import type { VendaRow } from '@/app/(app)/vendas/page'
+import { ResumoLucroVenda } from './resumo-lucro-venda'
 
 interface DrawerDetalheVendaProps {
   open: boolean
   onClose: () => void
   venda: VendaRow | null
   displayNum?: number
+  mostrarLucro?: boolean
   onEditar: () => void
   onExcluir: () => void
 }
@@ -19,6 +24,7 @@ export function DrawerDetalheVenda({
   onClose,
   venda,
   displayNum,
+  mostrarLucro = false,
   onEditar,
   onExcluir,
 }: DrawerDetalheVendaProps) {
@@ -162,6 +168,28 @@ export function DrawerDetalheVenda({
                 )
               })}
             </div>
+          )}
+
+          {mostrarLucro && (
+            <>
+              {(venda.custos ?? []).length > 0 && (
+                <div className="mt-4">
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-dark-400">Custos adicionais</h3>
+                  <div className="flex flex-col divide-y divide-gold-50 rounded-xl border border-gold-100">
+                    {(venda.custos ?? []).map((c) => (
+                      <div key={c.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="text-dark-700">{c.tipo_nome ?? 'Custo'}</p>
+                          {c.descricao && <p className="truncate text-xs text-dark-400">{c.descricao}</p>}
+                        </div>
+                        <span className="ml-3 flex-shrink-0 text-red-500">−{formatMoney(c.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <ResumoLucroVenda analise={analisarLucroVenda(venda)} className="mt-4" />
+            </>
           )}
 
           {venda.observacoes && (

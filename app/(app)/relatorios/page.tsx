@@ -15,7 +15,8 @@ import {
 } from '@/components/ui'
 import { usePagination } from '@/hooks/use-pagination'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
-import { formatMoney, formatDate, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today } from '@/utils'
+import { formatMoney, formatDate, FORMA_PAGAMENTO_LABEL, PRODUTO_CATEGORIA_LABEL, SERVICO_STATUS_LABEL, today, calcularLucroVenda } from '@/utils'
+import { TabelaLucroVendas, type LinhaLucroVenda } from '@/components/relatorios/tabela-lucro-vendas'
 import { Search, ChevronUp, ChevronDown } from 'lucide-react'
 import type { EstoqueMovimentoTipo, ProdutoCategoria, VwEstoqueAtual, ServicoStatus, ContaPagar } from '@/types'
 import { listarContasPagar } from '@/services/contas-pagar'
@@ -54,6 +55,7 @@ interface OrigemCliente {
 
 interface VendaRelatorio {
   id: string
+  numero: number
   tipo: 'normal' | 'livre'
   total: number
   data_venda: string
@@ -74,6 +76,7 @@ interface VendaRelatorio {
   }[] | null
   vendedor?: { nome: string } | { nome: string }[] | null
   cliente?: { nome: string; telefone: string | null } | { nome: string; telefone: string | null }[] | null
+  custos?: { valor: number }[] | null
 }
 
 interface VendaLtvRow {
@@ -128,6 +131,7 @@ interface ServicoRelatorio {
   origem_id: string | null
   origem_outro: string | null
   responsavel_id: string | null
+  custos?: { valor: number; venda_id: string | null }[] | null
 }
 
 interface MovimentoEstoqueRelatorio {
@@ -204,6 +208,11 @@ function getFormaPagamentoLabel(forma: string) {
 function getVendaCusto(venda: VendaRelatorio) {
   if (venda.tipo === 'livre') return venda.custo_livre ?? 0
   return (venda.itens ?? []).reduce((sum, item) => sum + ((item.custo_unitario ?? 0) * (item.quantidade ?? 0)), 0)
+}
+
+// Custos adicionais lançados na venda (mão de obra, gravação, frete...) — tabela venda_custos
+function getVendaCustosAdicionais(venda: VendaRelatorio) {
+  return (venda.custos ?? []).reduce((sum, c) => sum + (c.valor ?? 0), 0)
 }
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -288,7 +297,7 @@ export default function RelatoriosPage() {
 
     let vendasQuery = supabase
       .from('vendas')
-      .select('id, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))')
+      .select('id, numero, tipo, total, data_venda, forma_pagamento, vendedor_id, cliente_id, descricao_livre, custo_livre, origem_id, origem_outro, vendedor:profiles(nome), cliente:clientes(nome, telefone), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria)), custos:venda_custos(valor)')
       .gte('data_venda', dataInicio)
       .lte('data_venda', dataFim)
       .not('status', 'eq', 'cancelado')
@@ -296,7 +305,7 @@ export default function RelatoriosPage() {
 
     let servicosQuery = supabase
       .from('servicos')
-      .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro, responsavel_id')
+      .select('status, tipo, valor, custo_estimado, pago, data_entrada, origem_id, origem_outro, responsavel_id, custos:venda_custos(valor, venda_id)')
       .gte('data_entrada', dataInicio)
       .lte('data_entrada', dataFim)
     if (escopoVendedor) servicosQuery = servicosQuery.eq('responsavel_id', escopoVendedor)
@@ -315,7 +324,7 @@ export default function RelatoriosPage() {
         .not('status', 'eq', 'cancelado'),
       supabase
         .from('crediario_parcelas')
-        .select('valor_pago, crediario:crediario(venda:vendas(id, tipo, total, data_venda, forma_pagamento, vendedor_id, descricao_livre, custo_livre, vendedor:profiles(nome), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria))))')
+        .select('valor_pago, crediario:crediario(venda:vendas(id, numero, tipo, total, data_venda, forma_pagamento, vendedor_id, descricao_livre, custo_livre, vendedor:profiles(nome), itens:venda_itens(produto_id, nome_produto, subtotal, custo_unitario, quantidade, produto:produtos(categoria)), custos:venda_custos(valor)))')
         .eq('status', 'pago')
         .gte('data_pagamento', dataInicio)
         .lte('data_pagamento', dataFim),
@@ -410,13 +419,28 @@ export default function RelatoriosPage() {
       return sum + (getVendaCusto(item.venda) * Math.min(1, item.valor / item.venda.total))
     }, 0)
     const custo = custoVendasRecebidas + custoCrediarioRecebido
+    // Custos adicionais seguem a mesma regra do CMV: integral na venda à vista,
+    // proporcional ao valor recebido no crediário
+    const custosAdicionais = vendasRecebidas.reduce((sum, venda) => sum + getVendaCustosAdicionais(venda), 0)
+      + Array.from(recebidoPorVendaCrediario.values()).reduce((sum, item) => {
+        if (!item.venda || item.venda.total <= 0) return sum
+        return sum + (getVendaCustosAdicionais(item.venda) * Math.min(1, item.valor / item.venda.total))
+      }, 0)
     const despesas = lancamentosFinanceiros.filter((item) => item.tipo === 'saida').reduce((sum, item) => sum + item.valor, 0)
+    // Despesas sem os custos adicionais de venda (referencia_tipo 'venda_custo'), que já
+    // entram em custosAdicionais acima — evita descontar o mesmo valor duas vezes do lucro
+    const despesasOperacionais = lancamentosFinanceiros
+      .filter((item) => item.tipo === 'saida' && item.referencia_tipo !== 'venda_custo')
+      .reduce((sum, item) => sum + item.valor, 0)
     const entradas = lancamentosFinanceiros.filter((item) => item.tipo === 'entrada').reduce((sum, item) => sum + item.valor, 0)
 
     const servicosAtivos = servicos.filter((s) => s.status !== 'cancelado')
     const servicoValorTotal = servicosAtivos.reduce((sum, s) => sum + (s.valor ?? 0), 0)
     const servicoRecebido = servicosAtivos.filter((s) => s.pago).reduce((sum, s) => sum + (s.valor ?? 0), 0)
-    const servicoSaidas = servicosAtivos.reduce((sum, s) => sum + (s.custo_estimado ?? 0), 0)
+    // Custo estimado da OS + custos adicionais vinculados só à OS (os vinculados a venda entram no lucro da venda)
+    const servicoSaidas = servicosAtivos.reduce((sum, s) => (
+      sum + (s.custo_estimado ?? 0) + (s.custos ?? []).filter((c) => !c.venda_id).reduce((t, c) => t + c.valor, 0)
+    ), 0)
     const servicoLucro = servicoRecebido - servicoSaidas
     const servicosQtd = servicos.length
     const servicosPagos = servicosAtivos.filter((s) => s.pago)
@@ -440,9 +464,13 @@ export default function RelatoriosPage() {
 
     return {
       faturamento,
+      custoProdutos: custo,
+      custosAdicionais,
       lucroBruto: faturamento - custo,
-      lucroLiquido: faturamento - custo - despesas,
+      lucroVendas: faturamento - custo - custosAdicionais,
+      lucroLiquido: faturamento - custo - custosAdicionais - despesasOperacionais,
       despesas,
+      despesasOperacionais,
       entradas,
       ticketMedio: vendasRecebidas.length + recebidoPorVendaCrediario.size > 0
         ? faturamento / (vendasRecebidas.length + recebidoPorVendaCrediario.size)
@@ -746,6 +774,7 @@ export default function RelatoriosPage() {
 
     const custoNormal = vendasNormal.reduce((sum, v) => sum + getVendaCusto(v), 0)
     const custoLivre = vendasLivre.reduce((sum, v) => sum + getVendaCusto(v), 0)
+    const custosAdicionaisNormal = normalRecebidas.reduce((sum, v) => sum + getVendaCustosAdicionais(v), 0)
 
     return {
       faturamentoNormal,
@@ -760,10 +789,26 @@ export default function RelatoriosPage() {
       tickMedioNormal: normalRecebidas.length > 0 ? faturamentoNormal / normalRecebidas.length : 0,
       tickMedioLivre: livreRecebidas.length > 0 ? faturamentoLivre / livreRecebidas.length : 0,
       lucroNormal: faturamentoNormal - custoNormal,
+      lucroLiquidoNormal: faturamentoNormal - custoNormal - custosAdicionaisNormal,
       lucroLivre: faturamentoLivre - custoLivre,
       livreByDescricao,
     }
   }, [vendas, dataFim, dataInicio])
+
+  const linhasLucroVendas = useMemo<LinhaLucroVenda[]>(() => vendas
+    .filter((v) => vendasSubTab === 'todas' || v.tipo === vendasSubTab)
+    .map((v) => {
+      const cliente = Array.isArray(v.cliente) ? v.cliente[0] : v.cliente
+      return {
+        id: v.id,
+        numero: v.numero,
+        data: v.data_venda,
+        cliente: cliente?.nome ?? v.descricao_livre ?? 'Sem cliente',
+        tipo: v.tipo,
+        crediario: v.forma_pagamento === 'crediario',
+        analise: calcularLucroVenda(v.total ?? 0, getVendaCusto(v), getVendaCustosAdicionais(v)),
+      }
+    }), [vendas, vendasSubTab])
 
   const vendasEquipe = useMemo(() => {
     const vendasBase = vendasSubTab === 'normal'
@@ -1303,7 +1348,7 @@ export default function RelatoriosPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-semibold text-dark-700">{formatMoney(metrics.faturamento)}</p>
-                        <p className="text-xs text-green-700 mt-0.5">lucro bruto {formatMoney(metrics.lucroBruto)}</p>
+                        <p className="text-xs text-green-700 mt-0.5">lucro líquido {formatMoney(metrics.lucroVendas)}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between py-3">
@@ -1414,6 +1459,7 @@ export default function RelatoriosPage() {
                       { name: 'Faturamento', value: saudeFinanceira.totalFaturado },
                       { name: 'Custo', value: saudeFinanceira.totalFaturado - metrics.lucroBruto - metrics.servicoLucro },
                       { name: 'Lucro Bruto', value: metrics.lucroBruto + metrics.servicoLucro },
+                      { name: 'Custos Adicionais', value: metrics.custosAdicionais },
                       { name: 'Despesas', value: metrics.despesas },
                       { name: 'Resultado', value: metrics.entradas - metrics.despesas },
                     ]}
@@ -1469,6 +1515,27 @@ export default function RelatoriosPage() {
                   )}
                   <MetricCard label="Ticket Medio" value={metrics.vendasQtd > 0 ? formatMoney(metrics.ticketMedio) : '-'} changeType="neutral" />
                   <MetricCard label="Vendas" value={String(metrics.vendasQtd)} changeType="neutral" />
+                </div>
+              )}
+
+              {/* Análise de lucro — custo dos produtos + custos adicionais */}
+              {vendasSubTab === 'todas' && !escopoVendedor && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <MetricCard label="Custo dos Produtos" value={formatMoney(metrics.custoProdutos)} changeType="down" />
+                  <MetricCard label="Custos Adicionais" value={formatMoney(metrics.custosAdicionais)} change="mão de obra, gravação, frete..." changeType="down" />
+                  <MetricCard
+                    label="Lucro Líquido das Vendas"
+                    value={formatMoney(metrics.lucroVendas)}
+                    change={metrics.faturamento > 0 ? `${((metrics.lucroVendas / metrics.faturamento) * 100).toFixed(1)}% de margem` : undefined}
+                    changeType={metrics.lucroVendas >= 0 ? 'up' : 'down'}
+                    accent
+                  />
+                  <MetricCard
+                    label="Lucro Líquido Final"
+                    value={formatMoney(metrics.lucroLiquido)}
+                    change={`após ${formatMoney(metrics.despesasOperacionais)} de despesas`}
+                    changeType={metrics.lucroLiquido >= 0 ? 'up' : 'down'}
+                  />
                 </div>
               )}
 
@@ -1619,7 +1686,7 @@ export default function RelatoriosPage() {
                           ? [
                               { name: 'Faturamento', value: vendasPorTipo.faturamentoNormal },
                               { name: 'Lucro bruto', value: vendasPorTipo.lucroNormal },
-                              { name: 'Lucro liquido', value: vendasPorTipo.lucroNormal - metrics.despesas },
+                              { name: 'Lucro liquido', value: vendasPorTipo.lucroLiquidoNormal - metrics.despesasOperacionais },
                             ]
                           : [
                               { name: 'Faturamento', value: metrics.faturamento },
@@ -1631,6 +1698,8 @@ export default function RelatoriosPage() {
                   )}
                 </div>
               )}
+
+              {!escopoVendedor && <TabelaLucroVendas linhas={linhasLucroVendas} />}
 
               {/* Vendas por Tipo — Normal vs Livre lado a lado */}
               {vendasPorTipo.tipoSerie.length > 0 && (

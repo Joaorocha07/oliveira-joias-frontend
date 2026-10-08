@@ -19,9 +19,9 @@ import { deleteVenda, previewDeleteVenda } from '@/services/vendas'
 import type { DeleteVendaPreview } from '@/services/vendas'
 import {
   formatMoney, formatDate, formatDateTime, vendaStatusVariant,
-  VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL,
+  VENDA_STATUS_LABEL, FORMA_PAGAMENTO_LABEL, analisarLucroVenda,
 } from '@/utils'
-import type { Venda, VendaTipo, VendaStatus, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
+import type { Venda, VendaTipo, VendaStatus, VendaCusto, ClienteResumo, ProfileResumo, OrigemCliente } from '@/types'
 import { correspondeBusca } from '@/utils/search'
 
 export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> & {
@@ -43,6 +43,7 @@ export type VendaRow = Omit<Venda, 'cliente' | 'vendedor' | 'origem' | 'itens'> 
     produto?: { codigo: string; categoria: string; material: string | null } | null
     variacao?: { nome: string; valor: string } | null
   }[]
+  custos?: Pick<VendaCusto, 'id' | 'tipo_id' | 'tipo_nome' | 'descricao' | 'valor' | 'servico_id' | 'data_custo'>[]
 }
 
 export default function VendasPage() {
@@ -78,7 +79,8 @@ export default function VendasPage() {
           quantidade, preco_unitario, custo_unitario, desconto, subtotal,
           produto:produtos(codigo, categoria, material),
           variacao:produto_variacoes(nome, valor)
-        )
+        ),
+        custos:venda_custos(id, tipo_id, tipo_nome, descricao, valor, servico_id, data_custo)
       `)
       .gte('data_venda', dataInicio)
       .lte('data_venda', dataFim)
@@ -294,6 +296,9 @@ export default function VendasPage() {
                     <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Data</th>
                     <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Pagamento</th>
                     <th className="text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Total</th>
+                    {!escopoVendedor && (
+                      <th className="hidden lg:table-cell text-right px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Lucro</th>
+                    )}
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Status</th>
                     <th className="px-5 py-3 w-20" />
                   </tr>
@@ -382,6 +387,19 @@ export default function VendasPage() {
                           )}
                           <span className="font-medium text-dark-700">{formatMoney(venda.total)}</span>
                         </td>
+                        {!escopoVendedor && (() => {
+                          const analise = analisarLucroVenda(venda)
+                          return (
+                            <td className="hidden lg:table-cell px-5 py-3 text-right">
+                              <span className={`font-medium ${analise.lucro >= 0 ? 'text-[#5B8C5B]' : 'text-[#C75B5B]'}`}>
+                                {formatMoney(analise.lucro)}
+                              </span>
+                              {analise.faturamento > 0 && (
+                                <p className="text-[10px] text-dark-300 leading-none mt-0.5">{analise.margem.toFixed(0)}% margem</p>
+                              )}
+                            </td>
+                          )
+                        })()}
                         <td className="px-5 py-3">
                           <Badge variant={vendaStatusVariant(venda.status)}>{VENDA_STATUS_LABEL[venda.status]}</Badge>
                         </td>
@@ -444,6 +462,7 @@ export default function VendasPage() {
         open={!!drawerVenda}
         onClose={() => setDrawerVenda(null)}
         venda={drawerVenda}
+        mostrarLucro={!escopoVendedor}
         displayNum={drawerVenda ? displayNumMap.get(drawerVenda.id) : undefined}
         onEditar={() => { if (!drawerVenda) return; setEditando(drawerVenda); setDrawerVenda(null) }}
         onExcluir={() => { if (!drawerVenda) return; void handleIniciarDelete(drawerVenda); setDrawerVenda(null) }}

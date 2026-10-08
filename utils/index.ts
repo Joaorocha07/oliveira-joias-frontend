@@ -4,6 +4,7 @@ import type {
   FormaPagamento, VendaStatus, ServicoStatus,
   ParcelaStatus, CrediarioStatus, ProdutoCategoria,
   StatusFunil, ProdutoInteresse, FollowUpStatus, StatusQualificacao,
+  AnaliseLucroVenda,
 } from '@/types'
 
 // ── FORMATAÇÃO MONETÁRIA ───────────────────────────────────────
@@ -224,6 +225,46 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function round2(value: number): number {
   return Math.round(value * 100) / 100
+}
+
+// ── ANÁLISE DE LUCRO DA VENDA ──────────────────────────────────
+interface VendaCustoInput {
+  tipo: 'normal' | 'livre'
+  custo_livre?: number | null
+  itens?: { custo_unitario: number | null; quantidade: number | null }[] | null
+}
+
+// Custo dos produtos vendidos (CMV): custo_unitario gravado no item no momento da venda,
+// ou custo_livre na venda livre.
+export function calcularCustoProdutosVenda(venda: VendaCustoInput): number {
+  if (venda.tipo === 'livre') return round2(venda.custo_livre ?? 0)
+  return round2((venda.itens ?? []).reduce((sum, i) => sum + (i.custo_unitario ?? 0) * (i.quantidade ?? 0), 0))
+}
+
+export function calcularLucroVenda(
+  faturamento: number,
+  custoProdutos: number,
+  custosAdicionais: number,
+): AnaliseLucroVenda {
+  const lucro = round2(faturamento - custoProdutos - custosAdicionais)
+  return {
+    faturamento: round2(faturamento),
+    custoProdutos: round2(custoProdutos),
+    custosAdicionais: round2(custosAdicionais),
+    lucro,
+    margem: faturamento > 0 ? (lucro / faturamento) * 100 : 0,
+  }
+}
+
+// Análise completa de uma venda já gravada (total + itens/custo_livre + custos adicionais)
+export function analisarLucroVenda(
+  venda: VendaCustoInput & { total: number; custos?: { valor: number }[] | null },
+): AnaliseLucroVenda {
+  return calcularLucroVenda(
+    venda.total,
+    calcularCustoProdutosVenda(venda),
+    (venda.custos ?? []).reduce((sum, c) => sum + (c.valor ?? 0), 0),
+  )
 }
 
 // ── STATUS → BADGE VARIANT ─────────────────────────────────────

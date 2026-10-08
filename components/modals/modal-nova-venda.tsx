@@ -10,12 +10,17 @@ import { CurrencyInput } from '@/components/forms/currency-input'
 import { SearchableSelect, type SelectOption } from '@/components/forms/searchable-select'
 import { ModalQuickCliente } from '@/components/modals/modal-quick-cliente'
 import { ModalQuickVendedor } from '@/components/modals/modal-quick-vendedor'
+import { CustosAdicionaisEditor } from '@/components/vendas/custos-adicionais-editor'
+import { ResumoLucroVenda } from '@/components/vendas/resumo-lucro-venda'
 import { vendaSchema, type VendaFormData } from '@/schemas/venda'
 import { createVenda } from '@/services/vendas'
 import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import { buscarClientes, buscarProdutos, buscarProfiles } from '@/services/busca'
-import { today, formatMoney, FORMA_PAGAMENTO_LABEL, gerarDatasParcelas, formatDate } from '@/utils'
+import {
+  today, formatMoney, FORMA_PAGAMENTO_LABEL, gerarDatasParcelas, formatDate,
+  calcularCustoProdutosVenda, calcularLucroVenda,
+} from '@/utils'
 import type { FormaPagamento, Produto, ProdutoVariacao, OrigemCliente } from '@/types'
 
 interface ModalNovaVendaProps {
@@ -32,6 +37,8 @@ const FORMAS: FormaPagamento[] = [
 interface ItemProdutoState {
   variacoes: ProdutoVariacao[]
   loading: boolean
+  // custo do produto sem o custo adicional da variação
+  custoBase?: number
 }
 
 function round2(n: number) {
@@ -39,7 +46,9 @@ function round2(n: number) {
 }
 
 export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  // Vendedor não vê custos nem lucro (mesma regra dos relatórios)
+  const podeVerLucro = !!profile && profile.role !== 'vendedor'
   const alert = useAlert()
   const [itemProdutos, setItemProdutos] = useState<Record<number, ItemProdutoState>>({})
   const [quickClienteOpen, setQuickClienteOpen] = useState(false)
@@ -74,6 +83,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       descricao_livre: '',
       valor_livre: 0,
       custo_livre: 0,
+      custos_adicionais: [],
       num_parcelas: 1,
       entrada: 0,
       dia_vencimento: 10,
@@ -101,6 +111,14 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       }, 0)
   const total = round2(Math.max(0, subtotal - (watchedDesconto ?? 0)))
 
+  const watchedCustoLivre = watch('custo_livre')
+  const watchedCustos = watch('custos_adicionais')
+  const analiseLucro = calcularLucroVenda(
+    total,
+    calcularCustoProdutosVenda({ tipo: watchedTipo, custo_livre: watchedCustoLivre, itens: watchedItens }),
+    (watchedCustos ?? []).reduce((sum, c) => sum + (c.valor ?? 0), 0),
+  )
+
   useEffect(() => {
     if (open) {
       reset({
@@ -117,6 +135,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
         descricao_livre: '',
         valor_livre: 0,
         custo_livre: 0,
+        custos_adicionais: [],
         num_parcelas: 1,
         entrada: 0,
         dia_vencimento: 10,
@@ -202,12 +221,12 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       return false
     }
 
-    setItemProdutos((prev) => ({ ...prev, [index]: { variacoes, loading: false } }))
+    setItemProdutos((prev) => ({ ...prev, [index]: { variacoes, loading: false, custoBase: p.custo } }))
     clearErrors([`itens.${index}.produto_id`, `itens.${index}.quantidade`, `itens.${index}.variacao_id`])
     setValue(`itens.${index}.produto_id`, p.id)
     setValue(`itens.${index}.nome_produto`, p.nome)
     setValue(`itens.${index}.preco_unitario`, p.preco_venda)
-    setValue(`itens.${index}.custo_unitario`, p.custo)
+    setValue(`itens.${index}.custo_unitario`, round2(p.custo + (variacoes.length === 1 ? variacoes[0].custo_adicional ?? 0 : 0)))
     setValue(`itens.${index}.variacao_id`, variacoes.length === 1 ? variacoes[0].id : null)
     setValue(`itens.${index}.quantidade`, 1)
     return true
@@ -491,7 +510,13 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
                         label="Variação"
                         placeholder="Selecione a variação..."
                         error={itemErrors?.variacao_id?.message}
-                        {...register(`itens.${index}.variacao_id`)}
+                        {...register(`itens.${index}.variacao_id`, {
+                          // custo do item = custo do produto + custo adicional da variação escolhida
+                          onChange: (e) => {
+                            const variacao = itemState.variacoes.find((v) => v.id === e.target.value)
+                            setValue(`itens.${index}.custo_unitario`, round2((itemState.custoBase ?? 0) + (variacao?.custo_adicional ?? 0)))
+                          },
+                        })}
                       >
                         {itemState.variacoes.map((v) => (
                           <option key={v.id} value={v.id}>
@@ -695,6 +720,17 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
             </div>
           )}
 
+          {/* Custos adicionais */}
+          {podeVerLucro && (
+            <Controller
+              name="custos_adicionais"
+              control={control}
+              render={({ field }) => (
+                <CustosAdicionaisEditor value={field.value} onChange={field.onChange} errors={errors.custos_adicionais} />
+              )}
+            />
+          )}
+
           {/* Observações */}
           <div className="flex flex-col gap-1">
             <label className="label-base">Observações (opcional)</label>
@@ -716,6 +752,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
               <span>Total</span>
               <span className="font-display text-lg">{formatMoney(total)}</span>
             </div>
+            {podeVerLucro && <ResumoLucroVenda analise={analiseLucro} className="mt-3" />}
           </div>
         </form>
       </Modal>

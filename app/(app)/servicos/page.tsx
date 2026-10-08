@@ -16,12 +16,14 @@ import {
 } from '@/utils'
 import { updateServicoStatus, deleteServico } from '@/services/servicos'
 import { DrawerDetalheServico } from '@/components/servicos/drawer-detalhe-servico'
+import { CustosAdicionaisTab } from '@/components/servicos/custos-adicionais-tab'
 import type { ServicoComCliente, ServicoStatus } from '@/types'
 import { correspondeBusca } from '@/utils/search'
 
 const STATUS_OPTS: ServicoStatus[] = ['orcamento', 'aguardando', 'em_andamento', 'concluido', 'cancelado']
 
 type PeriodoAtalho = 'hoje' | 'sete_dias' | 'mes' | 'tres_meses'
+type ServicosAba = 'ordens' | 'custos'
 
 function toDateInputValue(date: Date) {
   return date.toISOString().slice(0, 10)
@@ -59,6 +61,9 @@ export default function ServicosPage() {
   const [deletando, setDeletando] = useState(false)
   const [activePeriodo, setActivePeriodo] = useState<PeriodoAtalho | null>('hoje')
   const [drawerServico, setDrawerServico] = useState<ServicoComCliente | null>(null)
+  // Aba de custos adicionais: só para quem vê lucro (vendedor não vê custos)
+  const [aba, setAba] = useState<ServicosAba>('ordens')
+  const podeVerCustos = !!profile && profile.role !== 'vendedor'
 
   const loadServicos = useCallback(async () => {
     setLoading(true)
@@ -145,13 +150,38 @@ export default function ServicosPage() {
       <PageHeader
         title="Serviços"
         subtitle="Ordens de serviço e reparos"
-        actions={
+        actions={aba === 'ordens' && (
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
             Novo Serviço
           </Button>
-        }
+        )}
       />
 
+      {podeVerCustos && (
+        <div className="mb-4 inline-flex rounded-xl border border-gold-200 bg-cream-50 p-1" role="tablist">
+          {([
+            { key: 'ordens', label: 'Ordens de serviço' },
+            { key: 'custos', label: 'Custos adicionais' },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={aba === t.key}
+              onClick={() => setAba(t.key)}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                aba === t.key ? 'bg-white text-dark-700 shadow-sm ring-1 ring-gold-300' : 'text-dark-400 hover:text-dark-600'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {podeVerCustos && aba === 'custos' ? (
+        <CustosAdicionaisTab />
+      ) : (
       <Card padding="none">
         <div className="flex flex-col gap-3 p-4 border-b border-gold-100">
           <div className="flex flex-col lg:flex-row gap-3 lg:items-end">
@@ -336,6 +366,7 @@ export default function ServicosPage() {
           </>
         )}
       </Card>
+      )}
 
       <ModalNovoServico
         open={modalOpen}

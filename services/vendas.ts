@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import { gerarDatasParcelas } from '@/utils'
+import { sincronizarCustosVenda, excluirCustosVenda } from '@/services/custos'
 import type { VendaFormData, VendaItemFormData } from '@/schemas/venda'
+import type { CustoAdicionalFormData } from '@/schemas/custo'
 import type { VendaStatus, FormaPagamento } from '@/types'
 
 export interface DeleteVendaPreview {
@@ -37,6 +39,8 @@ export interface UpdateVendaData {
   descricao_livre?: string
   valor_livre?: number
   custo_livre?: number
+  // undefined = não mexe nos custos (ex.: vendedor, que não vê a análise de lucro)
+  custos_adicionais?: CustoAdicionalFormData[]
 }
 
 function itemSubtotal(item: VendaItemFormData) {
@@ -200,6 +204,12 @@ export async function createVenda(
       referencia_tipo: 'venda',
       created_by: userId,
     })
+  }
+
+  // 6. Custos adicionais (geram saída no caixa com referencia_tipo 'venda_custo')
+  if (data.custos_adicionais.length > 0) {
+    const { error: custosError } = await sincronizarCustosVenda(venda.id, data.data_venda, data.custos_adicionais, userId)
+    if (custosError) return { error: custosError }
   }
 
   return { error: null }
@@ -532,6 +542,11 @@ export async function updateVenda(
     }
   }
 
+  if (data.custos_adicionais) {
+    const { error: custosError } = await sincronizarCustosVenda(id, data.data_venda, data.custos_adicionais, userId)
+    if (custosError) return { error: custosError }
+  }
+
   return { error: null }
 }
 
@@ -677,6 +692,9 @@ export async function deleteVenda(vendaId: string): Promise<{ error: string | nu
         .eq('id', variacaoId)
     }
   }
+
+  const { error: custosError } = await excluirCustosVenda(vendaId)
+  if (custosError) return { error: custosError }
 
   const cleanupQueries = [
     supabase.from('lancamentos').delete().eq('referencia_tipo', 'venda').eq('referencia_id', vendaId),

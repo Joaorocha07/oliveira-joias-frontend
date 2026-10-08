@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { aplicarBuscaSupabase, ordenarPorRelevancia } from '@/utils/search'
+import { aplicarBuscaSupabase, ordenarPorRelevancia, filtrarBusca } from '@/utils/search'
 
 // Buscas usadas pelos campos de autocomplete (SearchableSelect) dos modais/formulários.
 // Todas aceitam nome sem acento, palavras fora de ordem e telefone/CPF sem formatação.
@@ -113,6 +113,66 @@ export async function buscarFornecedores(
   const rows = (data ?? []) as (FornecedorBusca & { razao_social: string | null; categoria: string | null; cnpj: string | null; cpf: string | null; telefone: string | null })[]
   return {
     data: ordenarPorRelevancia(rows, termo, (f) => [f.nome, f.razao_social, f.categoria, f.cnpj, f.cpf, f.telefone]).slice(0, limit),
+    error: null,
+  }
+}
+
+// Vendas e serviços: busca pelos registros mais recentes e filtra no cliente
+// (o termo pode ser nº, nome do cliente ou descrição — campos em tabelas diferentes)
+const LIMITE_RECENTES = 300
+
+export interface VendaBusca {
+  id: string
+  numero: number
+  total: number
+  data_venda: string
+  descricao_livre: string | null
+  cliente: { nome: string } | null
+}
+
+export async function buscarVendas(
+  termo: string,
+  { limit = 20 }: { limit?: number } = {},
+): Promise<{ data: VendaBusca[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('vendas')
+    .select('id, numero, total, data_venda, descricao_livre, cliente:clientes(nome)')
+    .not('status', 'eq', 'cancelado')
+    .order('data_venda', { ascending: false })
+    .order('numero', { ascending: false })
+    .limit(LIMITE_RECENTES)
+  if (error) return { data: [], error: 'Erro ao buscar vendas.' }
+  const rows = (data ?? []) as unknown as VendaBusca[]
+  return {
+    data: filtrarBusca(rows, termo, (v) => [v.numero, v.cliente?.nome, v.descricao_livre]).slice(0, limit),
+    error: null,
+  }
+}
+
+export interface ServicoBusca {
+  id: string
+  numero: number
+  tipo: string
+  valor: number
+  data_entrada: string
+  cliente: { nome: string } | null
+}
+
+export async function buscarServicos(
+  termo: string,
+  { limit = 20 }: { limit?: number } = {},
+): Promise<{ data: ServicoBusca[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('servicos')
+    .select('id, numero, tipo, valor, data_entrada, cliente:clientes(nome)')
+    .not('status', 'eq', 'cancelado')
+    .order('data_entrada', { ascending: false })
+    .order('numero', { ascending: false })
+    .limit(LIMITE_RECENTES)
+  if (error) return { data: [], error: 'Erro ao buscar serviços.' }
+  const rows = (data ?? []) as unknown as ServicoBusca[]
+  return {
+    data: filtrarBusca(rows, termo, (s) => [s.numero, s.cliente?.nome, s.tipo]).slice(0, limit),
     error: null,
   }
 }

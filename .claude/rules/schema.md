@@ -103,6 +103,27 @@ parceiro_nome, parceiro_telefone  ← cadastro de casal (item 16 do doc), opcion
 > exige o hint explícito `profiles!clientes_vendedor_id_fkey(...)`, senão dá erro `PGRST201`
 > (relação ambígua).
 
+### `custo_tipos`
+```
+id, nome, ativo, created_by, created_at, updated_at
+```
+> Catálogo de tipos de custo adicional (Mão de obra, Gravação, Banho / Acabamento, Solda / Conserto,
+> Frete, Embalagem, Outro). Remoção é soft (`ativo=false`) — `venda_custos.tipo_nome` guarda snapshot.
+
+### `venda_custos`
+```
+id, venda_id (FK vendas, cascade, nullable), servico_id (FK servicos, set null, nullable),
+tipo_id (FK custo_tipos), tipo_nome, descricao, valor, data_custo, created_by, created_at, updated_at
+```
+> Custos adicionais da análise de lucro (`services/custos.ts`). Lançados no modal de nova/editar venda
+> (só para quem não é `vendedor`) ou na aba "Custos adicionais" da tela `/servicos`. Cada custo gera
+> um lançamento de saída em `lancamentos` com `referencia_id = venda_custos.id` e
+> `referencia_tipo = 'venda_custo'` (tem venda) ou `'servico_custo'` (só OS).
+> Lucro da venda = total − CMV (`venda_itens.custo_unitario × quantidade`, ou `custo_livre`) − custos
+> adicionais. Nos relatórios, `'venda_custo'` é excluído das despesas operacionais para não descontar
+> duas vezes; no crediário os custos são rateados pelo valor recebido, igual ao CMV. Custos só de OS
+> entram em "Custos" do relatório de Serviços. Migration: `.claude/migrations/custos_adicionais.sql`.
+
 ### `cliente_timeline`
 ```
 id, cliente_id, tipo ('nota'|'status'|'sistema'), descricao,
@@ -207,7 +228,8 @@ observacoes, editado, created_by, updated_by, created_at, updated_at
 > Alimenta a tela Caixa & Financeiro (`app/(app)/caixa/page.tsx`). `referencia_tipo` é texto livre
 > (sem FK/enum no banco) usado para rastrear a origem do lançamento: `'venda'`, `'servico'`,
 > `'crediario'`, `'crediario_parcela'`, `'venda_estorno'`, `'follow_up'` (valor registrado ao
-> concluir um follow-up do CRM, ver `services/follow-ups.ts`). `referencia_id` aponta para o id da
+> concluir um follow-up do CRM, ver `services/follow-ups.ts`), `'venda_custo'`/`'servico_custo'`
+> (custos adicionais, ver `venda_custos`). `referencia_id` aponta para o id da
 > respectiva linha de origem. Lançamentos manuais (criados direto na tela Caixa) têm
 > `referencia_id`/`referencia_tipo` nulos.
 >
@@ -322,6 +344,8 @@ id, admin_id, admin_nome, vendedor_id, vendedor_nome, created_at
 ```
 produtos ──< produto_variacoes (produto_id)
 vendas ──< venda_itens (venda_id)
+vendas ──< venda_custos (venda_id) >── custo_tipos (tipo_id)
+servicos ──< venda_custos (servico_id)
 vendas ──── crediario (venda_id)
 crediario ──< crediario_parcelas (crediario_id)
 clientes ──< vendas, crediario, servicos (cliente_id)

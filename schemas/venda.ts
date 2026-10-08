@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { custoAdicionalSchema } from './custo'
 
 const formasPagamento = [
   'dinheiro', 'pix', 'cartao_debito', 'cartao_credito',
@@ -32,6 +33,8 @@ export const vendaSchema = z
     descricao_livre: z.string(),
     valor_livre: z.number().min(0),
     custo_livre: z.number().min(0),
+    // Custos adicionais (mão de obra, gravação, frete...) — análise de lucro
+    custos_adicionais: z.array(custoAdicionalSchema),
     // Crediário
     num_parcelas: z.number().int().min(1).max(60),
     entrada: z.number().min(0),
