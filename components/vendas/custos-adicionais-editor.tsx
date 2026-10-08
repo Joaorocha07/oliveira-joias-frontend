@@ -14,14 +14,16 @@ import type { CustoTipo } from '@/types'
 const NOVO_TIPO = '__novo__'
 
 interface CustosAdicionaisEditorProps {
-  value: CustoAdicionalFormData[]
+  // Pode chegar undefined no primeiro render do modal de edição, antes do reset() preencher o form
+  value: CustoAdicionalFormData[] | undefined
   onChange: (custos: CustoAdicionalFormData[]) => void
   errors?: FieldErrors<{ custos_adicionais: CustoAdicionalFormData[] }>['custos_adicionais']
 }
 
 // Lista editável de custos adicionais da venda (mão de obra, gravação, frete...).
 // Usado nos modais de nova venda e de edição, dentro de um Controller do React Hook Form.
-export function CustosAdicionaisEditor({ value, onChange, errors }: CustosAdicionaisEditorProps) {
+export function CustosAdicionaisEditor({ value: valueProp, onChange, errors }: CustosAdicionaisEditorProps) {
+  const value = valueProp ?? []
   const [tipos, setTipos] = useState<CustoTipo[]>([])
   const [loadError, setLoadError] = useState(false)
   const [novoTipoIndex, setNovoTipoIndex] = useState<number | null>(null)
