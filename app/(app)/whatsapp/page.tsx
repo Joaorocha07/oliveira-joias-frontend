@@ -70,6 +70,9 @@ function SlotPanel({ index, slotStatus, onConnect, onDisconnect, loadingSlot }: 
               <p className="text-xs text-dark-300 mt-1 max-w-[200px]">
                 Conecte este número para receber contatos automaticamente.
               </p>
+              {slotStatus.error && (
+                <p className="text-xs text-[#C75B5B] mt-2 max-w-[240px]">{slotStatus.error}</p>
+              )}
             </div>
             <button
               onClick={() => onConnect(index)}
@@ -85,8 +88,12 @@ function SlotPanel({ index, slotStatus, onConnect, onDisconnect, loadingSlot }: 
         {slotStatus.status === 'connecting' && (
           <div className="flex flex-col items-center gap-3 text-center">
             <Loader2 size={36} className="text-[#25D366] animate-spin" />
-            <p className="text-white font-medium text-sm">Iniciando conexão…</p>
-            <p className="text-xs text-dark-300">Aguarde o QR Code aparecer.</p>
+            <p className="text-white font-medium text-sm">
+              {slotStatus.phone ? 'Reconectando…' : 'Iniciando conexão…'}
+            </p>
+            <p className="text-xs text-dark-300">
+              {slotStatus.phone ? 'A conexão caiu e está sendo restabelecida.' : 'Aguarde o QR Code aparecer.'}
+            </p>
           </div>
         )}
 

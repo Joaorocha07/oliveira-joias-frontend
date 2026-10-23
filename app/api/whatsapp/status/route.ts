@@ -6,7 +6,10 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
 export async function GET() {
   try {
-    const res = await fetch(`${BACKEND}/api/whatsapp/status`, { cache: 'no-store' })
+    const res = await fetch(`${BACKEND}/api/whatsapp/status`, {
+      cache: 'no-store',
+      headers: process.env.WHATSAPP_SECRET ? { 'x-whatsapp-secret': process.env.WHATSAPP_SECRET } : {},
+    })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {

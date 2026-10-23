@@ -1,11 +1,15 @@
 import { supabase } from '@/lib/supabase'
 import type { Cliente } from '@/types'
-import type { ConnectionStatus } from '@/lib/whatsapp-client'
+
+// A conexão com o WhatsApp (Baileys) roda no oliveira-joias-backend; as rotas
+// /api/whatsapp/* do Next só validam o admin e repassam para lá.
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'waiting_qr' | 'connected'
 
 export interface SlotStatus {
   status: ConnectionStatus
   qrBase64: string | null
   phone: string | null
+  error?: string | null
 }
 
 export interface WhatsAppAllStatus {
