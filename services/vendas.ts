@@ -206,7 +206,7 @@ export async function createVenda(
     })
   }
 
-  // 6. Custos adicionais (geram saída no caixa com referencia_tipo 'venda_custo')
+  // 6. Custos adicionais (só análise de lucro — não geram saída no caixa)
   if (data.custos_adicionais.length > 0) {
     const { error: custosError } = await sincronizarCustosVenda(venda.id, data.data_venda, data.custos_adicionais, userId)
     if (custosError) return { error: custosError }

@@ -3,11 +3,11 @@ import type { CustoAdicionalFormData } from '@/schemas/custo'
 import type { CustoTipo, VendaCusto, VendaCustoComRelacoes } from '@/types'
 
 // Custos adicionais (mão de obra, gravação, frete...) vinculados a vendas e/ou ordens de serviço.
-// Cada custo gera um lançamento de saída no Caixa com referencia_id = venda_custos.id e
-// referencia_tipo:
-//   'venda_custo'   → vinculado a uma venda. Os relatórios descontam no lucro da venda e por
-//                     isso NÃO o contam de novo como despesa operacional (ver relatorios/page.tsx).
-//   'servico_custo' → só vinculado a uma OS. Entra como despesa comum e no lucro dos serviços.
+//   Vinculado a uma venda → só entra na análise de lucro da venda; NÃO gera lançamento no Caixa
+//                           (a pedido do usuário). 'venda_custo' fica apenas para limpar
+//                           lançamentos antigos criados antes dessa regra.
+//   Só vinculado a uma OS → gera lançamento de saída no Caixa com referencia_id = venda_custos.id e
+//                           referencia_tipo 'servico_custo' (despesa comum e lucro dos serviços).
 
 export const REFERENCIA_CUSTO_VENDA = 'venda_custo'
 export const REFERENCIA_CUSTO_SERVICO = 'servico_custo'
@@ -68,10 +68,6 @@ async function nomeDoTipo(tipoId: string): Promise<string | null> {
   return (data?.nome as string | undefined) ?? null
 }
 
-function referenciaTipo(input: CustoInput) {
-  return input.venda_id ? REFERENCIA_CUSTO_VENDA : REFERENCIA_CUSTO_SERVICO
-}
-
 async function descricaoLancamento(input: CustoInput, tipoNome: string | null): Promise<string> {
   const rotulo = tipoNome ? `Custo adicional (${tipoNome})` : 'Custo adicional'
   if (input.venda_id) {
@@ -83,6 +79,52 @@ async function descricaoLancamento(input: CustoInput, tipoNome: string | null): 
     return `${rotulo} - Serviço #${data?.numero ?? '?'}`
   }
   return rotulo
+}
+
+// Mantém o lançamento de saída no Caixa coerente com o custo: custos de venda não vão para o
+// Caixa (remove qualquer lançamento existente); custos só de OS criam/atualizam a saída.
+async function sincronizarLancamentoCusto(
+  custoId: string,
+  input: CustoInput,
+  tipoNome: string | null,
+  userId: string,
+): Promise<{ error: string | null }> {
+  if (input.venda_id) {
+    const { error } = await supabase
+      .from('lancamentos')
+      .delete()
+      .in('referencia_tipo', REFERENCIAS_CUSTO)
+      .eq('referencia_id', custoId)
+    return { error: error ? 'Custo salvo, mas houve erro ao remover o lançamento antigo do caixa.' : null }
+  }
+
+  const campos = {
+    descricao: await descricaoLancamento(input, tipoNome),
+    valor: input.valor,
+    data_lancamento: input.data_custo,
+    observacoes: input.descricao.trim() || null,
+    referencia_tipo: REFERENCIA_CUSTO_SERVICO,
+  }
+  const { data: existentes, error: buscaError } = await supabase
+    .from('lancamentos')
+    .select('id')
+    .in('referencia_tipo', REFERENCIAS_CUSTO)
+    .eq('referencia_id', custoId)
+  if (buscaError) return { error: 'Custo salvo, mas houve erro ao lançar a saída no caixa.' }
+
+  const { error } = existentes && existentes.length > 0
+    ? await supabase
+        .from('lancamentos')
+        .update({ ...campos, updated_by: userId })
+        .in('id', existentes.map((l) => l.id as string))
+    : await supabase.from('lancamentos').insert({
+        ...campos,
+        tipo: 'saida',
+        categoria_nome: CATEGORIA_LANCAMENTO,
+        referencia_id: custoId,
+        created_by: userId,
+      })
+  return { error: error ? 'Custo salvo, mas houve erro ao lançar a saída no caixa.' : null }
 }
 
 // ── CRUD ───────────────────────────────────────────────────────
@@ -129,19 +171,7 @@ export async function criarCusto(input: CustoInput, userId: string): Promise<{ e
     .single()
   if (error) return { error: 'Erro ao salvar custo adicional.' }
 
-  const { error: lancError } = await supabase.from('lancamentos').insert({
-    tipo: 'saida',
-    descricao: await descricaoLancamento(input, tipoNome),
-    valor: input.valor,
-    data_lancamento: input.data_custo,
-    categoria_nome: CATEGORIA_LANCAMENTO,
-    observacoes: input.descricao.trim() || null,
-    referencia_id: custo.id,
-    referencia_tipo: referenciaTipo(input),
-    created_by: userId,
-  })
-  if (lancError) return { error: 'Custo salvo, mas houve erro ao lançar a saída no caixa.' }
-  return { error: null }
+  return sincronizarLancamentoCusto(custo.id as string, input, tipoNome, userId)
 }
 
 export async function atualizarCusto(
@@ -165,20 +195,7 @@ export async function atualizarCusto(
     .eq('id', id)
   if (error) return { error: 'Erro ao atualizar custo adicional.' }
 
-  const { error: lancError } = await supabase
-    .from('lancamentos')
-    .update({
-      descricao: await descricaoLancamento(input, tipoNome),
-      valor: input.valor,
-      data_lancamento: input.data_custo,
-      observacoes: input.descricao.trim() || null,
-      referencia_tipo: referenciaTipo(input),
-      updated_by: userId,
-    })
-    .in('referencia_tipo', REFERENCIAS_CUSTO)
-    .eq('referencia_id', id)
-  if (lancError) return { error: 'Custo atualizado, mas houve erro ao atualizar o lançamento no caixa.' }
-  return { error: null }
+  return sincronizarLancamentoCusto(id, input, tipoNome, userId)
 }
 
 export async function excluirCusto(id: string): Promise<{ error: string | null }> {

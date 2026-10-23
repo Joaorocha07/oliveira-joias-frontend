@@ -116,9 +116,11 @@ id, venda_id (FK vendas, cascade, nullable), servico_id (FK servicos, set null, 
 tipo_id (FK custo_tipos), tipo_nome, descricao, valor, data_custo, created_by, created_at, updated_at
 ```
 > Custos adicionais da análise de lucro (`services/custos.ts`). Lançados no modal de nova/editar venda
-> (só para quem não é `vendedor`) ou na aba "Custos adicionais" da tela `/servicos`. Cada custo gera
-> um lançamento de saída em `lancamentos` com `referencia_id = venda_custos.id` e
-> `referencia_tipo = 'venda_custo'` (tem venda) ou `'servico_custo'` (só OS).
+> (só para quem não é `vendedor`) ou na aba "Custos adicionais" da tela `/servicos`. Custos com
+> `venda_id` **não** geram lançamento no Caixa (só entram na análise de lucro — a pedido do usuário);
+> custos só de OS geram saída em `lancamentos` com `referencia_id = venda_custos.id` e
+> `referencia_tipo = 'servico_custo'`. `'venda_custo'` só existe em lançamentos antigos (anteriores
+> a essa regra), que são removidos quando o custo é editado/salvo de novo.
 > Lucro da venda = total − CMV (`venda_itens.custo_unitario × quantidade`, ou `custo_livre`) − custos
 > adicionais. Nos relatórios, `'venda_custo'` é excluído das despesas operacionais para não descontar
 > duas vezes; no crediário os custos são rateados pelo valor recebido, igual ao CMV. Custos só de OS
