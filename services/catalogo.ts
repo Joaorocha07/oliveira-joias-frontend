@@ -15,6 +15,8 @@ export type ProdutoCatalogo = {
   imagens: string[]
   destaque: boolean
   ativo: boolean
+  /** Continua ativo no site, mas com faixa "Sem estoque" (só em oliveirajoias.com). */
+  sem_estoque: boolean
   ordem: number | null
   info_produto: string | null
   voce_sabia: string | null
@@ -64,6 +66,26 @@ export async function atualizarProdutoCatalogo(
     const res = await fetch(`${BACKEND_URL}/api/produtos/${id}`, { method: 'PUT', body: formData })
     const json = await res.json()
     if (!res.ok) return { error: json.error ?? 'Erro ao atualizar produto.' }
+    return { error: null }
+  } catch {
+    return { error: 'Não foi possível conectar ao servidor de produtos.' }
+  }
+}
+
+export async function marcarSemEstoqueCatalogo(
+  id: string,
+  semEstoque: boolean,
+): Promise<{ error: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/produtos/${id}/estoque`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sem_estoque: semEstoque }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      return { error: json.error ?? 'Erro ao atualizar o estoque do produto.' }
+    }
     return { error: null }
   } catch {
     return { error: 'Não foi possível conectar ao servidor de produtos.' }

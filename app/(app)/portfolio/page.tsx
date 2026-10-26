@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, Layers } from 'lucide-react'
+import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, Layers, PackageX, PackageCheck } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { cn } from '@/lib/cn'
 import {
@@ -12,7 +12,7 @@ import { usePagination } from '@/hooks/use-pagination'
 import { formatMoney, formatDate } from '@/utils'
 import {
   listarProdutosCatalogo, criarProdutoCatalogo, atualizarProdutoCatalogo,
-  excluirProdutoCatalogo, reordenarProdutosCatalogo,
+  excluirProdutoCatalogo, reordenarProdutosCatalogo, marcarSemEstoqueCatalogo,
   listarCategoriasCatalogo, criarCategoriaCatalogo, excluirCategoriaCatalogo,
   listarAcabamentosCatalogo, criarAcabamentoCatalogo, excluirAcabamentoCatalogo,
   type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type FaqItem,
@@ -333,6 +333,19 @@ export default function PortfolioPage() {
     setSalvando(false)
   }
 
+  async function handleToggleEstoque(p: ProdutoCatalogo) {
+    const semEstoque = !p.sem_estoque
+    const { error } = await marcarSemEstoqueCatalogo(p.id, semEstoque)
+    if (error) { alert.error('Erro', error); return }
+    setProdutos((prev) => prev.map((item) => (item.id === p.id ? { ...item, sem_estoque: semEstoque } : item)))
+    alert.success(
+      semEstoque ? 'Marcado sem estoque' : 'Estoque disponível',
+      semEstoque
+        ? `"${p.nome}" continua no site com a faixa "Sem estoque" (oliveirajoias.com). Pode levar até 1h para aparecer.`
+        : `A faixa "Sem estoque" foi removida de "${p.nome}". Pode levar até 1h para sumir do site.`,
+    )
+  }
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeletando(true)
@@ -617,6 +630,11 @@ export default function PortfolioPage() {
                                 <div className="min-w-0">
                                   <p className="font-medium text-dark-700 truncate max-w-[220px]">{p.nome}</p>
                                   {p.linha && <p className="text-xs text-dark-300 truncate">{p.linha}</p>}
+                                  {p.sem_estoque && (
+                                    <span className="mt-0.5 inline-flex items-center rounded-full bg-[#C75B5B] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                      Sem estoque
+                                    </span>
+                                  )}
                                 </div>
                                 {p.destaque && <Star size={13} className="text-gold-500 flex-shrink-0" fill="currentColor" />}
                               </div>
@@ -641,6 +659,9 @@ export default function PortfolioPage() {
                                 <ActionMenu
                                   items={[
                                     { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
+                                    p.sem_estoque
+                                      ? { label: 'Marcar com estoque', icon: <PackageCheck size={14} />, onClick: () => handleToggleEstoque(p) }
+                                      : { label: 'Marcar sem estoque', icon: <PackageX size={14} />, onClick: () => handleToggleEstoque(p) },
                                     { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => setConfirmDelete(p), variant: 'danger' },
                                   ]}
                                 />
