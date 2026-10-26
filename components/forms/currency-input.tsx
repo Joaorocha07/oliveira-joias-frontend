@@ -10,6 +10,8 @@ interface CurrencyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
   error?: string
   hint?: string
   wrapperClassName?: string
+  /** Exibe "0,00" quando o valor é zero (padrão: campo vazio). Para campos em que 0 é um valor válido. */
+  showZero?: boolean
 }
 
 function toCents(raw: string) {
@@ -17,14 +19,14 @@ function toCents(raw: string) {
   return parseInt(digits || '0', 10)
 }
 
-function formatDisplay(cents: number) {
-  if (cents === 0) return ''
+function formatDisplay(cents: number, showZero = false) {
+  if (cents === 0 && !showZero) return ''
   const value = cents / 100
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ value, onChange, label, error, hint, wrapperClassName, className, id, ...props }, ref) => {
+  ({ value, onChange, label, error, hint, wrapperClassName, showZero, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
     const inputRef = useRef<HTMLInputElement>(null)
     const prevValueRef = useRef(value)
@@ -41,14 +43,14 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
     useEffect(() => {
       if (prevValueRef.current !== value && inputRef.current) {
         prevValueRef.current = value
-        inputRef.current.value = formatDisplay(Math.round(value * 100))
+        inputRef.current.value = formatDisplay(Math.round(value * 100), showZero)
       }
-    }, [value])
+    }, [value, showZero])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const cents = toCents(e.target.value)
       const num = cents / 100
-      e.target.value = formatDisplay(cents)
+      e.target.value = formatDisplay(cents, showZero)
       prevValueRef.current = num
       onChange(num)
     }
@@ -67,7 +69,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
             id={inputId}
             type="text"
             inputMode="numeric"
-            defaultValue={formatDisplay(Math.round(value * 100))}
+            defaultValue={formatDisplay(Math.round(value * 100), showZero)}
             onChange={handleChange}
             className={cn('input-base pl-10', !!error && 'border-red-400 focus:border-red-400', className)}
             {...props}

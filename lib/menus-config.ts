@@ -33,7 +33,7 @@ export const VENDEDOR_DEFAULT_MENUS: string[] = MENUS_VENDEDOR_CONFIG
   .map((m) => m.key)
 
 // Menus always blocked for vendedor regardless of menus_permitidos
-export const VENDEDOR_ALWAYS_BLOCKED = ['caixa', 'contas_pagar', 'equipe', 'whatsapp']
+export const VENDEDOR_ALWAYS_BLOCKED = ['caixa', 'contas_pagar', 'equipe', 'whatsapp', 'folha_pagamento']
 
 const CAIXA_ALLOWED = ['vendas', 'crediario', 'caixa', 'contas_pagar']
 
@@ -92,6 +92,7 @@ const ROUTE_MENU_MAP: RouteMenu[] = [
   { path: '/popups',            menuKey: 'popups' },
   { path: '/caixa',             menuKey: 'caixa' },
   { path: '/contas-pagar',      menuKey: 'contas_pagar' },
+  { path: '/folha-pagamento',   menuKey: 'folha_pagamento' },
   { path: '/relatorios',        menuKey: 'relatorios' },
   { path: '/whatsapp',          menuKey: 'whatsapp' },
 ].sort((a, b) => b.path.length - a.path.length)

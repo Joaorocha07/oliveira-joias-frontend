@@ -499,6 +499,98 @@ export interface ContaPagar {
 export type ContaPagarInsert = Omit<ContaPagar, 'id' | 'created_at' | 'updated_at'>
 export type ContaPagarUpdate = Partial<ContaPagarInsert>
 
+// ── FOLHA DE PAGAMENTO ─────────────────────────────────────────
+export interface FolhaFuncionario {
+  profile_id: string
+  cargo: string | null
+  salario_base: number
+  chave_pix: string | null
+  ativo: boolean
+  observacoes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type FolhaFuncionarioUpdate = Partial<Pick<FolhaFuncionario, 'cargo' | 'salario_base' | 'ativo' | 'observacoes'>>
+
+/** Usuário do sistema + dados de folha (null quando ainda não configurado). */
+export interface FuncionarioFolha {
+  profile: Pick<Profile, 'id' | 'nome' | 'cpf' | 'role' | 'ativo' | 'comissao_percentual'>
+  folha: FolhaFuncionario | null
+}
+
+export type FolhaStatus = 'aberta' | 'paga'
+
+export interface FolhaPagamento {
+  id: string
+  mes: string
+  funcionario_id: string
+  funcionario_nome: string
+  cargo: string | null
+  salario_base: number
+  comissao_percentual: number
+  base_comissao: number
+  valor_comissao: number
+  total_proventos: number
+  total_descontos: number
+  valor_liquido: number
+  status: FolhaStatus
+  data_pagamento: string | null
+  forma_pagamento: string | null
+  lancamento_id: string | null
+  observacoes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type FolhaItemTipo = 'provento' | 'desconto'
+
+export interface FolhaItem {
+  id: string
+  folha_id: string
+  tipo: FolhaItemTipo
+  descricao: string
+  valor: number
+  created_by: string | null
+  created_at: string
+}
+
+export type FolhaItemInsert = Pick<FolhaItem, 'folha_id' | 'tipo' | 'descricao' | 'valor'>
+
+export interface FolhaVale {
+  id: string
+  funcionario_id: string
+  data_vale: string
+  valor: number
+  descricao: string | null
+  forma_pagamento: string | null
+  lancamento_id: string | null
+  folha_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type FolhaValeInsert = Pick<FolhaVale, 'funcionario_id' | 'data_vale' | 'valor' | 'descricao' | 'forma_pagamento'>
+
+export interface FolhaDetalhe {
+  folha: FolhaPagamento
+  itens: FolhaItem[]
+  vales: FolhaVale[]
+}
+
+export interface FolhaResumoMensal {
+  mes: string
+  funcionarios: number
+  salarios: number
+  comissoes: number
+  outrosProventos: number
+  descontos: number
+  liquido: number
+  pago: number
+}
+
 // ── ORÇAMENTOS ─────────────────────────────────────────────────
 export interface OrcamentoModelo {
   id: string

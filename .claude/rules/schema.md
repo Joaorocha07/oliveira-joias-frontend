@@ -231,7 +231,7 @@ observacoes, editado, created_by, updated_by, created_at, updated_at
 > (sem FK/enum no banco) usado para rastrear a origem do lançamento: `'venda'`, `'servico'`,
 > `'crediario'`, `'crediario_parcela'`, `'venda_estorno'`, `'follow_up'` (valor registrado ao
 > concluir um follow-up do CRM, ver `services/follow-ups.ts`), `'venda_custo'`/`'servico_custo'`
-> (custos adicionais, ver `venda_custos`). `referencia_id` aponta para o id da
+> (custos adicionais, ver `venda_custos`), `'folha_pagamento'`/`'folha_vale'` (folha de pagamento). `referencia_id` aponta para o id da
 > respectiva linha de origem. Lançamentos manuais (criados direto na tela Caixa) têm
 > `referencia_id`/`referencia_tipo` nulos.
 >
@@ -308,6 +308,37 @@ created_at, updated_at
 > em `services/certificados.ts`). Controla TODO o conteúdo textual do certificado em PDF, incluindo as
 > listas de bullets. Placeholder `{empresa}` nos textos é trocado pelo `nome_empresa` na geração.
 > Migration: `.claude/migrations/certificados.sql`.
+
+### `folha_funcionarios` / `folha_pagamentos` / `folha_itens` / `folha_vales` (só admin)
+```
+folha_funcionarios: profile_id (PK, FK profiles), cargo, salario_base, chave_pix, ativo, observacoes,
+                    created_at, updated_at
+folha_pagamentos:   id, mes (date, dia 1), funcionario_id (FK profiles), funcionario_nome, cargo,
+                    salario_base, comissao_percentual, base_comissao, valor_comissao,
+                    total_proventos, total_descontos, valor_liquido, status ('aberta'|'paga'),
+                    data_pagamento, forma_pagamento, lancamento_id (FK lancamentos), observacoes,
+                    created_by, created_at, updated_at — unique (mes, funcionario_id)
+folha_itens:        id, folha_id (FK, cascade), tipo ('provento'|'desconto'), descricao, valor,
+                    created_by, created_at
+folha_vales:        id, funcionario_id, data_vale, valor, descricao, forma_pagamento,
+                    lancamento_id (FK lancamentos), folha_id (FK folha_pagamentos, null = a descontar),
+                    created_by, created_at, updated_at
+```
+> Folha de pagamento de **controle interno** (tela `/folha-pagamento`, `services/folha.ts`) — sem
+> INSS/IRRF/FGTS. Funcionários = `profiles`; salário fica em `folha_funcionarios` e **não** em
+> `profiles`, porque `profiles` é legível por qualquer autenticado. RLS das 4 tabelas: só
+> `public.is_admin()` (função criada na migration). Menu `folha_pagamento` sempre bloqueado para
+> `vendedor` e fora das listas de `caixa`/`visualizador`.
+>
+> Líquido = salário base + comissão (`profiles.comissao_percentual` × soma de `vendas.total` do mês com
+> `vendedor_id` = funcionário, exceto status `cancelado`/`orcamento`) + itens provento − itens desconto
+> − vales. Enquanto `status='aberta'` a folha é recalculada (ao gerar e ao abrir o detalhe) e puxa os
+> vales com `folha_id` nulo e `data_vale` até o fim do mês; paga = congelada.
+>
+> Caixa: o vale gera saída no dia (`referencia_tipo='folha_vale'`, categoria "Vale / Adiantamento");
+> pagar a folha gera saída só do líquido (`referencia_tipo='folha_pagamento'`, categoria "Folha de
+> pagamento"); estornar apaga esse lançamento. Holerite em PDF: `utils/holerite-pdf.ts` (dados da
+> empresa de `orcamento_configuracoes`). Migration: `.claude/migrations/folha_pagamento.sql`.
 
 ---
 

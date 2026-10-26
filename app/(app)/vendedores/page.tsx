@@ -12,18 +12,11 @@ import {
   Modal, Input, Select, ConfirmDialog, Badge, type BadgeVariant,
 } from '@/components/ui'
 import { MaskedInput } from '@/components/forms/masked-input'
-import { formatPhone } from '@/utils'
+import { formatPhone, ROLE_LABEL } from '@/utils'
 import { listarMetasMensais, upsertMetaMensal } from '@/services/metas'
 import { MENUS_VENDEDOR_CONFIG, VENDEDOR_DEFAULT_MENUS } from '@/lib/menus-config'
 import type { Profile, UserRole } from '@/types'
 import { ordenarPorRelevancia } from '@/utils/search'
-
-const ROLE_LABEL: Record<UserRole, string> = {
-  admin: 'Administrador',
-  vendedor: 'Vendedor',
-  caixa: 'Caixa',
-  visualizador: 'Visualizador',
-}
 
 const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
   admin: 'gold',

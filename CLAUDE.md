@@ -73,6 +73,7 @@ Para consultar dados reais diretamente, use o skill `/db`. Ele lê as credenciai
     relatorios/
     vendedores/
     portfolio/        ← cadastro de produtos do site público (fala com oliveira-joias-backend)
+    folha-pagamento/  ← salários, comissões, vales e holerites (só admin)
     configuracoes/
   login/              ← fora do grupo, sem auth
 ```
@@ -89,7 +90,7 @@ Componente → Service (/services/*.ts) → Supabase Client (/lib/supabase.ts)
 
 Services retornam `{ data: T | null, error: string | null }`. Nunca retornam throw — erros são capturados e convertidos para string em português.
 
-Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`, `custos` (custos adicionais / análise de lucro), `catalogo` (este último fala com o `oliveira-joias-backend`, não com Supabase — ver seção "Stack real"). Rotas como `clientes`, `fornecedores`, `caixa`, `vendedores` ainda não têm service — ao criar funcionalidades nessas áreas, criar o service correspondente em `/services/`.
+Services implementados: `vendas`, `crediario`, `estoque`, `produtos`, `servicos`, `custos` (custos adicionais / análise de lucro), `folha` (folha de pagamento, só admin), `catalogo` (este último fala com o `oliveira-joias-backend`, não com Supabase — ver seção "Stack real"). Rotas como `clientes`, `fornecedores`, `caixa`, `vendedores` ainda não têm service — ao criar funcionalidades nessas áreas, criar o service correspondente em `/services/`.
 
 ### Autenticação
 

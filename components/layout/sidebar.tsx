@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
-  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText,
+  Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText, Banknote,
   Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe, Layers, Award, Smartphone,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
@@ -47,6 +47,7 @@ const navItems: NavItem[] = [
   { sectionLabel: 'Administração', href: '/whatsapp',          icon: <Smartphone size={18} />,          label: 'WhatsApp',            menuKey: 'whatsapp' },
   { sectionLabel: 'Financeiro',  href: '/caixa',             icon: <Wallet size={18} />,              label: 'Caixa & Financeiro',  menuKey: 'caixa' },
   { sectionLabel: 'Financeiro',  href: '/contas-pagar',      icon: <Receipt size={18} />,             label: 'Contas a Pagar',      menuKey: 'contas_pagar' },
+  { sectionLabel: 'Financeiro',  href: '/folha-pagamento',   icon: <Banknote size={18} />,            label: 'Folha de Pagamento',  menuKey: 'folha_pagamento' },
   { sectionLabel: 'Financeiro',  href: '/relatorios',        icon: <BarChart3 size={18} />,           label: 'Relatórios',          menuKey: 'relatorios' },
 ]
 

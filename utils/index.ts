@@ -4,7 +4,7 @@ import type {
   FormaPagamento, VendaStatus, ServicoStatus,
   ParcelaStatus, CrediarioStatus, ProdutoCategoria,
   StatusFunil, ProdutoInteresse, FollowUpStatus, StatusQualificacao,
-  AnaliseLucroVenda,
+  AnaliseLucroVenda, UserRole,
 } from '@/types'
 
 // ── FORMATAÇÃO MONETÁRIA ───────────────────────────────────────
@@ -56,6 +56,13 @@ export function today(): string {
 }
 
 // ── LABELS ─────────────────────────────────────────────────────
+export const ROLE_LABEL: Record<UserRole, string> = {
+  admin: 'Administrador',
+  vendedor: 'Vendedor',
+  caixa: 'Caixa',
+  visualizador: 'Visualizador',
+}
+
 export const FORMA_PAGAMENTO_LABEL: Record<FormaPagamento, string> = {
   dinheiro: 'Dinheiro',
   pix: 'Pix',
