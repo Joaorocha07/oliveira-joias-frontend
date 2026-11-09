@@ -242,9 +242,13 @@ observacoes, editado, created_by, updated_by, created_at, updated_at
 
 ### `categorias`
 ```
-id, nome, tipo ('entrada'|'saida'), cor, ativo, created_at
+id, nome
 ```
-> Categorias de lançamento usadas no filtro/formulário da tela Caixa.
+> Categorias de lançamento usadas no filtro/formulário da tela Caixa. Criar/renomear:
+> `services/categorias-lancamento.ts`, pelo modal `modal-gerenciar-categorias-lancamento.tsx`.
+> `lancamentos.categoria_nome` é cópia do nome e é a base do filtro e dos relatórios, por isso
+> renomear também atualiza os lançamentos com aquele `categoria_id`. Permissão de escrita:
+> `.claude/migrations/categorias_escrita.sql` (admin e caixa).
 
 ### `orcamentos`
 ```

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Wallet, TrendingUp, TrendingDown, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Wallet, TrendingUp, TrendingDown, Pencil, Trash2, Tags } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
@@ -11,14 +11,14 @@ import {
   ActionMenu, type ActionMenuItem, ConfirmDialog,
 } from '@/components/ui'
 import { CurrencyInput } from '@/components/forms/currency-input'
+import { ModalGerenciarCategoriasLancamento } from '@/components/modals/modal-gerenciar-categorias-lancamento'
 import { formatMoney, formatDate, today } from '@/utils'
-import type { Lancamento, LancamentoInsert, LancamentoTipo } from '@/types'
+import type { CategoriaLancamento, Lancamento, LancamentoInsert, LancamentoTipo } from '@/types'
 import { useAuth } from '@/context/auth-context'
 import { correspondeBusca } from '@/utils/search'
 
-interface CategoriaLancamento {
-  id: string
-  nome: string
+function ordenarCategorias(categorias: CategoriaLancamento[]) {
+  return [...categorias].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 }
 
 const EMPTY_FORM: LancamentoInsert = {
@@ -56,6 +56,7 @@ export default function CaixaPage() {
   const [deletando, setDeletando] = useState(false)
   const [form, setForm] = useState<LancamentoInsert>(EMPTY_FORM)
   const [salvando, setSalvando] = useState(false)
+  const [categoriasOpen, setCategoriasOpen] = useState(false)
 
   const loadLancamentos = useCallback(async () => {
     const pageSize = 1000
@@ -145,6 +146,20 @@ export default function CaixaPage() {
       categoria_id: categoria?.id ?? null,
       categoria_nome: categoria?.nome ?? null,
     }))
+  }
+
+  function handleCategoriaCriada(categoria: CategoriaLancamento) {
+    setCategorias((prev) => ordenarCategorias([...prev, categoria]))
+    setForm((prev) => ({ ...prev, categoria_id: categoria.id, categoria_nome: categoria.nome }))
+  }
+
+  function handleCategoriaRenomeada(categoria: CategoriaLancamento, nomeAnterior: string) {
+    setCategorias((prev) => ordenarCategorias(prev.map((c) => (c.id === categoria.id ? categoria : c))))
+    setLancamentos((prev) => prev.map((l) => (
+      l.categoria_id === categoria.id ? { ...l, categoria_nome: categoria.nome } : l
+    )))
+    setForm((prev) => (prev.categoria_id === categoria.id ? { ...prev, categoria_nome: categoria.nome } : prev))
+    setFiltroCategoria((prev) => (prev === nomeAnterior ? categoria.nome : prev))
   }
 
   function openEdit(l: Lancamento) {
@@ -443,18 +458,31 @@ export default function CaixaPage() {
             <option value="saida">Saída</option>
           </Select>
 
-          <Select
-            label="Categoria"
-            value={form.categoria_id ?? ''}
-            onChange={(e) => handleCategoriaChange(e.target.value)}
-            placeholder={categoriasLoading ? 'Carregando categorias...' : 'Selecione a categoria...'}
-            disabled={categoriasLoading}
-            hint={!categoriasLoading && categorias.length === 0 ? 'Nenhuma categoria encontrada no banco.' : undefined}
-          >
-            {categorias.map((categoria) => (
-              <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>
-            ))}
-          </Select>
+          <div>
+            <Select
+              label="Categoria"
+              value={form.categoria_id ?? ''}
+              onChange={(e) => handleCategoriaChange(e.target.value)}
+              placeholder={categoriasLoading ? 'Carregando categorias...' : 'Selecione a categoria...'}
+              disabled={categoriasLoading}
+              hint={!categoriasLoading && categorias.length === 0 ? 'Nenhuma categoria encontrada no banco.' : undefined}
+            >
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>
+              ))}
+            </Select>
+            <div className="mt-1.5 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Tags size={13} />}
+                onClick={() => setCategoriasOpen(true)}
+                disabled={categoriasLoading}
+              >
+                Criar ou editar categorias
+              </Button>
+            </div>
+          </div>
 
           <Input label="Descrição *" value={form.descricao} onChange={(e) => setField('descricao', e.target.value)} />
           <CurrencyInput
@@ -466,6 +494,13 @@ export default function CaixaPage() {
           <Textarea label="Observações" value={form.observacoes ?? ''} onChange={(e) => setField('observacoes', e.target.value || null)} />
         </div>
       </Modal>
+      <ModalGerenciarCategoriasLancamento
+        open={categoriasOpen}
+        onClose={() => setCategoriasOpen(false)}
+        categorias={categorias}
+        onCriada={handleCategoriaCriada}
+        onRenomeada={handleCategoriaRenomeada}
+      />
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}

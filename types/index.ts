@@ -453,6 +453,12 @@ export interface CategoriaFinanceira {
   created_at: string
 }
 
+/** Linha da tabela `categorias`, usada nos lançamentos do Caixa. */
+export interface CategoriaLancamento {
+  id: string
+  nome: string
+}
+
 export interface Lancamento {
   id: string
   tipo: LancamentoTipo
