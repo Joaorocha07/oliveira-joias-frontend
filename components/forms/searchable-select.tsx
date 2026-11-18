@@ -149,7 +149,7 @@ export function SearchableSelect({
           error && 'input-error',
         )}
       >
-        <span className={cn('flex-1 truncate text-sm', !showLabel && 'text-[#9E9484]')}>
+        <span className={cn('flex-1 truncate text-sm', !showLabel && 'text-dark-300')}>
           {showLabel || placeholder}
         </span>
         <span className="flex items-center gap-1 flex-shrink-0">
@@ -187,7 +187,7 @@ export function SearchableSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="bg-white border border-gold-100 rounded-[10px] shadow-[0_8px_30px_rgba(26,21,16,0.12)] overflow-hidden"
+            className="bg-surface border border-gold-100 rounded-[10px] shadow-[0_8px_30px_rgba(26,21,16,0.12)] overflow-hidden"
           >
             {/* Busca */}
             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gold-100">

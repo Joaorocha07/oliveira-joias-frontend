@@ -30,12 +30,12 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
 
   return (
     <div className={cn(
-      'flex items-center justify-between gap-3 px-5 py-3 border-t border-[#F0EBE0] flex-wrap',
+      'flex items-center justify-between gap-3 px-5 py-3 border-t border-gold-100 flex-wrap',
       className,
     )}>
       {/* Contagem */}
-      <p className="text-xs text-[#9E9484] whitespace-nowrap">
-        {from}–{to} de <span className="font-medium text-[#6B5E4E]">{total}</span> itens
+      <p className="text-xs text-dark-300 whitespace-nowrap">
+        {from}–{to} de <span className="font-medium text-dark-400">{total}</span> itens
       </p>
 
       {/* Controles */}
@@ -45,7 +45,7 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[#F0EBE0] text-[#6B5E4E] hover:bg-[#FAF7F0] hover:border-[#E8D5A3] disabled:opacity-35 disabled:cursor-not-allowed transition-all"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gold-100 text-dark-400 hover:bg-cream-100 hover:border-gold-300 disabled:opacity-35 disabled:cursor-not-allowed transition-all"
           aria-label="Página anterior"
         >
           <ChevronLeft size={15} />
@@ -55,7 +55,7 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
         <div className="hidden sm:flex items-center gap-1">
           {pages.map((p, i) =>
             p === '...' ? (
-              <span key={`ellipsis-${i}`} className="w-8 text-center text-xs text-[#9E9484] select-none">
+              <span key={`ellipsis-${i}`} className="w-8 text-center text-xs text-dark-300 select-none">
                 ···
               </span>
             ) : (
@@ -66,8 +66,8 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
                 className={cn(
                   'w-8 h-8 rounded-lg text-xs font-medium transition-all',
                   p === page
-                    ? 'bg-[#C9A84C] text-white border border-[#C9A84C] shadow-sm'
-                    : 'text-[#6B5E4E] border border-transparent hover:bg-[#FAF7F0] hover:border-[#E8D5A3]',
+                    ? 'bg-gold-500 text-white border border-gold-500 shadow-sm'
+                    : 'text-dark-400 border border-transparent hover:bg-cream-100 hover:border-gold-300',
                 )}
                 aria-current={p === page ? 'page' : undefined}
               >
@@ -78,7 +78,7 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
         </div>
 
         {/* Indicador simples no mobile */}
-        <span className="sm:hidden text-xs text-[#6B5E4E] px-2 font-medium">
+        <span className="sm:hidden text-xs text-dark-400 px-2 font-medium">
           {page} / {totalPages}
         </span>
 
@@ -87,7 +87,7 @@ export function Pagination({ page, totalPages, onPageChange, from, to, total, cl
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[#F0EBE0] text-[#6B5E4E] hover:bg-[#FAF7F0] hover:border-[#E8D5A3] disabled:opacity-35 disabled:cursor-not-allowed transition-all"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-gold-100 text-dark-400 hover:bg-cream-100 hover:border-gold-300 disabled:opacity-35 disabled:cursor-not-allowed transition-all"
           aria-label="Próxima página"
         >
           <ChevronRight size={15} />

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { User, Mail, Phone, Shield, Lock } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { useAuth } from '@/context/auth-context'
-import { PageHeader, Card, CardHeader, Button, Input, Divider } from '@/components/ui'
+import { PageHeader, Card, CardHeader, Button, Input, Divider, ThemeSelector } from '@/components/ui'
 import { getInitials } from '@/utils'
 
 const ROLE_LABEL: Record<string, string> = {
@@ -152,6 +152,11 @@ export default function ConfiguracoesPage() {
           </form>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader title="Aparência" subtitle="Escolha o tema do sistema. A preferência fica salva neste navegador." />
+        <ThemeSelector />
+      </Card>
 
       <Card className="mt-6">
         <CardHeader title="Alterar Senha" subtitle="Defina uma nova senha de acesso ao sistema" />

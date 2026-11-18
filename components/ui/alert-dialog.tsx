@@ -56,7 +56,7 @@ export function AlertDialog({
       />
 
       {/* Painel */}
-      <div className="relative w-full max-w-[420px] bg-white rounded-[20px] border border-[rgba(232,213,163,0.3)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
+      <div className="relative w-full max-w-[420px] bg-surface rounded-[20px] border border-[rgba(232,213,163,0.3)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
         {/* Botão fechar */}
         <button
           type="button"

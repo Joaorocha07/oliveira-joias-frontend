@@ -37,7 +37,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', cla
 
       {/* Container */}
       <div className={cn(
-        'relative w-full bg-white rounded-2xl flex flex-col max-h-[90vh]',
+        'relative w-full bg-surface rounded-2xl flex flex-col max-h-[90vh]',
         'border border-[rgba(232,213,163,0.3)]',
         'shadow-[0_20px_60px_rgba(26,21,16,0.15)]',
         sizeClasses[size]

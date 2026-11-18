@@ -181,7 +181,7 @@ export default function FollowUpPage() {
 
 function AlertaTile({ icon, label, count }: { icon: React.ReactNode; label: string; count: number }) {
   return (
-    <div className={`rounded-xl border p-3.5 flex items-center gap-3 ${count > 0 ? 'border-red-200 bg-red-50/40' : 'border-gold-100 bg-white'}`}>
+    <div className={`rounded-xl border p-3.5 flex items-center gap-3 ${count > 0 ? 'border-red-200 bg-red-50/40' : 'border-gold-100 bg-surface'}`}>
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${count > 0 ? 'bg-red-100 text-red-600' : 'bg-cream-100 text-dark-300'}`}>
         {icon}
       </div>

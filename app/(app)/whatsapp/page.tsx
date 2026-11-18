@@ -40,7 +40,7 @@ function SlotPanel({ index, slotStatus, onConnect, onDisconnect, loadingSlot }: 
   const isActive = slotStatus.status === 'connecting' || slotStatus.status === 'waiting_qr'
 
   return (
-    <div className="bg-dark-800 rounded-2xl border border-white/[0.06] overflow-hidden flex flex-col">
+    <div className="theme-light bg-ink-800 rounded-2xl border border-white/[0.06] overflow-hidden flex flex-col">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
         <div className="flex items-center gap-2.5">
@@ -62,7 +62,7 @@ function SlotPanel({ index, slotStatus, onConnect, onDisconnect, loadingSlot }: 
       <div className="flex flex-col items-center justify-center p-6 flex-1 min-h-[280px]">
         {slotStatus.status === 'disconnected' && (
           <div className="flex flex-col items-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-full bg-dark-700 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-ink-700 flex items-center justify-center">
               <WifiOff size={26} className="text-dark-400" />
             </div>
             <div>
@@ -99,7 +99,7 @@ function SlotPanel({ index, slotStatus, onConnect, onDisconnect, loadingSlot }: 
 
         {slotStatus.status === 'waiting_qr' && slotStatus.qrBase64 && (
           <div className="flex flex-col items-center gap-3">
-            <div className="bg-white p-2.5 rounded-xl shadow-lg">
+            <div className="bg-surface p-2.5 rounded-xl shadow-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={slotStatus.qrBase64} alt="QR Code" width={200} height={200} />
             </div>
@@ -283,7 +283,7 @@ export default function WhatsAppPage() {
       </div>
 
       {/* Instruções */}
-      <div className="bg-dark-800 rounded-2xl border border-white/[0.06] p-5">
+      <div className="theme-light bg-ink-800 rounded-2xl border border-white/[0.06] p-5">
         <p className="text-sm font-semibold text-white mb-3">Como funciona</p>
         <ol className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
@@ -293,7 +293,7 @@ export default function WhatsAppPage() {
             'Os contatos aparecem em Clientes e no Funil de Vendas com origem "WhatsApp".',
           ].map((step, i) => (
             <li key={i} className="flex gap-3 text-sm text-dark-300">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-dark-700 text-[#25D366] text-xs font-semibold flex items-center justify-center mt-0.5">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-ink-700 text-[#25D366] text-xs font-semibold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
               {step}
@@ -304,7 +304,7 @@ export default function WhatsAppPage() {
 
       {/* Contatos recebidos */}
       {anyConnected && (
-        <div className="bg-dark-800 rounded-2xl border border-white/[0.06]">
+        <div className="theme-light bg-ink-800 rounded-2xl border border-white/[0.06]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
             <div className="flex items-center gap-2">
               <Users size={16} className="text-dark-300" />

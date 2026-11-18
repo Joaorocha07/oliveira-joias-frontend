@@ -117,7 +117,7 @@ export default function CalendarioPage() {
                 onClick={() => setView(v)}
                 className={cn(
                   'px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize',
-                  view === v ? 'bg-white text-gold-600 shadow-sm' : 'text-dark-400 hover:text-dark-600'
+                  view === v ? 'bg-surface text-gold-600 shadow-sm' : 'text-dark-400 hover:text-dark-600'
                 )}
               >
                 {v}
@@ -185,7 +185,7 @@ export default function CalendarioPage() {
                   {format(dia, "EEE dd/MM", { locale: ptBR })}
                 </button>
                 {itens.map((f) => (
-                  <div key={f.id} className="text-xs bg-white border border-gold-100 rounded-lg px-2 py-1.5">
+                  <div key={f.id} className="text-xs bg-surface border border-gold-100 rounded-lg px-2 py-1.5">
                     <p className="font-medium text-dark-700 truncate">{f.cliente?.nome ?? '—'}</p>
                     {f.horario && <p className="text-dark-300">{f.horario.slice(0, 5)}</p>}
                   </div>

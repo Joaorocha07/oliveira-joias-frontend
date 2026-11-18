@@ -24,7 +24,7 @@ export default function EsqueciSenhaPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-dark-50 px-6 py-12">
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
+        <div className="bg-surface rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
           <div className="mb-7">
             <h2 className="font-display text-2xl font-semibold text-dark-500">
               Esqueci minha senha

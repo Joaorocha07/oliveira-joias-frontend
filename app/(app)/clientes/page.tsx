@@ -235,14 +235,14 @@ export default function ClientesPage() {
               {paginated.map((cliente) => (
                 <div
                   key={cliente.id}
-                  className="p-4 hover:bg-[#FAF7F0] active:bg-[#F5ECD0]/60 transition-colors cursor-pointer"
+                  className="p-4 hover:bg-cream-100 active:bg-gold-50/60 transition-colors cursor-pointer"
                   onClick={() => setHistoricoCliente(cliente)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setHistoricoCliente(cliente) }}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#C9A84C] text-xs font-semibold font-display">
+                    <div className="w-9 h-9 rounded-full bg-gold-50 flex items-center justify-center flex-shrink-0 text-gold-500 text-xs font-semibold font-display">
                       {cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -291,12 +291,12 @@ export default function ClientesPage() {
                   {paginated.map((cliente) => (
                     <tr
                       key={cliente.id}
-                      className="hover:bg-[#FAF7F0] transition-colors cursor-pointer"
+                      className="hover:bg-cream-100 transition-colors cursor-pointer"
                       onClick={() => setHistoricoCliente(cliente)}
                     >
                       <td className="px-5 py-3 max-w-[200px]">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-7 h-7 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#C9A84C] text-[10px] font-semibold font-display">
+                          <div className="w-7 h-7 rounded-full bg-gold-50 flex items-center justify-center flex-shrink-0 text-gold-500 text-[10px] font-semibold font-display">
                             {cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
                           </div>
                           <span className="font-medium text-dark-700 truncate">{cliente.nome}</span>

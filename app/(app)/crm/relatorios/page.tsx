@@ -77,7 +77,13 @@ export default function CrmRelatoriosPage() {
         import('html2canvas'),
         import('jspdf'),
       ])
-      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        // PDF sempre no tema claro, mesmo com o sistema em modo escuro
+        onclone: (doc) => doc.documentElement.classList.remove('dark'),
+      })
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageWidth = pdf.internal.pageSize.getWidth()
       const pageHeight = pdf.internal.pageSize.getHeight()
@@ -299,7 +305,7 @@ export default function CrmRelatoriosPage() {
               </thead>
               <tbody className="divide-y divide-gold-50">
                 {origemComparativo.map((row) => (
-                  <tr key={row.nome} className="hover:bg-[#FAF7F0] transition-colors">
+                  <tr key={row.nome} className="hover:bg-cream-100 transition-colors">
                     <td className="px-5 py-3 font-medium text-dark-700">{row.nome}</td>
                     <td className="px-5 py-3 text-right text-dark-400">{row.leads}</td>
                     <td className="px-5 py-3 text-right text-dark-400">{row.vendas}</td>
@@ -371,7 +377,7 @@ export default function CrmRelatoriosPage() {
                 </thead>
                 <tbody className="divide-y divide-gold-50">
                   {porVendedor.map((v) => (
-                    <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
+                    <tr key={v.id} className="hover:bg-cream-100 transition-colors">
                       <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
                       <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
                       <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>

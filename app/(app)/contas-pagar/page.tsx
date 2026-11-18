@@ -217,7 +217,7 @@ export default function ContasPagarPage() {
                   'rounded-lg border px-4 py-2 text-sm font-medium transition-all',
                   filterTab === tab.key
                     ? 'border-gold-500 bg-gold-500 text-dark-800 shadow-sm'
-                    : 'border-gold-100 bg-white text-dark-500 hover:bg-cream-50 hover:border-gold-200',
+                    : 'border-gold-100 bg-surface text-dark-500 hover:bg-cream-50 hover:border-gold-200',
                 ].join(' ')}
               >
                 {tab.label}
@@ -241,7 +241,7 @@ export default function ContasPagarPage() {
                   'rounded-lg border px-3 py-1.5 text-xs font-medium transition-all',
                   filterTipo === tipo
                     ? 'border-gold-400 bg-gold-50 text-gold-700'
-                    : 'border-gold-100 bg-white text-dark-400 hover:bg-cream-50',
+                    : 'border-gold-100 bg-surface text-dark-400 hover:bg-cream-50',
                 ].join(' ')}
               >
                 {tipo === 'todas' ? 'Todas' : tipo === 'fixa' ? 'Fixas' : 'Variáveis'}

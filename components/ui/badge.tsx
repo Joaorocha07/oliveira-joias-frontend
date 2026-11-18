@@ -5,7 +5,7 @@ export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'gray' | 
 
 const variantClasses: Record<BadgeVariant, string> = {
   success: 'bg-[rgba(91,140,91,0.1)] text-[#5B8C5B] border-[rgba(91,140,91,0.25)]',
-  warning: 'bg-[rgba(201,168,76,0.1)] text-[#C9A84C] border-[rgba(201,168,76,0.25)]',
+  warning: 'bg-[rgba(201,168,76,0.1)] text-gold-500 border-[rgba(201,168,76,0.25)]',
   danger:  'bg-[rgba(199,91,91,0.1)] text-[#C75B5B] border-[rgba(199,91,91,0.25)]',
   info:    'bg-[rgba(91,142,184,0.1)] text-[#5B8EB8] border-[rgba(91,142,184,0.25)]',
   gray:    'bg-dark-200/20 text-dark-300 border-dark-200/40',

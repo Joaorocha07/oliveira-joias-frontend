@@ -3,6 +3,9 @@
 // ============================================================
 
 export type UserRole = 'admin' | 'vendedor' | 'caixa' | 'visualizador'
+/** Preferência de tema salva no navegador; 'system' segue o tema do sistema operacional */
+export type ThemePreference = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
 export type VendaTipo = 'normal' | 'livre'
 export type VendaStatus = 'orcamento' | 'pendente' | 'pago' | 'crediario' | 'cancelado'
 export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito' | 'crediario' | 'transferencia' | 'cheque' | 'misto'

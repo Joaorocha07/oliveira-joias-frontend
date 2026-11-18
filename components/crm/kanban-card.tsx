@@ -38,7 +38,7 @@ export function KanbanCard({ cliente, onClick, onScheduleFollowUp, onOpenWhatsAp
       {...attributes}
       onClick={onClick}
       className={cn(
-        'relative bg-white rounded-lg border border-gold-100 border-l-[3px] border-l-transparent p-3',
+        'relative bg-surface rounded-lg border border-gold-100 border-l-[3px] border-l-transparent p-3',
         'cursor-grab active:cursor-grabbing touch-none',
         'hover:border-l-gold-300',
         isDragging && 'opacity-30'
@@ -68,7 +68,7 @@ export function KanbanCard({ cliente, onClick, onScheduleFollowUp, onOpenWhatsAp
 
 export function KanbanCardOverlay({ cliente }: { cliente: Cliente }) {
   return (
-    <div className="w-64 bg-white rounded-lg border border-gold-300 border-l-[3px] border-l-gold-400 p-3 shadow-[0_16px_40px_rgba(45,36,24,0.28)] rotate-[2deg] cursor-grabbing relative">
+    <div className="w-64 bg-surface rounded-lg border border-gold-300 border-l-[3px] border-l-gold-400 p-3 shadow-[0_16px_40px_rgba(45,36,24,0.28)] rotate-[2deg] cursor-grabbing relative">
       <div className="absolute top-0 left-0 right-0 h-[3px] rounded-tl-lg rounded-tr-lg overflow-hidden bg-gold-50">
         <div
           className="h-full"

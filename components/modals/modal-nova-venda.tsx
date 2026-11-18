@@ -313,7 +313,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
               className={`group flex min-h-[58px] items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                 !isLivre
                   ? 'border-gold-500 bg-gold-50 text-dark-700 shadow-[0_10px_26px_rgba(166,139,60,0.18)] ring-1 ring-gold-400/60'
-                  : 'border-transparent bg-white text-dark-500 hover:border-gold-200 hover:bg-cream-100'
+                  : 'border-transparent bg-surface text-dark-500 hover:border-gold-200 hover:bg-cream-100'
               }`}
               aria-pressed={!isLivre}
             >
@@ -339,7 +339,7 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
               className={`group flex min-h-[58px] items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                 isLivre
                   ? 'border-gold-500 bg-gold-50 text-dark-700 shadow-[0_10px_26px_rgba(166,139,60,0.18)] ring-1 ring-gold-400/60'
-                  : 'border-transparent bg-white text-dark-500 hover:border-gold-200 hover:bg-cream-100'
+                  : 'border-transparent bg-surface text-dark-500 hover:border-gold-200 hover:bg-cream-100'
               }`}
               aria-pressed={isLivre}
             >

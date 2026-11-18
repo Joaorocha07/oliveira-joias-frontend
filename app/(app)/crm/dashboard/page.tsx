@@ -373,7 +373,7 @@ export default function CrmDashboardPage() {
                     const ticketMedioVendedor = v.vendas > 0 ? v.valorVendido / v.vendas : 0
                     const comissao = v.valorVendido * (v.comissaoPercentual / 100)
                     return (
-                      <tr key={v.id} className="hover:bg-[#FAF7F0] transition-colors">
+                      <tr key={v.id} className="hover:bg-cream-100 transition-colors">
                         <td className="px-5 py-3 font-medium text-dark-700">{v.nome}</td>
                         <td className="px-5 py-3 text-right text-dark-400">{v.leads}</td>
                         <td className="px-5 py-3 text-right text-dark-400">{v.vendas}</td>

@@ -17,7 +17,7 @@ export function FollowUpCard({ followUp, atrasado, processing, onConcluir, onRea
   const cliente = followUp.cliente
 
   return (
-    <div className={`rounded-xl border p-4 ${atrasado ? 'border-red-200 bg-red-50/40' : 'border-gold-100 bg-white'}`}>
+    <div className={`rounded-xl border p-4 ${atrasado ? 'border-red-200 bg-red-50/40' : 'border-gold-100 bg-surface'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

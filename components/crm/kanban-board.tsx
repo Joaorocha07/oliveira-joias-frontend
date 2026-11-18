@@ -292,7 +292,7 @@ export function KanbanBoard({ clientes, onCardClick, onMoveCard, onScheduleFollo
             onClick={() => scrollBy(-280)}
             className={cn(
               'absolute left-0 top-1/2 -translate-y-1/2 z-20 w-8 h-8',
-              'bg-white/95 rounded-full shadow-md border border-gold-100',
+              'bg-surface/95 rounded-full shadow-md border border-gold-100',
               'flex items-center justify-center text-gold-600',
               'opacity-0 group-hover/board:opacity-100',
               !canScrollLeft && '!opacity-0 pointer-events-none',
@@ -329,7 +329,7 @@ export function KanbanBoard({ clientes, onCardClick, onMoveCard, onScheduleFollo
             onClick={() => scrollBy(280)}
             className={cn(
               'absolute right-0 top-1/2 -translate-y-1/2 z-20 w-8 h-8',
-              'bg-white/95 rounded-full shadow-md border border-gold-100',
+              'bg-surface/95 rounded-full shadow-md border border-gold-100',
               'flex items-center justify-center text-gold-600',
               'opacity-0 group-hover/board:opacity-100',
               !canScrollRight && '!opacity-0 pointer-events-none',

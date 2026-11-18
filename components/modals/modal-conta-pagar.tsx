@@ -162,7 +162,7 @@ export function ModalContaPagar({ open, onClose, onSuccess, conta }: ModalContaP
             'flex cursor-pointer select-none items-center justify-between rounded-xl border p-4 transition-all',
             form.fixa
               ? 'border-gold-400 bg-gold-50'
-              : 'border-gold-100 bg-white hover:bg-cream-50',
+              : 'border-gold-100 bg-surface hover:bg-cream-50',
           ].join(' ')}
         >
           <div>
@@ -178,7 +178,7 @@ export function ModalContaPagar({ open, onClose, onSuccess, conta }: ModalContaP
             form.fixa ? 'bg-gold-500' : 'bg-cream-300',
           ].join(' ')}>
             <div className={[
-              'mt-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform',
+              'mt-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform',
               form.fixa ? 'translate-x-4 ml-0.5' : 'translate-x-0.5',
             ].join(' ')} />
           </div>

@@ -186,11 +186,11 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
       />
 
       {/* Painel */}
-      <div className="relative w-full max-w-[calc(100vw-1rem)] sm:max-w-[900px] bg-white rounded-xl sm:rounded-2xl flex min-h-0 flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] border border-[rgba(232,213,163,0.35)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
+      <div className="relative w-full max-w-[calc(100vw-1rem)] sm:max-w-[900px] bg-surface rounded-xl sm:rounded-2xl flex min-h-0 flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] border border-[rgba(232,213,163,0.35)] shadow-[0_24px_80px_rgba(26,21,16,0.18)]">
 
         {/* Banner com dados do cliente */}
         <div className="flex-shrink-0 rounded-t-xl sm:rounded-t-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-[#1A1510] to-[#2D2418] px-3 sm:px-6 py-3.5 sm:py-5 relative">
+          <div className="bg-gradient-to-r from-ink-800 to-ink-500 px-3 sm:px-6 py-3.5 sm:py-5 relative">
             <div
               className="absolute inset-0 opacity-[0.06] pointer-events-none"
               style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, #C9A84C 0%, transparent 60%)' }}
@@ -199,8 +199,8 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
             <div className="relative flex items-center justify-between gap-2 sm:gap-3">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 {/* Avatar */}
-                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 border-[#C9A84C]/40 bg-[#C9A84C]/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[#C9A84C] text-xs sm:text-sm font-semibold font-display">{iniciais}</span>
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 border-gold-500/40 bg-gold-500/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-gold-500 text-xs sm:text-sm font-semibold font-display">{iniciais}</span>
                 </div>
 
                 <div className="min-w-0">
@@ -210,7 +210,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
                   {/* Contatos — empilham em telas muito pequenas */}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                     {cliente.cpf && (
-                      <span className="flex min-w-0 items-center gap-1 text-[11px] text-[#C9A84C]/80 font-mono">
+                      <span className="flex min-w-0 items-center gap-1 text-[11px] text-gold-500/80 font-mono">
                         <CreditCard size={9} />
                         {formatCPF(cliente.cpf)}
                       </span>
@@ -243,7 +243,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
           </div>
 
           {/* Abas */}
-          <div className="grid grid-cols-4 border-b border-[#F0EBE0] bg-white px-1 sm:flex sm:px-6 sm:overflow-x-auto">
+          <div className="grid grid-cols-4 border-b border-gold-100 bg-surface px-1 sm:flex sm:px-6 sm:overflow-x-auto">
             {TABS.map(({ key, label, Icon }) => (
               <button
                 key={key}
@@ -251,8 +251,8 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
                 onClick={() => setTab(key)}
                 className={`flex min-w-0 items-center justify-center gap-1 px-1.5 sm:px-4 py-2.5 sm:py-3 text-[11px] sm:text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-all duration-150 ${
                   tab === key
-                    ? 'border-[#C9A84C] text-[#A68B3C]'
-                    : 'border-transparent text-[#6B5E4E] hover:text-[#2D2418] hover:border-[#D4C9B0]'
+                    ? 'border-gold-500 text-gold-600'
+                    : 'border-transparent text-dark-400 hover:text-dark-500 hover:border-gold-200'
                 }`}
               >
                 <Icon size={13} className="shrink-0" />
@@ -267,7 +267,7 @@ export function ModalHistoricoCliente({ open, onClose, cliente }: Props) {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-14 gap-3">
               <Spinner size={28} />
-              <p className="text-sm text-[#9E9484]">Carregando histórico...</p>
+              <p className="text-sm text-dark-300">Carregando histórico...</p>
             </div>
           ) : (
             <>
@@ -366,8 +366,8 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
           height={140}
           className="opacity-80 mb-3"
         />
-        <p className="text-sm font-medium text-[#6B5E4E]">Nenhuma compra registrada</p>
-        <p className="text-xs text-[#9E9484] mt-1">Este cliente ainda não realizou compras.</p>
+        <p className="text-sm font-medium text-dark-400">Nenhuma compra registrada</p>
+        <p className="text-xs text-dark-300 mt-1">Este cliente ainda não realizou compras.</p>
       </div>
     )
   }
@@ -379,47 +379,47 @@ function TabCompras({ vendas }: { vendas: VendaComItens[] }) {
       {groups.map(([date, items]) => (
         <div key={date}>
           <div className="flex items-center gap-3 mb-2.5">
-            <p className="text-xs font-semibold text-[#9E9484] uppercase tracking-wider whitespace-nowrap">
+            <p className="text-xs font-semibold text-dark-300 uppercase tracking-wider whitespace-nowrap">
               {formatDate(date)}
             </p>
-            <div className="flex-1 h-px bg-[#F0EBE0]" />
+            <div className="flex-1 h-px bg-gold-100" />
           </div>
 
           <div className="space-y-2">
             {items.map((venda) => (
-              <div key={venda.id} className="border border-[#F0EBE0] rounded-xl overflow-hidden">
+              <div key={venda.id} className="border border-gold-100 rounded-xl overflow-hidden">
                 {/* Header da venda — empilha no mobile */}
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2.5 bg-[#FAF7F0]">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2.5 bg-cream-100">
                   <div className="flex min-w-0 items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono text-[#9E9484]">#{venda.numero}</span>
-                    <span className="text-xs text-[#6B5E4E] truncate">
+                    <span className="text-xs font-mono text-dark-300">#{venda.numero}</span>
+                    <span className="text-xs text-dark-400 truncate">
                       {FORMA_PAGAMENTO_LABEL[venda.forma_pagamento]}
                     </span>
-                    <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-xs text-[#6B5E4E]">
-                      <UserRound size={12} className="text-[#A68B3C] flex-shrink-0" />
+                    <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-xs text-dark-400">
+                      <UserRound size={12} className="text-gold-600 flex-shrink-0" />
                       <span className="truncate">{getVendedorNome(venda)}</span>
                     </span>
                     <Badge variant={vendaStatusVariant(venda.status)}>
                       {VENDA_STATUS_LABEL[venda.status]}
                     </Badge>
                   </div>
-                  <span className="text-sm font-semibold text-[#2D2418] text-right">
+                  <span className="text-sm font-semibold text-dark-500 text-right">
                     {formatMoney(venda.total)}
                   </span>
                 </div>
 
                 {/* Itens */}
                 {(venda.itens ?? []).length > 0 && (
-                  <div className="divide-y divide-[#F5ECD0]/80">
+                  <div className="divide-y divide-gold-50/80">
                     {(venda.itens ?? []).map((item) => (
                       <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-3 sm:px-4 py-2">
                         <div className="flex items-baseline gap-1.5 min-w-0">
-                          <span className="text-sm text-[#2D2418] leading-snug line-clamp-2">{item.nome_produto}</span>
+                          <span className="text-sm text-dark-500 leading-snug line-clamp-2">{item.nome_produto}</span>
                           {item.quantidade > 1 && (
-                            <span className="text-xs text-[#9E9484] flex-shrink-0">×{item.quantidade}</span>
+                            <span className="text-xs text-dark-300 flex-shrink-0">×{item.quantidade}</span>
                           )}
                         </div>
-                        <span className="text-sm text-[#6B5E4E] text-right whitespace-nowrap">
+                        <span className="text-sm text-dark-400 text-right whitespace-nowrap">
                           {formatMoney(item.subtotal)}
                         </span>
                       </div>
@@ -451,8 +451,8 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
           height={140}
           className="opacity-80 mb-3"
         />
-        <p className="text-sm font-medium text-[#6B5E4E]">Nenhum serviço registrado</p>
-        <p className="text-xs text-[#9E9484] mt-1">Este cliente ainda não utilizou serviços.</p>
+        <p className="text-sm font-medium text-dark-400">Nenhum serviço registrado</p>
+        <p className="text-xs text-dark-300 mt-1">Este cliente ainda não utilizou serviços.</p>
       </div>
     )
   }
@@ -460,16 +460,16 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
   return (
     <div className="space-y-2.5">
       {paginated.map((servico) => (
-        <div key={servico.id} className="border border-[#F0EBE0] rounded-xl px-3 sm:px-4 py-3 hover:border-[#E8D5A3] hover:bg-[#FAF7F0]/60 transition-colors">
+        <div key={servico.id} className="border border-gold-100 rounded-xl px-3 sm:px-4 py-3 hover:border-gold-300 hover:bg-cream-100/60 transition-colors">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-mono text-[#9E9484]">#{servico.numero}</span>
-                <span className="text-[#D4C9B0] text-xs select-none">·</span>
-                <span className="text-xs text-[#6B5E4E]">{formatDate(servico.data_entrada)}</span>
+                <span className="text-xs font-mono text-dark-300">#{servico.numero}</span>
+                <span className="text-gold-200 text-xs select-none">·</span>
+                <span className="text-xs text-dark-400">{formatDate(servico.data_entrada)}</span>
               </div>
-              <p className="text-sm font-semibold text-[#2D2418]">{servico.tipo}</p>
-              <p className="text-xs text-[#6B5E4E] mt-0.5 line-clamp-2 leading-relaxed">
+              <p className="text-sm font-semibold text-dark-500">{servico.tipo}</p>
+              <p className="text-xs text-dark-400 mt-0.5 line-clamp-2 leading-relaxed">
                 {servico.descricao}
               </p>
             </div>
@@ -477,7 +477,7 @@ function TabServicos({ servicos }: { servicos: Servico[] }) {
               <Badge variant={servicoStatusVariant(servico.status)}>
                 {SERVICO_STATUS_LABEL[servico.status]}
               </Badge>
-              <span className="text-sm font-semibold text-[#2D2418]">{formatMoney(servico.valor)}</span>
+              <span className="text-sm font-semibold text-dark-500">{formatMoney(servico.valor)}</span>
             </div>
           </div>
         </div>
@@ -517,8 +517,8 @@ function TabResumo({
             height={160}
             className="opacity-75 mb-3"
           />
-          <p className="text-sm font-medium text-[#6B5E4E]">Nenhuma movimentação encontrada</p>
-          <p className="text-xs text-[#9E9484] mt-1">
+          <p className="text-sm font-medium text-dark-400">Nenhuma movimentação encontrada</p>
+          <p className="text-xs text-dark-300 mt-1">
             Cliente desde {anoCliente} · Sem compras ou serviços registrados.
           </p>
         </div>
@@ -536,13 +536,13 @@ function TabResumo({
                 key={label}
                 className={`rounded-xl p-3 sm:p-4 ${
                   highlight
-                    ? 'bg-gradient-to-br from-[#F5ECD0] to-[#F0E8C8] border border-[#E8D5A3]'
-                    : 'bg-[#FAF7F0] border border-[#F0EBE0]'
+                    ? 'bg-gradient-to-br from-gold-50 to-gold-100 border border-gold-300'
+                    : 'bg-cream-100 border border-gold-100'
                 }`}
               >
-                <p className="text-[11px] sm:text-xs text-[#9E9484] mb-1 leading-tight">{label}</p>
+                <p className="text-[11px] sm:text-xs text-dark-300 mb-1 leading-tight">{label}</p>
                 <p className={`text-sm sm:text-base font-semibold font-display leading-tight ${
-                  highlight ? 'text-[#A68B3C]' : 'text-[#2D2418]'
+                  highlight ? 'text-gold-600' : 'text-dark-500'
                 }`}>
                   {value}
                 </p>
@@ -551,12 +551,12 @@ function TabResumo({
           </div>
 
           {/* Bloco de fidelidade */}
-          <div className="rounded-xl border border-[#E8D5A3] overflow-hidden">
-            <div className="bg-gradient-to-r from-[#1A1510] to-[#2D2418] px-4 py-3 flex items-center gap-2">
-              <Star size={13} className="text-[#C9A84C]" fill="currentColor" />
+          <div className="rounded-xl border border-gold-300 overflow-hidden">
+            <div className="bg-gradient-to-r from-ink-800 to-ink-500 px-4 py-3 flex items-center gap-2">
+              <Star size={13} className="text-gold-500" fill="currentColor" />
               <span className="text-sm font-semibold text-white">Status de Fidelidade</span>
             </div>
-            <div className="bg-[#F5ECD0]/30 px-4 py-4 flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+            <div className="bg-gold-50/30 px-4 py-4 flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
               {/* Imagem decorativa — oculta no mobile para economizar espaço */}
               <Image
                 src="/images/Success factors-amico.svg"
@@ -567,7 +567,7 @@ function TabResumo({
                 aria-hidden="true"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#2D2418] leading-relaxed">
+                <p className="text-sm font-medium text-dark-500 leading-relaxed">
                   Cliente desde <strong>{anoCliente}</strong>
                   {totalComprasCount > 0 && (
                     <> · <strong>{totalComprasCount}</strong> compra{totalComprasCount !== 1 ? 's' : ''}</>
@@ -577,13 +577,13 @@ function TabResumo({
                   )}
                 </p>
                 {ultimaCompra && (
-                  <p className="text-xs text-[#6B5E4E] mt-1.5">
+                  <p className="text-xs text-dark-400 mt-1.5">
                     Última compra: <span className="font-medium">{formatDate(ultimaCompra)}</span>
                   </p>
                 )}
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {totalComprasCount >= 10 && (
-                    <span className="inline-flex items-center gap-1 text-xs bg-[#C9A84C]/15 text-[#A68B3C] border border-[#C9A84C]/30 rounded-full px-2.5 py-0.5 font-medium">
+                    <span className="inline-flex items-center gap-1 text-xs bg-gold-500/15 text-gold-600 border border-gold-500/30 rounded-full px-2.5 py-0.5 font-medium">
                       <Star size={10} fill="currentColor" /> Cliente Fiel
                     </span>
                   )}
@@ -632,7 +632,7 @@ function TabTimeline({
   return (
     <div className="space-y-5">
       {/* Resumo CRM */}
-      <div className="rounded-xl border border-[#F0EBE0] bg-[#FAF7F0] p-4">
+      <div className="rounded-xl border border-gold-100 bg-cream-100 p-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <Badge variant={statusFunilVariant(cliente.status_funil)}>
@@ -643,7 +643,7 @@ function TabTimeline({
                 <Star
                   key={i}
                   size={12}
-                  className={i < cliente.lead_score ? 'text-[#C9A84C]' : 'text-[#E8D5A3]'}
+                  className={i < cliente.lead_score ? 'text-gold-500' : 'text-gold-300'}
                   fill="currentColor"
                 />
               ))}
@@ -680,37 +680,37 @@ function TabTimeline({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
           <div>
-            <p className="text-[#9E9484]">Origem</p>
-            <p className="text-[#2D2418] font-medium">{cliente.origem?.nome || cliente.origem_outro || '—'}</p>
+            <p className="text-dark-300">Origem</p>
+            <p className="text-dark-500 font-medium">{cliente.origem?.nome || cliente.origem_outro || '—'}</p>
           </div>
           <div>
-            <p className="text-[#9E9484]">Produto de interesse</p>
-            <p className="text-[#2D2418] font-medium">
+            <p className="text-dark-300">Produto de interesse</p>
+            <p className="text-dark-500 font-medium">
               {cliente.produto_interesse ? PRODUTO_INTERESSE_LABEL[cliente.produto_interesse] : '—'}
             </p>
           </div>
           <div>
-            <p className="text-[#9E9484]">Vendedor</p>
-            <p className="text-[#2D2418] font-medium">{cliente.vendedor?.nome || '—'}</p>
+            <p className="text-dark-300">Vendedor</p>
+            <p className="text-dark-500 font-medium">{cliente.vendedor?.nome || '—'}</p>
           </div>
           <div>
-            <p className="text-[#9E9484]">Valor pretendido</p>
-            <p className="text-[#2D2418] font-medium">
+            <p className="text-dark-300">Valor pretendido</p>
+            <p className="text-dark-500 font-medium">
               {cliente.valor_pretendido ? formatMoney(cliente.valor_pretendido) : '—'}
             </p>
           </div>
           <div>
-            <p className="text-[#9E9484]">Data do casamento</p>
-            <p className="text-[#2D2418] font-medium">{cliente.data_casamento ? formatDate(cliente.data_casamento) : '—'}</p>
+            <p className="text-dark-300">Data do casamento</p>
+            <p className="text-dark-500 font-medium">{cliente.data_casamento ? formatDate(cliente.data_casamento) : '—'}</p>
           </div>
           <div>
-            <p className="text-[#9E9484]">Data do noivado</p>
-            <p className="text-[#2D2418] font-medium">{cliente.data_noivado ? formatDate(cliente.data_noivado) : '—'}</p>
+            <p className="text-dark-300">Data do noivado</p>
+            <p className="text-dark-500 font-medium">{cliente.data_noivado ? formatDate(cliente.data_noivado) : '—'}</p>
           </div>
           {cliente.parceiro_nome && (
             <div>
-              <p className="text-[#9E9484]">Parceiro(a)</p>
-              <p className="text-[#2D2418] font-medium">
+              <p className="text-dark-300">Parceiro(a)</p>
+              <p className="text-dark-500 font-medium">
                 {cliente.parceiro_nome}{cliente.parceiro_telefone ? ` · ${formatPhone(cliente.parceiro_telefone)}` : ''}
               </p>
             </div>
@@ -726,9 +726,9 @@ function TabTimeline({
       {/* Anexos: fotos de modelos e documentos/comprovantes */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold text-[#6B5E4E] uppercase tracking-wide">Anexos</p>
+          <p className="text-xs font-semibold text-dark-400 uppercase tracking-wide">Anexos</p>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-[#A68B3C] hover:text-[#8A7230] cursor-pointer transition-colors">
+            <label className="text-xs font-medium text-gold-600 hover:text-gold-700 cursor-pointer transition-colors">
               {enviandoArquivo === 'foto' ? 'Enviando...' : '+ Foto'}
               <input
                 type="file"
@@ -738,7 +738,7 @@ function TabTimeline({
                 onChange={(e) => { void onUploadArquivo(e.target.files?.[0], 'foto'); e.target.value = '' }}
               />
             </label>
-            <label className="text-xs font-medium text-[#A68B3C] hover:text-[#8A7230] cursor-pointer transition-colors">
+            <label className="text-xs font-medium text-gold-600 hover:text-gold-700 cursor-pointer transition-colors">
               {enviandoArquivo === 'documento' ? 'Enviando...' : '+ Documento'}
               <input
                 type="file"
@@ -750,7 +750,7 @@ function TabTimeline({
           </div>
         </div>
         {arquivos.length === 0 ? (
-          <p className="text-xs text-[#9E9484]">Nenhum arquivo anexado.</p>
+          <p className="text-xs text-dark-300">Nenhum arquivo anexado.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {arquivos.map((arquivo) => (
@@ -762,7 +762,7 @@ function TabTimeline({
                       alt={arquivo.nome}
                       width={64}
                       height={64}
-                      className="w-16 h-16 rounded-lg object-cover border border-[#F0EBE0]"
+                      className="w-16 h-16 rounded-lg object-cover border border-gold-100"
                       unoptimized
                     />
                   </a>
@@ -771,11 +771,11 @@ function TabTimeline({
                     href={getArquivoUrl(arquivo.url)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border border-[#F0EBE0] bg-[#FAF7F0] text-center px-1"
+                    className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border border-gold-100 bg-cream-100 text-center px-1"
                     title={arquivo.nome}
                   >
-                    <FileText size={18} className="text-[#A68B3C]" />
-                    <span className="text-[9px] text-[#6B5E4E] truncate w-full mt-0.5">{arquivo.nome}</span>
+                    <FileText size={18} className="text-gold-600" />
+                    <span className="text-[9px] text-dark-400 truncate w-full mt-0.5">{arquivo.nome}</span>
                   </a>
                 )}
                 <button
@@ -823,7 +823,7 @@ function TabTimeline({
             height={140}
             className="opacity-80 mb-3"
           />
-          <p className="text-sm font-medium text-[#6B5E4E]">Nenhum evento registrado</p>
+          <p className="text-sm font-medium text-dark-400">Nenhum evento registrado</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -831,12 +831,12 @@ function TabTimeline({
             const Icon = TIMELINE_ICON[evento.tipo]
             return (
               <div key={evento.id} className="flex gap-3">
-                <div className="w-7 h-7 rounded-full bg-[#F5ECD0] flex items-center justify-center flex-shrink-0 text-[#A68B3C]">
+                <div className="w-7 h-7 rounded-full bg-gold-50 flex items-center justify-center flex-shrink-0 text-gold-600">
                   <Icon size={13} />
                 </div>
-                <div className="flex-1 min-w-0 pb-3 border-b border-[#F0EBE0] last:border-0">
-                  <p className="text-sm text-[#2D2418] leading-snug">{evento.descricao}</p>
-                  <p className="text-xs text-[#9E9484] mt-0.5">
+                <div className="flex-1 min-w-0 pb-3 border-b border-gold-100 last:border-0">
+                  <p className="text-sm text-dark-500 leading-snug">{evento.descricao}</p>
+                  <p className="text-xs text-dark-300 mt-0.5">
                     {formatDateTime(evento.created_at)}
                     {evento.autor?.nome && <> · {evento.autor.nome}</>}
                   </p>

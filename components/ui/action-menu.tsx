@@ -79,7 +79,7 @@ export function ActionMenu({ items, className }: ActionMenuProps) {
       {open && typeof window !== 'undefined' && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] min-w-[156px] bg-white rounded-xl border border-gold-100 shadow-lg py-1 overflow-hidden"
+          className="fixed z-[9999] min-w-[156px] bg-surface rounded-xl border border-gold-100 shadow-lg py-1 overflow-hidden"
           style={{ top: pos.top, right: pos.right }}
         >
           {items.map((item, i) => (

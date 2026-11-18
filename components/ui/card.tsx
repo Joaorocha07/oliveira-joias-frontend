@@ -11,7 +11,7 @@ interface CardProps {
 export function Card({ children, className, padding = 'md' }: CardProps) {
   return (
     <div className={cn(
-      'bg-white rounded-xl border border-gold-100',
+      'bg-surface rounded-xl border border-gold-100',
       'shadow-[0_1px_3px_rgba(45,36,24,0.06)]',
       padding === 'md' && 'py-5 px-6',
       padding === 'sm' && 'py-3 px-4',

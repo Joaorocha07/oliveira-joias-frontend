@@ -355,7 +355,7 @@ export default function PopupsPage() {
                       'flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all',
                       form.tipo === tipo && !taken
                         ? 'border-gold-400 bg-gold-50/60'
-                        : 'border-gold-100 hover:border-gold-200 bg-white',
+                        : 'border-gold-100 hover:border-gold-200 bg-surface',
                       taken && 'opacity-40 cursor-not-allowed',
                     )}
                   >
@@ -483,7 +483,7 @@ export default function PopupsPage() {
                         ? key === 'whatsapp'
                           ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
                           : 'border-gold-400 bg-gold-50/60 text-dark-700'
-                        : 'border-gold-100 text-dark-300 hover:border-gold-200 bg-white',
+                        : 'border-gold-100 text-dark-300 hover:border-gold-200 bg-surface',
                     )}
                   >
                     {icon}

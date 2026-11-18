@@ -53,7 +53,7 @@ function ParcelaRow({
   const isPaga = parcela.status === 'pago'
 
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-xl border ${isPaga ? 'bg-green-50/50 border-green-100' : isVencida ? 'bg-red-50/50 border-red-100' : 'bg-white border-gold-100'}`}>
+    <div className={`flex items-start gap-3 p-3 rounded-xl border ${isPaga ? 'bg-green-50/50 border-green-100' : isVencida ? 'bg-red-50/50 border-red-100' : 'bg-surface border-gold-100'}`}>
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isPaga ? 'bg-green-100 text-green-700' : isVencida ? 'bg-red-100 text-red-700' : 'bg-gold-100 text-gold-700'}`}>
         {isPaga ? <CheckCircle2 size={16} /> : isVencida ? <AlertCircle size={16} /> : <Clock size={16} />}
       </div>
@@ -158,9 +158,9 @@ export function DrawerDetalheCrediario({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-dark-800/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-ink-800/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative w-full max-w-lg bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+      <div className="relative w-full max-w-lg bg-surface shadow-2xl flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-gold-100 bg-cream-50/50 flex-shrink-0">
           <div className="min-w-0 flex-1">

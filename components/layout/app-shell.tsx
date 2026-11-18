@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Diamond, Menu } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { Sidebar } from './sidebar'
+import { ThemeToggle } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { canAccessMenu, getMenuKeyForPath } from '@/lib/menus-config'
 
@@ -56,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile overlay backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-dark-900/60 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-30 bg-ink-900/60 backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -78,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Mobile top bar */}
-        <div className="md:hidden flex items-center gap-3 px-4 h-14 bg-white border-b border-gold-100 flex-shrink-0">
+        <div className="md:hidden flex items-center gap-3 px-4 h-14 bg-surface border-b border-gold-100 flex-shrink-0">
           <button
             onClick={() => { setCollapsed(false); setMobileOpen(true) }}
             className="p-2 -ml-1 rounded-lg text-dark-400 hover:text-gold-600 hover:bg-cream-100 transition-colors"
@@ -87,6 +88,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu size={20} />
           </button>
           <p className="font-display text-base text-gold-600 leading-none">Oliveira Joias</p>
+          <ThemeToggle
+            size={18}
+            className="ml-auto p-2 -mr-1 rounded-lg text-dark-400 hover:text-gold-600 hover:bg-cream-100"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 min-w-0">
@@ -99,12 +104,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function InitialLoadingScreen() {
   return (
-    <div className="relative flex min-h-screen overflow-hidden bg-[#FDFCF9] text-dark-500">
+    <div className="relative flex min-h-screen overflow-hidden bg-cream-50 text-dark-500">
       <div className="absolute inset-x-0 top-0 h-1 bg-gold-100" aria-hidden="true">
         <div className="h-full w-1/3 animate-[loadingBar_1.35s_ease-in-out_infinite] bg-gold-500" />
       </div>
 
-      <aside className="hidden w-64 shrink-0 border-r border-gold-100 bg-white/75 px-5 py-6 md:block">
+      <aside className="hidden w-64 shrink-0 border-r border-gold-100 bg-surface/75 px-5 py-6 md:block">
         <div className="mb-9 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gold-300 bg-gold-50 text-gold-600">
             <Diamond size={18} />
@@ -126,7 +131,7 @@ function InitialLoadingScreen() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gold-100 bg-white/80 px-4 md:hidden">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-gold-100 bg-surface/80 px-4 md:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gold-300 bg-gold-50 text-gold-600">
             <Diamond size={15} />
           </div>
@@ -139,7 +144,7 @@ function InitialLoadingScreen() {
               <div className="relative mb-5 flex h-16 w-16 items-center justify-center">
                 <div className="absolute inset-0 rounded-full border border-gold-300" />
                 <div className="absolute inset-1 rounded-full border-2 border-transparent border-t-gold-500 animate-spin" />
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-dark-800 text-gold-500 shadow-[0_12px_32px_rgba(26,21,16,0.18)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-ink-800 text-gold-500 shadow-[0_12px_32px_rgba(26,21,16,0.18)]">
                   <Diamond size={19} />
                 </div>
               </div>
@@ -154,7 +159,7 @@ function InitialLoadingScreen() {
               {[0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="rounded-lg border border-gold-100 bg-white/80 p-4 shadow-[0_16px_40px_rgba(26,21,16,0.05)]"
+                  className="rounded-lg border border-gold-100 bg-surface/80 p-4 shadow-[0_16px_40px_rgba(26,21,16,0.05)]"
                 >
                   <div className="h-2 w-16 rounded-full bg-cream-300" />
                   <div className="mt-4 h-5 w-24 rounded-full bg-gold-100" />

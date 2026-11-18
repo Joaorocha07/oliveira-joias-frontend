@@ -115,7 +115,7 @@ export default function PersonificarPage() {
     <div className="min-h-screen flex flex-col lg:flex-row">
 
       {/* ── Painel esquerdo — ilustração ────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[55%] bg-dark-800 flex-col items-center justify-center relative overflow-hidden p-12">
+      <div className="theme-light hidden lg:flex lg:w-[55%] bg-ink-800 flex-col items-center justify-center relative overflow-hidden p-12">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(201,168,76,0.08),transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(201,168,76,0.05),transparent_60%)]" />
 
@@ -158,7 +158,7 @@ export default function PersonificarPage() {
         </div>
 
         <div className="w-full max-w-sm">
-          <div className="bg-white rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
+          <div className="bg-surface rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
 
             {/* ── Etapa 1: escolher conta ─────────────────────────── */}
             {etapa === 'escolha' && (
@@ -329,7 +329,7 @@ export default function PersonificarPage() {
                             <Spinner size={16} />
                           </span>
                         ) : (
-                          <span className="flex-shrink-0 w-9 h-9 rounded-full bg-dark-800 text-gold-400 text-xs font-medium flex items-center justify-center uppercase">
+                          <span className="flex-shrink-0 w-9 h-9 rounded-full bg-ink-800 text-gold-400 text-xs font-medium flex items-center justify-center uppercase">
                             {vendedor.nome.slice(0, 2)}
                           </span>
                         )}

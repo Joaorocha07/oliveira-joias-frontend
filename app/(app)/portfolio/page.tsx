@@ -925,7 +925,7 @@ export default function PortfolioPage() {
                   onClick={() => toggleModoParcela('quantidade')}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                    modoParcela === 'quantidade' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                    modoParcela === 'quantidade' ? 'bg-surface text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
                   )}
                 >
                   Por quantidade
@@ -935,7 +935,7 @@ export default function PortfolioPage() {
                   onClick={() => toggleModoParcela('valor')}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                    modoParcela === 'valor' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                    modoParcela === 'valor' ? 'bg-surface text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
                   )}
                 >
                   Por valor da parcela
@@ -945,7 +945,7 @@ export default function PortfolioPage() {
                   onClick={() => toggleModoParcela('manual')}
                   className={cn(
                     'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                    modoParcela === 'manual' ? 'bg-white text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
+                    modoParcela === 'manual' ? 'bg-surface text-gold-700 shadow-sm' : 'text-dark-300 hover:text-dark-500'
                   )}
                 >
                   Manual

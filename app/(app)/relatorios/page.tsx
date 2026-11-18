@@ -1185,7 +1185,7 @@ export default function RelatoriosPage() {
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50',
                     activeSection === section.key
                       ? 'border-gold-500 bg-gold-500 text-dark-800 shadow-sm'
-                      : 'border-gold-100 bg-white text-dark-600 hover:bg-cream-50 hover:border-gold-200',
+                      : 'border-gold-100 bg-surface text-dark-600 hover:bg-cream-50 hover:border-gold-200',
                   ].join(' ')}
                 >
                   <span className="block text-sm font-medium leading-tight">{section.label}</span>
@@ -1205,7 +1205,7 @@ export default function RelatoriosPage() {
         <>
           {activeSection === 'geral' && (
             <ReportBlock>
-              <div className="overflow-hidden rounded-xl border border-gold-100 bg-white shadow-sm">
+              <div className="overflow-hidden rounded-xl border border-gold-100 bg-surface shadow-sm">
                 <div className="border-b border-gold-100 bg-cream-50/70 px-5 py-4">
                   <div className="space-y-4">
                     <div>
@@ -1214,21 +1214,21 @@ export default function RelatoriosPage() {
                       <p className="text-sm text-dark-400 mt-1">Saúde financeira e operacional no período selecionado</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                      <div className="rounded-lg border border-gold-100 bg-surface px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Faturamento</p>
                         <p className="mt-1 text-sm font-semibold text-dark-800">{formatMoney(saudeFinanceira.totalFaturado)}</p>
                       </div>
-                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                      <div className="rounded-lg border border-gold-100 bg-surface px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Resultado</p>
                         <p className={`mt-1 text-sm font-semibold ${metrics.entradas - metrics.despesas >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                           {formatMoney(metrics.entradas - metrics.despesas)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                      <div className="rounded-lg border border-gold-100 bg-surface px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Vendas</p>
                         <p className="mt-1 text-sm font-semibold text-dark-800">{metrics.vendasQtd}</p>
                       </div>
-                      <div className="rounded-lg border border-gold-100 bg-white px-3 py-2">
+                      <div className="rounded-lg border border-gold-100 bg-surface px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[1px] text-dark-300 font-semibold">Alertas</p>
                         <p className={`mt-1 text-sm font-semibold ${estoqueAtual.alertas > 0 ? 'text-red-600' : 'text-green-700'}`}>
                           {estoqueAtual.alertas}
@@ -1260,7 +1260,7 @@ export default function RelatoriosPage() {
                           {saudeFinanceira.saudeMargemBruta.label}
                         </span>
                       </div>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface/80">
                         <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.margemBruta))}%` }} />
                       </div>
                       <div className="mt-3 flex items-end justify-between gap-3">
@@ -1281,7 +1281,7 @@ export default function RelatoriosPage() {
                           {saudeFinanceira.saudeMargemLiquida.label}
                         </span>
                       </div>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface/80">
                         <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.margemLiquida))}%` }} />
                       </div>
                       <div className="mt-3 flex items-end justify-between gap-3">
@@ -1302,7 +1302,7 @@ export default function RelatoriosPage() {
                           {saudeFinanceira.saudeCrediario.label}
                         </span>
                       </div>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface/80">
                         <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.crediarioPct))}%` }} />
                       </div>
                       <div className="mt-3 flex items-end justify-between gap-3">
@@ -1323,7 +1323,7 @@ export default function RelatoriosPage() {
                           {saudeFinanceira.saudeServicos.label}
                         </span>
                       </div>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80">
+                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface/80">
                         <div className="h-full rounded-full bg-gold-500" style={{ width: `${Math.min(100, Math.max(0, saudeFinanceira.servicosPct))}%` }} />
                       </div>
                       <div className="mt-3 flex items-end justify-between gap-3">
@@ -1486,7 +1486,7 @@ export default function RelatoriosPage() {
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50',
                         vendasSubTab === tab
                           ? 'border-gold-500 bg-gold-500 text-dark-800 shadow-sm'
-                          : 'border-gold-100 bg-white text-dark-500 hover:bg-cream-50 hover:border-gold-200',
+                          : 'border-gold-100 bg-surface text-dark-500 hover:bg-cream-50 hover:border-gold-200',
                       ].join(' ')}
                     >
                       {tab === 'todas' ? 'Todas' : tab === 'normal' ? 'Venda Normal' : 'Venda Livre'}
@@ -2334,7 +2334,7 @@ export default function RelatoriosPage() {
                           {clientesPagination.paginated.map((cliente) => (
                             <tr
                               key={cliente.id}
-                              className="hover:bg-[#FAF7F0] transition-colors cursor-pointer"
+                              className="hover:bg-cream-100 transition-colors cursor-pointer"
                               onClick={() => setClienteLtvDetalhe(cliente)}
                             >
                               <td className="px-4 py-3 max-w-[200px]">
@@ -2520,11 +2520,11 @@ function ProductSalesReport({ data }: { data: CategoriaData[] }) {
           <p className="text-[11px] font-medium uppercase text-dark-300">Total vendido</p>
           <p className="mt-1 text-lg font-bold text-dark-700">{formatMoney(total)}</p>
         </div>
-        <div className="rounded-lg border border-gold-100 bg-white px-4 py-3">
+        <div className="rounded-lg border border-gold-100 bg-surface px-4 py-3">
           <p className="text-[11px] font-medium uppercase text-dark-300">Produtos</p>
           <p className="mt-1 text-lg font-bold text-dark-700">{data.length}</p>
         </div>
-        <div className="rounded-lg border border-gold-100 bg-white px-4 py-3">
+        <div className="rounded-lg border border-gold-100 bg-surface px-4 py-3">
           <p className="text-[11px] font-medium uppercase text-dark-300">Maior venda</p>
           <p className="mt-1 truncate text-sm font-semibold text-dark-700" title={leadingProduct.name}>
             {leadingProduct.name}

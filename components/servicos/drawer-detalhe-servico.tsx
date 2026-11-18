@@ -33,9 +33,9 @@ export function DrawerDetalheServico({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-dark-800/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-ink-800/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative w-full max-w-lg bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+      <div className="relative w-full max-w-lg bg-surface shadow-2xl flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-gold-100 bg-cream-50/50 flex-shrink-0">
           <div className="min-w-0 flex-1">

@@ -23,7 +23,7 @@ export function SearchInput({ value, onChange, placeholder = 'Buscar...', classN
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={cn('input-base w-full pl-10 bg-dark-50 border-transparent focus:bg-white text-sm')}
+        className={cn('input-base w-full pl-10 bg-dark-50 border-transparent focus:bg-surface text-sm')}
       />
     </div>
   )

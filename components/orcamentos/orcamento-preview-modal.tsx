@@ -92,7 +92,7 @@ export function OrcamentoPreviewModal({ open, onClose, orcamento, configuracao }
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-3xl bg-white rounded-2xl flex flex-col max-h-[90vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
+      <div className="relative w-full max-w-3xl bg-surface rounded-2xl flex flex-col max-h-[90vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gold-100 flex-shrink-0">
           <h3 className="font-display text-lg font-semibold text-dark-500">Orçamento #{orcamento.numero}</h3>
           <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export function OrcamentoPreviewModal({ open, onClose, orcamento, configuracao }
         </div>
 
         <div className="overflow-y-auto flex-1">
-          <div id="orcamento-print-area" className="flex flex-col bg-white">
+          <div id="orcamento-print-area" className="theme-light flex flex-col bg-surface">
 
             {/* ── Cabeçalho de marca ─────────────────────────────────────── */}
             <header

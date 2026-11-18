@@ -59,7 +59,7 @@ export default function DefinirSenhaPage() {
     <div className="min-h-screen flex flex-col lg:flex-row">
 
       {/* ── Painel esquerdo — ilustração ────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[55%] bg-dark-800 flex-col items-center justify-center relative overflow-hidden p-12">
+      <div className="theme-light hidden lg:flex lg:w-[55%] bg-ink-800 flex-col items-center justify-center relative overflow-hidden p-12">
         {/* Gradiente decorativo */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(201,168,76,0.08),transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(201,168,76,0.05),transparent_60%)]" />
@@ -108,7 +108,7 @@ export default function DefinirSenhaPage() {
 
         <div className="w-full max-w-sm">
           {/* Card do formulário */}
-          <div className="bg-white rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
+          <div className="bg-surface rounded-2xl border border-gold-100 shadow-[0_8px_40px_rgba(26,21,16,0.08)] p-8">
             {!session ? (
               <div className="text-center">
                 <h2 className="font-display text-2xl font-semibold text-dark-500">

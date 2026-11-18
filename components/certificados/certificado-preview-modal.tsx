@@ -62,7 +62,7 @@ export function CertificadoPreviewModal({ open, onClose, certificado, configurac
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-[rgba(26,21,16,0.55)] backdrop-blur-[6px]" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative w-full max-w-3xl bg-white rounded-2xl flex flex-col max-h-[92vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
+      <div className="relative w-full max-w-3xl bg-surface rounded-2xl flex flex-col max-h-[92vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gold-100 flex-shrink-0">
           <div>
             <h3 className="font-display text-lg font-semibold text-dark-500">Certificado {certificado.numero}</h3>

@@ -9,7 +9,7 @@ import {
   Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe, Layers, Award, Smartphone,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
-import { AlertDialog } from '@/components/ui'
+import { AlertDialog, ThemeToggle } from '@/components/ui'
 import { getInitials } from '@/utils'
 import { cn } from '@/lib/cn'
 import { canAccessMenu } from '@/lib/menus-config'
@@ -97,7 +97,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
   return (
     <>
       <aside className={cn(
-        'flex flex-col bg-dark-800 border-r border-white/[0.04] transition-all duration-200 flex-shrink-0',
+        'theme-light flex flex-col bg-ink-800 border-r border-white/[0.04] transition-all duration-200 flex-shrink-0',
         collapsed ? 'w-14' : 'w-56'
       )}>
         {/* Logo */}
@@ -194,6 +194,7 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
                 </p>
               </div>
               <div className="flex gap-1">
+                <ThemeToggle className="p-1.5 rounded text-dark-300 hover:text-gold-500" />
                 <Link
                   href="/configuracoes"
                   onClick={onMobileClose}
@@ -213,14 +214,17 @@ export function Sidebar({ collapsed, onToggle, onMobileClose }: SidebarProps) {
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setSignOutOpen(true)}
-              className="w-full flex justify-center p-2 text-dark-300 hover:text-[#C75B5B] transition-colors"
-              title="Sair"
-            >
-              <LogOut size={15} />
-            </button>
+            <div className="flex flex-col items-center">
+              <ThemeToggle size={15} className="w-full flex justify-center p-2 text-dark-300 hover:text-gold-500" />
+              <button
+                type="button"
+                onClick={() => setSignOutOpen(true)}
+                className="w-full flex justify-center p-2 text-dark-300 hover:text-[#C75B5B] transition-colors"
+                title="Sair"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
           )}
         </div>
       </aside>

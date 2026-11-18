@@ -170,7 +170,7 @@ export default function ServicosPage() {
               aria-selected={aba === t.key}
               onClick={() => setAba(t.key)}
               className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-                aba === t.key ? 'bg-white text-dark-700 shadow-sm ring-1 ring-gold-300' : 'text-dark-400 hover:text-dark-600'
+                aba === t.key ? 'bg-surface text-dark-700 shadow-sm ring-1 ring-gold-300' : 'text-dark-400 hover:text-dark-600'
               }`}
             >
               {t.label}
@@ -277,7 +277,7 @@ export default function ServicosPage() {
                     <select
                       value={s.status}
                       onChange={(e) => void handleStatusChange(s.id, e.target.value as ServicoStatus)}
-                      className="text-xs border border-gold-200 rounded-lg px-2 py-1 bg-white text-dark-600 focus:outline-none focus:ring-1 focus:ring-gold-400"
+                      className="text-xs border border-gold-200 rounded-lg px-2 py-1 bg-surface text-dark-600 focus:outline-none focus:ring-1 focus:ring-gold-400"
                     >
                       {STATUS_OPTS.map((opt) => (
                         <option key={opt} value={opt}>{SERVICO_STATUS_LABEL[opt]}</option>
@@ -330,7 +330,7 @@ export default function ServicosPage() {
                         <select
                           value={s.status}
                           onChange={(e) => void handleStatusChange(s.id, e.target.value as ServicoStatus)}
-                          className="text-xs border border-gold-200 rounded-lg px-2 py-1 bg-white text-dark-600 focus:outline-none focus:ring-1 focus:ring-gold-400 cursor-pointer"
+                          className="text-xs border border-gold-200 rounded-lg px-2 py-1 bg-surface text-dark-600 focus:outline-none focus:ring-1 focus:ring-gold-400 cursor-pointer"
                         >
                           {STATUS_OPTS.map((opt) => (
                             <option key={opt} value={opt}>{SERVICO_STATUS_LABEL[opt]}</option>

@@ -155,7 +155,7 @@ export default function FolhaPagamentoPage() {
               type="month"
               value={mes.slice(0, 7)}
               onChange={(e) => e.target.value && setMes(`${e.target.value}-01`)}
-              className="h-9 rounded-lg border border-gold-200 bg-white px-3 text-sm text-dark-600 focus:border-gold-500 focus:outline-none"
+              className="h-9 rounded-lg border border-gold-200 bg-surface px-3 text-sm text-dark-600 focus:border-gold-500 focus:outline-none"
               aria-label="Competência"
             />
             {aba === 'mes' && (
@@ -182,7 +182,7 @@ export default function FolhaPagamentoPage() {
               'rounded-lg border px-4 py-2 text-sm font-medium transition-all',
               aba === a.key
                 ? 'border-gold-500 bg-gold-500 text-dark-800 shadow-sm'
-                : 'border-gold-100 bg-white text-dark-500 hover:bg-cream-50 hover:border-gold-200',
+                : 'border-gold-100 bg-surface text-dark-500 hover:bg-cream-50 hover:border-gold-200',
             ].join(' ')}
           >
             {a.label}

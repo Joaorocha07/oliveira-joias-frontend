@@ -38,7 +38,7 @@ export function ModalConfirmarExclusaoVenda({
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-md bg-white rounded-2xl flex flex-col max-h-[90vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
+      <div className="relative w-full max-w-md bg-surface rounded-2xl flex flex-col max-h-[90vh] border border-[rgba(232,213,163,0.3)] shadow-[0_20px_60px_rgba(26,21,16,0.15)]">
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gold-100">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-50 flex-shrink-0">
