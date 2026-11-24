@@ -18,6 +18,9 @@ import { useAuth } from '@/context/auth-context'
 import { supabase } from '@/lib/supabase'
 import { buscarClientes, buscarProdutos, buscarProfiles } from '@/services/busca'
 import {
+  listarCuponsAtivosDoCliente, calcularDescontoCupom, descricaoCupom, marcarCupomUsado, type Cupom,
+} from '@/services/loja-site'
+import {
   today, formatMoney, FORMA_PAGAMENTO_LABEL, gerarDatasParcelas, formatDate,
   calcularCustoProdutosVenda, calcularLucroVenda,
 } from '@/utils'
@@ -55,6 +58,9 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
   const [quickVendedorOpen, setQuickVendedorOpen] = useState(false)
   const [clienteDisplayValue, setClienteDisplayValue] = useState<string | undefined>(undefined)
   const [origens, setOrigens] = useState<OrigemCliente[]>([])
+  // Cupons ativos do cliente selecionado (site / Cupons)
+  const [cuponsCarregados, setCuponsCarregados] = useState<{ clienteId: string; cupons: Cupom[] } | null>(null)
+  const [cupomId, setCupomId] = useState('')
   const [vendedorDisplayValue, setVendedorDisplayValue] = useState<string | undefined>(undefined)
 
   const {
@@ -160,6 +166,24 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
     const base = watchedDataVenda ? new Date(watchedDataVenda + 'T00:00:00') : new Date()
     setValue('primeira_parcela_proximo_mes', base.getDate() > (watchedDiaVencimento ?? 10))
   }, [watchedDiaVencimento, watchedDataVenda, isCrediario, setValue])
+
+  const watchedClienteId = watch('cliente_id')
+  useEffect(() => {
+    if (!open || !watchedClienteId) return
+    let ativo = true
+    void listarCuponsAtivosDoCliente(watchedClienteId).then((cupons) => {
+      if (ativo) setCuponsCarregados({ clienteId: watchedClienteId, cupons })
+    })
+    return () => { ativo = false }
+  }, [open, watchedClienteId])
+  const cuponsDoCliente = cuponsCarregados && cuponsCarregados.clienteId === watchedClienteId ? cuponsCarregados.cupons : []
+  const cupomSelecionado = cuponsDoCliente.find((c) => c.id === cupomId)
+
+  function selecionarCupom(id: string) {
+    setCupomId(id)
+    const cupom = cuponsDoCliente.find((c) => c.id === id)
+    setValue('desconto', cupom ? calcularDescontoCupom(cupom, subtotal) : 0)
+  }
 
   const watchedOrigemId = watch('origem_id')
   const origemSelecionada = origens.find((o) => o.id === watchedOrigemId)
@@ -278,10 +302,15 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
       }
     }
 
-    const { error } = await createVenda(data, user.id)
+    const { error, vendaId } = await createVenda(data, user.id)
     if (error) {
       alert.error('Erro', error)
     } else {
+      if (cupomSelecionado) {
+        const { error: cupomError } = await marcarCupomUsado(cupomSelecionado.id, vendaId ?? null)
+        if (cupomError) alert.error('Atenção', `Venda registrada, mas o cupom não foi marcado como usado: ${cupomError}`)
+      }
+      setCupomId('')
       alert.success('Venda Registrada!', 'Venda registrada com sucesso.', {
         onConfirm: () => { onSuccess(); onClose() },
       })
@@ -656,6 +685,22 @@ export function ModalNovaVenda({ open, onClose, onSuccess }: ModalNovaVendaProps
               )}
             />
           </div>
+
+          {cuponsDoCliente.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <Select
+                label="Cupom do cliente"
+                value={cupomSelecionado ? cupomId : ''}
+                onChange={(e) => selecionarCupom(e.target.value)}
+                hint="Preenche o desconto e marca o cupom como usado ao registrar a venda."
+              >
+                <option value="">Não usar cupom</option>
+                {cuponsDoCliente.map((c) => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {descricaoCupom(c)}</option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           {/* Crediário */}
           {isCrediario && (

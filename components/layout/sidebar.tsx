@@ -7,6 +7,7 @@ import {
   LayoutDashboard, ShoppingCart, CreditCard, Diamond, Wrench,
   Users, Truck, Wallet, BarChart3, Settings, LogOut, ChevronLeft, Menu, UserCog, Receipt, FileText, Banknote,
   Kanban, CalendarClock, Gauge, Calendar, LineChart, Gift, MessageSquareText, Globe, Layers, Award, Smartphone,
+  ShoppingBag, Ticket,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth-context'
 import { AlertDialog, ThemeToggle } from '@/components/ui'
@@ -31,7 +32,7 @@ const navItems: NavItem[] = [
   { sectionLabel: 'Cadastros',   href: '/estoque',           icon: <Diamond size={18} />,             label: 'Estoque',             menuKey: 'estoque' },
   { sectionLabel: 'Cadastros',   href: '/servicos',          icon: <Wrench size={18} />,              label: 'Serviços',            menuKey: 'servicos' },
   { sectionLabel: 'Cadastros',   href: '/orcamentos',        icon: <FileText size={18} />,            label: 'Orçamentos',          menuKey: 'orcamentos' },
-  { sectionLabel: 'Cadastros',   href: '/clientes',          icon: <Users size={18} />,               label: 'Clientes',            menuKey: 'clientes' },
+  { sectionLabel: 'Cadastros',   href: '/clientes',          icon: <Users size={18} />,               label: 'Leads',               menuKey: 'clientes' },
   { sectionLabel: 'Cadastros',   href: '/fornecedores',      icon: <Truck size={18} />,               label: 'Fornecedores',        menuKey: 'fornecedores' },
   { sectionLabel: 'Cadastros',   href: '/vendedores',        icon: <UserCog size={18} />,             label: 'Equipe de Vendas',    menuKey: 'equipe' },
   { sectionLabel: 'CRM',         href: '/crm/dashboard',     icon: <Gauge size={18} />,               label: 'Dashboard',           menuKey: 'crm_dashboard' },
@@ -43,6 +44,8 @@ const navItems: NavItem[] = [
   { sectionLabel: 'CRM',         href: '/crm/relatorios',    icon: <LineChart size={18} />,           label: 'Relatórios CRM',      menuKey: 'crm_relatorios' },
   { sectionLabel: 'Site',        href: '/portfolio',         icon: <Globe size={18} />,               label: 'Produtos do Portfólio', menuKey: 'portfolio' },
   { sectionLabel: 'Site',        href: '/popups',            icon: <Layers size={18} />,              label: 'Pop-ups do Site',     menuKey: 'popups' },
+  { sectionLabel: 'Site',        href: '/pedidos-site',      icon: <ShoppingBag size={18} />,         label: 'Pedidos do Site',     menuKey: 'pedidos_site' },
+  { sectionLabel: 'Site',        href: '/cupons',            icon: <Ticket size={18} />,              label: 'Cupons',              menuKey: 'cupons' },
   { sectionLabel: 'Site',        href: 'https://oliveirajoias.vercel.app/certificados', icon: <Award size={18} />, label: 'Certificados', menuKey: 'certificados', external: true },
   { sectionLabel: 'Administração', href: '/whatsapp',          icon: <Smartphone size={18} />,          label: 'WhatsApp',            menuKey: 'whatsapp' },
   { sectionLabel: 'Financeiro',  href: '/caixa',             icon: <Wallet size={18} />,              label: 'Caixa & Financeiro',  menuKey: 'caixa' },

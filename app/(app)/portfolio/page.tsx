@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, Layers, PackageX, PackageCheck } from 'lucide-react'
+import { Plus, ImageOff, Star, Pencil, Trash2, X, ArrowUp, ArrowDown, Tag, AlertTriangle, Layers, PackageX, PackageCheck, Ruler } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { cn } from '@/lib/cn'
 import {
@@ -18,6 +18,7 @@ import {
   type ProdutoCatalogo, type CategoriaCatalogo, type AcabamentoCatalogo, type FaqItem,
 } from '@/services/catalogo'
 import { correspondeBusca } from '@/utils/search'
+import { ModalArosProduto } from '@/components/modals/modal-aros-produto'
 
 const EMPTY_FORM = {
   nome: '',
@@ -52,6 +53,7 @@ export default function PortfolioPage() {
   const [salvando, setSalvando] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<ProdutoCatalogo | null>(null)
   const [deletando, setDeletando] = useState(false)
+  const [produtoAros, setProdutoAros] = useState<ProdutoCatalogo | null>(null)
   const [modoOrdenar, setModoOrdenar] = useState(false)
   const [ordemLocal, setOrdemLocal] = useState<ProdutoCatalogo[]>([])
   const [salvandoOrdem, setSalvandoOrdem] = useState(false)
@@ -630,6 +632,12 @@ export default function PortfolioPage() {
                                 <div className="min-w-0">
                                   <p className="font-medium text-dark-700 truncate max-w-[220px]">{p.nome}</p>
                                   {p.linha && <p className="text-xs text-dark-300 truncate">{p.linha}</p>}
+                                  {(p.aros?.length ?? 0) > 0 && (
+                                    <span className="mt-0.5 mr-1 inline-flex items-center gap-1 rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-semibold text-gold-700">
+                                      <Ruler size={10} />
+                                      {p.aros!.filter((a) => a.estoque > 0).length}/{p.aros!.length} aros
+                                    </span>
+                                  )}
                                   {p.sem_estoque && (
                                     <span className="mt-0.5 inline-flex items-center rounded-full bg-[#C75B5B] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                                       Sem estoque
@@ -659,6 +667,7 @@ export default function PortfolioPage() {
                                 <ActionMenu
                                   items={[
                                     { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(p) },
+                                    { label: 'Configurar aros', icon: <Ruler size={14} />, onClick: () => setProdutoAros(p) },
                                     p.sem_estoque
                                       ? { label: 'Marcar com estoque', icon: <PackageCheck size={14} />, onClick: () => handleToggleEstoque(p) }
                                       : { label: 'Marcar sem estoque', icon: <PackageX size={14} />, onClick: () => handleToggleEstoque(p) },
@@ -854,6 +863,19 @@ export default function PortfolioPage() {
           autoFocus
         />
       </Modal>
+
+      {produtoAros && (
+        <ModalArosProduto
+          produto={produtoAros}
+          onClose={() => setProdutoAros(null)}
+          onSaved={(aros, arosPar) => {
+            const id = produtoAros.id
+            setProdutos((prev) => prev.map((item) => (item.id === id ? { ...item, aros, aros_par: arosPar } : item)))
+            setProdutoAros(null)
+            alert.success('Aros salvos!', 'A disponibilidade dos aros já vale no site.')
+          }}
+        />
+      )}
 
       {/* Modal de produto */}
       <Modal

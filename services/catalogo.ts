@@ -1,4 +1,8 @@
+import { supabase } from '@/lib/supabase'
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
+
+export type AroEstoque = { aro: number; estoque: number }
 
 export type ProdutoCatalogo = {
   id: string
@@ -17,6 +21,10 @@ export type ProdutoCatalogo = {
   ativo: boolean
   /** Continua ativo no site, mas com faixa "Sem estoque" (só em oliveirajoias.com). */
   sem_estoque: boolean
+  /** Aros oferecidos no site e estoque de cada um (vazio = sem seleção de aro). */
+  aros?: AroEstoque[]
+  /** true = cliente escolhe 2 aros (par); false = 1 aro. */
+  aros_par?: boolean
   ordem: number | null
   info_produto: string | null
   voce_sabia: string | null
@@ -85,6 +93,33 @@ export async function marcarSemEstoqueCatalogo(
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
       return { error: json.error ?? 'Erro ao atualizar o estoque do produto.' }
+    }
+    return { error: null }
+  } catch {
+    return { error: 'Não foi possível conectar ao servidor de produtos.' }
+  }
+}
+
+// Rota protegida: exige o usuário logado no sistema (token do Supabase Auth).
+export async function salvarArosCatalogo(
+  id: string,
+  arosPar: boolean,
+  aros: AroEstoque[],
+): Promise<{ error: string | null }> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return { error: 'Sessão expirada. Entre novamente.' }
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/produtos/${id}/aros`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ aros_par: arosPar, aros }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => null)
+      if (!json && res.status === 404) {
+        return { error: 'O servidor ainda não tem a configuração de aros. Faça o deploy da versão nova do backend.' }
+      }
+      return { error: json?.error ?? 'Erro ao salvar os aros.' }
     }
     return { error: null }
   } catch {

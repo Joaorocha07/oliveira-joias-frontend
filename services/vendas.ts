@@ -50,7 +50,7 @@ function itemSubtotal(item: VendaItemFormData) {
 export async function createVenda(
   data: VendaFormData,
   userId: string,
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; vendaId?: string }> {
   const isLivre = data.tipo === 'livre'
   const subtotal = isLivre
     ? Math.round(data.valor_livre * 100) / 100
@@ -212,7 +212,7 @@ export async function createVenda(
     if (custosError) return { error: custosError }
   }
 
-  return { error: null }
+  return { error: null, vendaId: venda.id as string }
 }
 
 export async function updateVenda(

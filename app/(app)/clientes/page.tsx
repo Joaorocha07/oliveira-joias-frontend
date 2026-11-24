@@ -1,32 +1,79 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Users, Phone, Mail, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Phone, Mail, Pencil, Trash2, KeyRound } from 'lucide-react'
 import { useAlert } from '@/hooks/use-alert'
 import { supabase } from '@/lib/supabase'
 import {
   PageHeader, Card, Button, SearchInput, Spinner, EmptyState,
-  Modal, Input, Textarea, ConfirmDialog, ActionMenu, Pagination,
+  Modal, Input, Textarea, Select, ConfirmDialog, ActionMenu, Pagination, Badge,
 } from '@/components/ui'
+import { cn } from '@/lib/cn'
+import { LeadsDashboard, type OrigemResumo } from '@/components/leads/leads-dashboard'
 import { usePagination } from '@/hooks/use-pagination'
-import { formatPhone, formatCPF } from '@/utils'
-import type { Cliente, ClienteInsert } from '@/types'
+import { formatPhone } from '@/utils'
+import type { Cliente, ClienteInsert, OrigemCliente } from '@/types'
 import { useAuth } from '@/context/auth-context'
 import { deleteVenda } from '@/services/vendas'
 import { ModalHistoricoCliente } from '@/components/modals/modal-historico-cliente'
 import { ordenarPorRelevancia } from '@/utils/search'
+import {
+  listarContasSite, gerarSenhaTemporaria, type ContaSite,
+} from '@/services/loja-site'
+import type { ActionMenuItem } from '@/components/ui'
 
 const EMPTY_FORM: ClienteInsert = {
   nome: '', cpf: null, rg: null, email: null, telefone: null, whatsapp: null,
   data_nascimento: null, endereco: null, numero: null, complemento: null,
   bairro: null, cidade: null, estado: null, cep: null, observacoes: null,
-  ativo: true, created_by: null,
+  ativo: true, created_by: null, origem_id: null,
+}
+
+// Filtros da aba Leads. "Lead" = cadastro sem compra; "comprou" = tem ao menos
+// uma venda que não foi cancelada nem é só orçamento.
+type Filtro = 'todos' | 'leads' | 'compraram' | 'site' | 'whatsapp'
+
+const FILTROS: { key: Filtro; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'leads', label: 'Leads cadastrados' },
+  { key: 'compraram', label: 'Clientes que compraram' },
+  { key: 'site', label: 'Somente pelo site' },
+  { key: 'whatsapp', label: 'Vindos do WhatsApp' },
+]
+
+type LeadRow = Cliente & { origem?: Pick<OrigemCliente, 'id' | 'nome'> | null }
+
+function origemNome(c: LeadRow): string {
+  return c.origem?.nome || c.origem_outro || 'Não informado'
+}
+
+function origemEh(c: LeadRow, nome: string): boolean {
+  return (c.origem?.nome ?? '').trim().toLowerCase() === nome
+}
+
+// O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas.
+async function buscarTodos<T>(
+  montar: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: string | null }> {
+  const PASSO = 1000
+  const todos: T[] = []
+  for (let from = 0; ; from += PASSO) {
+    const { data, error } = await montar(from, from + PASSO - 1)
+    if (error) return { data: todos, error: error.message }
+    todos.push(...(data ?? []))
+    if (!data || data.length < PASSO) break
+  }
+  return { data: todos, error: null }
 }
 
 export default function ClientesPage() {
   const { user } = useAuth()
   const alert = useAlert()
-  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [clientes, setClientes] = useState<LeadRow[]>([])
+  const [compradores, setCompradores] = useState<Set<string>>(new Set())
+  const [contasSite, setContasSite] = useState<Map<string, ContaSite>>(new Map())
+  const [origens, setOrigens] = useState<Pick<OrigemCliente, 'id' | 'nome'>[]>([])
+  const [filtro, setFiltro] = useState<Filtro>('todos')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -43,17 +90,35 @@ export default function ClientesPage() {
   const [historicoCliente, setHistoricoCliente] = useState<Cliente | null>(null)
 
   async function loadClientes() {
-    const { data, error } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('ativo', true)
-      .order('nome')
+    const [clientesRes, vendasRes, origensRes, contas] = await Promise.all([
+      buscarTodos<LeadRow>((from, to) =>
+        supabase
+          .from('clientes')
+          .select('*, origem:origens_cliente(id, nome)')
+          .eq('ativo', true)
+          .order('nome')
+          .range(from, to),
+      ),
+      buscarTodos<{ cliente_id: string }>((from, to) =>
+        supabase
+          .from('vendas')
+          .select('cliente_id')
+          .not('cliente_id', 'is', null)
+          .not('status', 'in', '(cancelado,orcamento)')
+          .range(from, to),
+      ),
+      supabase.from('origens_cliente').select('id, nome').eq('ativo', true).order('nome'),
+      listarContasSite(),
+    ])
 
-    if (error) {
-      alert.error('Erro', 'Erro ao carregar clientes.')
+    if (clientesRes.error) {
+      alert.error('Erro', 'Erro ao carregar leads.')
     } else {
-      setClientes(data ?? [])
+      setClientes(clientesRes.data)
     }
+    if (!vendasRes.error) setCompradores(new Set(vendasRes.data.map((v) => v.cliente_id)))
+    setOrigens(origensRes.data ?? [])
+    setContasSite(new Map(contas.map((c) => [c.cliente_id, c])))
     setLoading(false)
   }
 
@@ -62,12 +127,37 @@ export default function ClientesPage() {
     return () => window.clearTimeout(timeoutId)
   }, [])
 
-  const filtered = useMemo(
-    () => ordenarPorRelevancia(clientes, search, (c) => [
+  const contagens = useMemo(() => {
+    const comprou = (c: LeadRow) => compradores.has(c.id)
+    return {
+      todos: clientes.length,
+      leads: clientes.filter((c) => !comprou(c)).length,
+      compraram: clientes.filter(comprou).length,
+      site: clientes.filter((c) => origemEh(c, 'site')).length,
+      whatsapp: clientes.filter((c) => origemEh(c, 'whatsapp')).length,
+    } satisfies Record<Filtro, number>
+  }, [clientes, compradores])
+
+  const origensResumo = useMemo<OrigemResumo[]>(() => {
+    const map = new Map<string, number>()
+    clientes.forEach((c) => map.set(origemNome(c), (map.get(origemNome(c)) ?? 0) + 1))
+    return Array.from(map, ([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total)
+  }, [clientes])
+
+  const filtered = useMemo(() => {
+    const porFiltro = clientes.filter((c) => {
+      switch (filtro) {
+        case 'leads': return !compradores.has(c.id)
+        case 'compraram': return compradores.has(c.id)
+        case 'site': return origemEh(c, 'site')
+        case 'whatsapp': return origemEh(c, 'whatsapp')
+        default: return true
+      }
+    })
+    return ordenarPorRelevancia(porFiltro, search, (c) => [
       c.nome, c.telefone, c.whatsapp, c.cpf, c.email, c.cidade, c.bairro, c.instagram,
-    ]),
-    [clientes, search],
-  )
+    ])
+  }, [clientes, compradores, filtro, search])
 
   const { paginated, page, setPage, totalPages, total, from, to } = usePagination(filtered)
 
@@ -87,6 +177,7 @@ export default function ClientesPage() {
       bairro: cliente.bairro, cidade: cliente.cidade, estado: cliente.estado,
       cep: cliente.cep, observacoes: cliente.observacoes,
       ativo: cliente.ativo, created_by: cliente.created_by,
+      origem_id: cliente.origem_id,
     })
     setModalOpen(true)
   }
@@ -107,23 +198,52 @@ export default function ClientesPage() {
       if (error) {
         alert.error('Erro', 'Erro ao atualizar cliente.')
       } else {
-        setClientes((prev) => prev.map((c) => c.id === editando.id ? { ...c, ...form } : c))
-        alert.success('Cliente Atualizado!', 'Os dados do cliente foram salvos.', {
+        const origem = origens.find((o) => o.id === form.origem_id) ?? null
+        setClientes((prev) => prev.map((c) => c.id === editando.id ? { ...c, ...form, origem } : c))
+        alert.success('Cadastro Atualizado!', 'Os dados foram salvos.', {
           onConfirm: () => setModalOpen(false),
         })
       }
     } else {
-      const { data, error } = await supabase.from('clientes').insert([form]).select().single()
+      const { data, error } = await supabase
+        .from('clientes')
+        .insert([form])
+        .select('*, origem:origens_cliente(id, nome)')
+        .single()
       if (error) {
-        alert.error('Erro', 'Erro ao cadastrar cliente.')
+        alert.error('Erro', 'Erro ao cadastrar lead.')
       } else {
-        setClientes((prev) => [...prev, data as Cliente])
-        alert.success('Cliente Cadastrado!', 'Cliente adicionado com sucesso.', {
+        setClientes((prev) => [...prev, data as LeadRow])
+        alert.success('Lead Cadastrado!', 'Cadastro adicionado com sucesso.', {
           onConfirm: () => setModalOpen(false),
         })
       }
     }
     setSalvando(false)
+  }
+
+  function pedirSenhaTemporaria(cliente: Cliente) {
+    alert.warning(
+      'Gerar nova senha?',
+      `A senha atual da conta do site de ${cliente.nome} deixa de funcionar. Envie a nova senha só pelo WhatsApp cadastrado do cliente.`,
+      {
+        showCancel: true,
+        confirmText: 'Gerar senha',
+        onConfirm: async () => {
+          const { senha, error } = await gerarSenhaTemporaria(cliente.id)
+          if (error || !senha) { alert.error('Erro', error ?? 'Erro ao gerar senha.'); return }
+          alert.success('Senha temporária gerada', `Nova senha: ${senha}\n\nPeça para o cliente trocá-la em "Minha conta" depois de entrar.`)
+        },
+      },
+    )
+  }
+
+  function acoesContaSite(cliente: Cliente): ActionMenuItem[] {
+    const conta = contasSite.get(cliente.id)
+    if (!conta) return []
+    return [
+      { label: 'Gerar senha temporária', icon: <KeyRound size={14} />, onClick: () => pedirSenhaTemporaria(cliente) },
+    ]
   }
 
   async function iniciarDelete(cliente: Cliente) {
@@ -194,17 +314,51 @@ export default function ClientesPage() {
   return (
     <div>
       <PageHeader
-        title="Clientes"
-        subtitle="Cadastro de clientes"
+        title="Leads"
+        subtitle="Leads e clientes cadastrados — site, WhatsApp e loja"
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openCreate}>
-            Novo Cliente
+            Novo Lead
           </Button>
         }
       />
 
+      {!loading && (
+        <LeadsDashboard
+          total={contagens.todos}
+          leads={contagens.leads}
+          compradores={contagens.compraram}
+          origens={origensResumo}
+        />
+      )}
+
       <Card padding="none">
-        <div className="p-4 border-b border-gold-100">
+        <div className="p-4 border-b border-gold-100 space-y-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mb-1" role="tablist" aria-label="Filtrar leads">
+            {FILTROS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={filtro === f.key}
+                onClick={() => setFiltro(f.key)}
+                className={cn(
+                  'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors',
+                  filtro === f.key
+                    ? 'border-gold-400 bg-gold-50 text-gold-600'
+                    : 'border-gold-100 text-dark-400 hover:border-gold-200 hover:text-dark-600',
+                )}
+              >
+                {f.label}
+                <span className={cn(
+                  'rounded-full px-1.5 text-[10px] tabular-nums',
+                  filtro === f.key ? 'bg-gold-100 text-gold-600' : 'bg-dark-200/20 text-dark-300',
+                )}>
+                  {loading ? '…' : contagens[f.key]}
+                </span>
+              </button>
+            ))}
+          </div>
           <SearchInput
             value={search}
             onChange={setSearch}
@@ -218,12 +372,12 @@ export default function ClientesPage() {
         ) : filtered.length === 0 ? (
           <EmptyState
             imageSrc="/images/Profile Interface-rafiki.svg"
-            title="Nenhum cliente encontrado"
-            description={search ? 'Tente outro termo.' : 'Cadastre o primeiro cliente.'}
+            title="Nenhum lead encontrado"
+            description={search || filtro !== 'todos' ? 'Tente outro termo ou filtro.' : 'Cadastre o primeiro lead.'}
             action={
-              !search && (
+              !search && filtro === 'todos' && (
                 <Button variant="primary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreate}>
-                  Novo Cliente
+                  Novo Lead
                 </Button>
               )
             }
@@ -246,7 +400,12 @@ export default function ClientesPage() {
                       {cliente.nome.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-dark-700 text-sm truncate">{cliente.nome}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-medium text-dark-700 text-sm truncate">{cliente.nome}</p>
+                        <StatusBadge comprou={compradores.has(cliente.id)} />
+                        <ContaSiteBadge conta={contasSite.get(cliente.id)} />
+                      </div>
+                      <p className="text-[11px] text-dark-300 mt-0.5">Origem: {origemNome(cliente)}</p>
                       <div className="flex flex-wrap gap-x-3 mt-0.5">
                         {cliente.telefone && (
                           <p className="flex items-center gap-1 text-xs text-dark-400">
@@ -266,6 +425,7 @@ export default function ClientesPage() {
                       <ActionMenu
                         items={[
                           { label: 'Editar', icon: <Pencil size={14} />, onClick: () => openEdit(cliente) },
+                          ...acoesContaSite(cliente),
                           { label: 'Excluir', icon: <Trash2 size={14} />, onClick: () => void iniciarDelete(cliente), variant: 'danger' },
                         ]}
                       />
@@ -283,7 +443,8 @@ export default function ClientesPage() {
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Telefone</th>
                     <th className="hidden md:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Email</th>
-                    <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">CPF</th>
+                    <th className="hidden lg:table-cell text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Origem</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-dark-300 uppercase tracking-wide">Status</th>
                     <th className="px-5 py-3 w-20" />
                   </tr>
                 </thead>
@@ -313,8 +474,14 @@ export default function ClientesPage() {
                       <td className="hidden md:table-cell px-5 py-3 text-dark-400 max-w-[200px]">
                         <span className="block truncate">{cliente.email || '—'}</span>
                       </td>
-                      <td className="hidden lg:table-cell px-5 py-3 text-dark-400 font-mono text-xs">
-                        {cliente.cpf ? formatCPF(cliente.cpf) : '—'}
+                      <td className="hidden lg:table-cell px-5 py-3 text-dark-400 text-xs">
+                        {origemNome(cliente)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <StatusBadge comprou={compradores.has(cliente.id)} />
+                          <ContaSiteBadge conta={contasSite.get(cliente.id)} />
+                        </div>
                       </td>
                       <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
@@ -322,16 +489,17 @@ export default function ClientesPage() {
                             type="button"
                             onClick={() => openEdit(cliente)}
                             className="p-1.5 rounded-lg text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="Editar cliente"
+                            title="Editar"
                           >
                             <Pencil size={14} />
                           </button>
+                          {contasSite.has(cliente.id) && <ActionMenu items={acoesContaSite(cliente)} />}
                           <button
                             type="button"
                             onClick={() => void iniciarDelete(cliente)}
                             disabled={checandoVinculos === cliente.id}
                             className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                            title="Excluir cliente"
+                            title="Excluir"
                           >
                             {checandoVinculos === cliente.id
                               ? <span className="block w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
@@ -354,7 +522,7 @@ export default function ClientesPage() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editando ? 'Editar Cliente' : 'Novo Cliente'}
+        title={editando ? 'Editar Cadastro' : 'Novo Lead'}
         size="lg"
         footer={
           <>
@@ -374,6 +542,17 @@ export default function ClientesPage() {
             onChange={(e) => setField('nome', e.target.value)}
             className="sm:col-span-2"
           />
+          <Select
+            label="Origem"
+            placeholder="Não informado"
+            value={form.origem_id ?? ''}
+            onChange={(e) => setField('origem_id', e.target.value || null)}
+            wrapperClassName="sm:col-span-2"
+          >
+            {origens.map((o) => (
+              <option key={o.id} value={o.id}>{o.nome}</option>
+            ))}
+          </Select>
           <Input
             label="CPF"
             value={form.cpf ?? ''}
@@ -518,4 +697,15 @@ export default function ClientesPage() {
       </Modal>
     </div>
   )
+}
+
+function StatusBadge({ comprou }: { comprou: boolean }) {
+  return comprou
+    ? <Badge variant="success" className="!px-2 !py-0.5 text-[10px] flex-shrink-0">Cliente</Badge>
+    : <Badge variant="gold" className="!px-2 !py-0.5 text-[10px] flex-shrink-0">Lead</Badge>
+}
+
+function ContaSiteBadge({ conta }: { conta: ContaSite | undefined }) {
+  if (!conta) return null
+  return <Badge variant="info" className="!px-2 !py-0.5 text-[10px] flex-shrink-0">Conta no site</Badge>
 }

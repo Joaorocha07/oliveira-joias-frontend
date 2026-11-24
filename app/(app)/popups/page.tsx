@@ -17,6 +17,7 @@ const TIPO_DESCRICOES: Record<SitePopup['tipo'], string> = {
   boas_vindas: 'Aparece após o visitante entrar no site. Máx. 1.',
   promocao: 'Vinculado a um produto específico. Sem limite.',
   saida: 'Aparece quando o visitante tenta sair. Máx. 1.',
+  cadastro: 'Cria a conta no site (nome, telefone, e-mail e senha) e libera o cupom. Só no oliveirajoias.com. Máx. 1.',
 }
 
 const EMPTY_FORM = {
@@ -25,6 +26,8 @@ const EMPTY_FORM = {
   mensagem: '',
   produto_slug: '',
   cta_texto: '',
+  cupom_codigo: '',
+  cupom_percentual: '10',
   ativo: true,
   delay_segundos: '3',
 }
@@ -117,6 +120,8 @@ export default function PopupsPage() {
       mensagem: p.mensagem,
       produto_slug: p.produto_slug ?? '',
       cta_texto: p.cta_texto ?? '',
+      cupom_codigo: p.cupom_codigo ?? '',
+      cupom_percentual: p.cupom_percentual != null ? String(p.cupom_percentual) : '10',
       ativo: p.ativo,
       delay_segundos: String(p.delay_segundos),
     })
@@ -165,7 +170,9 @@ export default function PopupsPage() {
     }
 
     let finalCtaUrl = ''
-    if (ctaTipo === 'url') {
+    if (form.tipo === 'cadastro') {
+      // O botão do pop-up de cadastro é o "enviar" do formulário — sem destino.
+    } else if (ctaTipo === 'url') {
       finalCtaUrl = ctaUrl.trim()
     } else if (ctaTipo === 'whatsapp') {
       if (!waNumero.replace(/\D/g, '')) {
@@ -185,6 +192,11 @@ export default function PopupsPage() {
     if (form.tipo === 'promocao' && form.produto_slug) fd.append('produto_slug', form.produto_slug)
     if (form.cta_texto.trim()) fd.append('cta_texto', form.cta_texto.trim())
     if (finalCtaUrl) fd.append('cta_url', finalCtaUrl)
+    else if (editando?.cta_url) fd.append('cta_url', '')
+    if (form.tipo === 'cadastro') {
+      fd.append('cupom_codigo', form.cupom_codigo.trim().toUpperCase())
+      if (form.cupom_codigo.trim()) fd.append('cupom_percentual', form.cupom_percentual || '10')
+    }
     if (imagem) fd.append('imagem', imagem)
 
     const { error } = editando
@@ -293,7 +305,13 @@ export default function PopupsPage() {
                       Produto: <span className="font-medium text-dark-500">{p.produto_slug}</span>
                     </p>
                   )}
-                  {p.tipo === 'boas_vindas' && (
+                  {p.tipo === 'cadastro' && (
+                    <p className="text-[10px] text-dark-300">
+                      Cupom: <span className="font-mono font-semibold text-dark-500">{p.cupom_codigo || '— sem cupom —'}</span>
+                      {p.cupom_codigo && p.cupom_percentual != null && <> · {p.cupom_percentual}%</>}
+                    </p>
+                  )}
+                  {(p.tipo === 'boas_vindas' || p.tipo === 'cadastro') && (
                     <p className="text-[10px] text-dark-300">
                       Delay: <span className="font-medium text-dark-500">{p.delay_segundos}s</span>
                     </p>
@@ -342,8 +360,8 @@ export default function PopupsPage() {
           {/* Tipo */}
           <div>
             <label className="label-base mb-2 block">Tipo de pop-up *</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['boas_vindas', 'promocao', 'saida'] as const).map((tipo) => {
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(['boas_vindas', 'promocao', 'saida', 'cadastro'] as const).map((tipo) => {
                 const taken = tipoTaken(tipo)
                 return (
                   <button
@@ -440,11 +458,47 @@ export default function PopupsPage() {
             </div>
           )}
 
-          {/* Delay (boas_vindas) */}
-          {form.tipo === 'boas_vindas' && (
+          {/* Cupom (cadastro) */}
+          {form.tipo === 'cadastro' && (
+            <div className="flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3">
+              <Input
+                label="Código do cupom"
+                placeholder="Ex: BEMVINDO10"
+                hint="Mostrado ao visitante só depois que ele se cadastra. Deixe vazio para não oferecer cupom."
+                value={form.cupom_codigo}
+                onChange={(e) => setField('cupom_codigo', e.target.value.toUpperCase().replace(/\s/g, ''))}
+                maxLength={40}
+              />
+              <Input
+                label="Desconto do cupom (%)"
+                type="number"
+                min={1}
+                max={100}
+                hint="Cada pessoa que se cadastra recebe o próprio cupom, controlado em Cupons (marcado como usado na venda)."
+                value={form.cupom_percentual}
+                onChange={(e) => setField('cupom_percentual', e.target.value)}
+              />
+              <Input
+                label="Texto do botão de cadastro"
+                placeholder="Quero meu desconto"
+                value={form.cta_texto}
+                onChange={(e) => setField('cta_texto', e.target.value)}
+              />
+              <p className="text-[11px] text-dark-400 leading-snug">
+                Descreva a oferta no título e na mensagem (ex.: &quot;Ganhe 10% OFF na primeira compra&quot;).
+                Cada cadastro cai automaticamente em <strong>Leads</strong> com origem &quot;Site&quot;; quem já
+                estiver no sistema não é duplicado.
+              </p>
+            </div>
+          )}
+
+          {/* Delay (boas_vindas / cadastro) */}
+          {(form.tipo === 'boas_vindas' || form.tipo === 'cadastro') && (
             <Input
               label="Delay (segundos)"
-              hint="Tempo de espera antes de exibir o pop-up"
+              hint={form.tipo === 'cadastro'
+                ? 'Tempo mínimo no site antes de exibir — o pop-up só aparece depois que o visitante começa a navegar'
+                : 'Tempo de espera antes de exibir o pop-up'}
               type="number"
               min={0}
               max={60}
@@ -454,6 +508,7 @@ export default function PopupsPage() {
           )}
 
           {/* ─── Seção CTA ─── */}
+          {form.tipo !== 'cadastro' && (
           <div className="border-t border-gold-100 pt-4 flex flex-col gap-3">
             <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide">Botão de ação (opcional)</p>
 
@@ -531,6 +586,7 @@ export default function PopupsPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Ativo */}
           <label className="flex items-center gap-2 text-sm text-dark-600 cursor-pointer select-none">
